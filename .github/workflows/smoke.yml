@@ -1,0 +1,20 @@
+name: Smoke-Test (Login-Mail)
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "E-Mail für den Test-Login"
+        required: false
+        default: "schrittweise.smoketest@example.com"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: request-link aufrufen
+        run: |
+          curl -sS -w "\nHTTP %{http_code}\n" -X POST \
+            "https://schrittweise-2-0.vercel.app/api/auth/request-link" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${{ inputs.email }}\",\"register\":true,\"display_name\":\"Smoke\"}"

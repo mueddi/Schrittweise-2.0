@@ -7,9 +7,13 @@ URL-Fragment; das Backend tauscht dieses Token gegen das eigene App-JWT
 (siehe /api/auth/verify-supabase). Nutzerverwaltung und Rollen bleiben
 vollständig in der eigenen users-Tabelle.
 """
+import logging
+
 import httpx
 
 from ..config import settings
+
+log = logging.getLogger("schrittweise.supabase")
 
 
 class SupabaseRateLimited(Exception):
@@ -29,6 +33,11 @@ def send_magic_link_via_supabase(email: str, redirect_to: str) -> bool:
     )
     if resp.status_code == 429:
         raise SupabaseRateLimited()
+    if resp.status_code >= 400:
+        # Fehlerdetails ins Log – die Nutzerantwort bleibt bewusst generisch.
+        log.error(
+            "Supabase-OTP fehlgeschlagen: HTTP %s – %s", resp.status_code, resp.text[:500]
+        )
     resp.raise_for_status()
     return True
 
