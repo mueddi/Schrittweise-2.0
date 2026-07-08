@@ -12,9 +12,23 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: request-link aufrufen
+      - name: request-link aufrufen und Runtime-Logs einsammeln
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          DEP=$(npx --yes vercel@latest ls schrittweise-2-0 --prod --token "$VERCEL_TOKEN" 2>/dev/null \
+            | grep -oE 'https://[a-z0-9-]+\.vercel\.app' | head -1)
+          echo "Produktions-Deployment: $DEP"
+
+          # Log-Tail zuerst starten, dann die Anfrage abschicken
+          (timeout 45 npx --yes vercel@latest logs "$DEP" --token "$VERCEL_TOKEN" > runtime.log 2>&1 || true) &
+          sleep 8
+
           curl -sS -w "\nHTTP %{http_code}\n" -X POST \
             "https://schrittweise-2-0.vercel.app/api/auth/request-link" \
             -H "Content-Type: application/json" \
             -d "{\"email\":\"${{ inputs.email }}\",\"register\":true,\"display_name\":\"Smoke\"}"
+
+          wait
+          echo "===== RUNTIME-LOGS ====="
+          cat runtime.log
