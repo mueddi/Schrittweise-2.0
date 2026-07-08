@@ -14,6 +14,13 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
+# Supabase-Auth-Anbindung (Login-Mails): URL + Publishable Key sind PUBLIC
+# (stehen sonst sichtbar in jedem Frontend) und gehören zu diesem Projekt.
+# Vor dem Sidecar gesetzt, damit ein versehentlich beschädigter Secret-Wert
+# sie nicht überschreiben kann; echte Vercel-Env-Variablen gewinnen weiterhin.
+os.environ.setdefault("SUPABASE_URL", "https://bogrqbazqjvjpahuecon.supabase.co")
+os.environ.setdefault("SUPABASE_ANON_KEY", "sb_publishable_Y1lYSALGd8Wdg_HoDjf0cA_217R27Ne")
+
 # Optionales Secrets-Sidecar (nur falls beim Deploy mitgeliefert, gitignored)
 _env_file = Path(__file__).resolve().parent / "runtime-env.json"
 if _env_file.exists():
