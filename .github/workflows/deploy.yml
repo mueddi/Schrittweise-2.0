@@ -1,0 +1,47 @@
+name: Deploy (Vercel)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secrets prüfen
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$RUNTIME_ENV_JSON" ]; then
+            echo "::error::Secrets fehlen: VERCEL_TOKEN und RUNTIME_ENV_JSON unter Settings → Secrets and variables → Actions anlegen."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Secrets kommen als gitignore'd Sidecar ins Deployment-Paket (api/index.py liest sie);
+      # sie landen NIE im Git-Verlauf.
+      - name: Secrets-Sidecar schreiben
+        env:
+          RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
+        run: printf '%s' "$RUNTIME_ENV_JSON" > api/runtime-env.json
+
+      - name: Zu Vercel deployen
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" | tee deploy-url.txt
+          {
+            echo "### Produktions-URL"
+            tail -n 1 deploy-url.txt
+          } >> "$GITHUB_STEP_SUMMARY"
