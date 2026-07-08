@@ -1,2 +1,17 @@
-# Vercel installiert Python-Dependencies aus dem Repo-Root
--r backend/requirements.txt
+# Vercel installiert Python-Dependencies aus dem Repo-Root.
+# Vercels Funktions-Bundler kann kein `-r backend/requirements.txt` parsen,
+# darum steht die Liste hier ausgeschrieben – bei Änderungen BEIDE Dateien
+# synchron halten (backend/requirements.txt ist die Referenz für lokal/CI/Docker).
+fastapi==0.115.6
+uvicorn[standard]>=0.34,<1
+sqlalchemy>=2.0.41,<2.1
+pydantic>=2.12,<3
+pydantic-settings>=2.7,<3
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.20
+sympy==1.13.3
+anthropic==0.42.0
+pillow>=11.3
+pytesseract==0.3.13
+email-validator==2.2.0
+psycopg[binary]>=3.2.10,<3.4
