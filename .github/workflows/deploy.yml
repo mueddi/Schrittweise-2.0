@@ -30,11 +30,29 @@ jobs:
           node-version: "20"
 
       # Secrets kommen als gitignore'd Sidecar ins Deployment-Paket (api/index.py liest sie);
-      # sie landen NIE im Git-Verlauf.
+      # sie landen NIE im Git-Verlauf. Das separate Secret ANTHROPIC_API_KEY (einzeiliger
+      # Klartext, weniger fehleranfällig beim Einfügen) überschreibt den JSON-Wert.
+      # Beim Einfügen beschädigte Werte (Nicht-ASCII) werden verworfen statt deployt.
       - name: Secrets-Sidecar schreiben
         env:
           RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
-        run: printf '%s' "$RUNTIME_ENV_JSON" > api/runtime-env.json
+          ANTHROPIC_API_KEY_OVERRIDE: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 - <<'EOF'
+          import json, os
+
+          env = json.loads(os.environ["RUNTIME_ENV_JSON"])
+          override = (os.environ.get("ANTHROPIC_API_KEY_OVERRIDE") or "").strip()
+          if override:
+              env["ANTHROPIC_API_KEY"] = override
+          for key, value in list(env.items()):
+              if isinstance(value, str) and not value.isascii():
+                  print(f"::warning::{key} enthält Nicht-ASCII-Zeichen (Einfüge-Schaden) und wird verworfen")
+                  env.pop(key)
+          with open("api/runtime-env.json", "w") as f:
+              json.dump(env, f)
+          print("Sidecar geschrieben mit Schlüsseln:", sorted(env))
+          EOF
 
       - name: Zu Vercel deployen
         env:
