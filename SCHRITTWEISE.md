@@ -43,7 +43,16 @@ im Vercel-Dashboard (Settings → Environment Variables):
 | `MAGIC_LINK_DEV_RETURN` | `false` (Produktion) | ohne SMTP `true` **nur** zusammen mit `ALLOW_INSECURE_DEV_LOGIN=true` |
 | `FRONTEND_BASE_URL` | `https://<projekt>.vercel.app` | korrekte Magic-Link-URL (wird sonst von Vercel abgeleitet) |
 | `ANTHROPIC_API_KEY` | `sk-ant-…` | echter Tutor (ohne Key: deterministischer Mock) |
-| `SMTP_*` | Zugang (z. B. Brevo) | Magic-Link per Mail statt Dev-Rückgabe |
+| `SUPABASE_URL` + `SUPABASE_ANON_KEY` | Projekt-URL + anon-Key (Supabase-Dashboard) | Login-Mails via **Supabase Auth** – kein eigener SMTP-Zugang nötig |
+| `SMTP_*` | Zugang (z. B. Brevo) | Alternative zu Supabase Auth: Magic-Link per eigenem Mailserver |
+
+Für Supabase Auth zusätzlich im Supabase-Dashboard unter **Authentication →
+URL Configuration**: Site URL auf `https://<projekt>.vercel.app` setzen und
+`https://<projekt>.vercel.app/login/verify` als Redirect URL eintragen.
+Hinweis: Der eingebaute Supabase-Mailversand ist gedrosselt (wenige Mails/Stunde,
+für Tests gedacht) – für den echten Betrieb im Supabase-Dashboard unter
+**Authentication → SMTP Settings** einen eigenen SMTP (z. B. Brevo) hinterlegen;
+die App braucht dann trotzdem keine `SMTP_*`-Variablen.
 
 Sicherheits-Guard: In Produktion (Env `VERCEL`/`RENDER` gesetzt) bricht der Start hart
 ab, wenn `JWT_SECRET` der Platzhalter ist oder der Dev-Login ohne bewusste Freigabe

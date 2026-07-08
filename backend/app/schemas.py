@@ -32,6 +32,11 @@ class VerifyRequest(BaseModel):
     token: str
 
 
+class SupabaseVerifyRequest(BaseModel):
+    # Supabase-Access-Token aus dem URL-Fragment nach dem Magic-Link-Klick
+    access_token: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

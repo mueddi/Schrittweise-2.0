@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     allow_insecure_dev_login: bool = False
     frontend_base_url: str = "http://localhost:5173"
 
+    # Supabase Auth: Login-Mails über Supabase statt eigenem SMTP (optional).
+    # Beide Werte gesetzt -> Magic-Link-Mails verschickt Supabase.
+    supabase_url: str = ""
+    supabase_anon_key: str = ""
+
     # SMTP (optional)
     smtp_host: str = ""
     smtp_port: int = 587
@@ -71,6 +76,10 @@ class Settings(BaseSettings):
     @property
     def smtp_enabled(self) -> bool:
         return bool(self.smtp_host and self.smtp_from)
+
+    @property
+    def supabase_auth_enabled(self) -> bool:
+        return bool(self.supabase_url and self.supabase_anon_key)
 
 
 @lru_cache

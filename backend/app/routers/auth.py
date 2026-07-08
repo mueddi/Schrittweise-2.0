@@ -12,6 +12,7 @@ from ..models import MagicLink, Role, User
 from ..schemas import (
     MagicLinkRequest,
     MagicLinkResponse,
+    SupabaseVerifyRequest,
     TokenResponse,
     UserOut,
     UserUpdate,
@@ -19,6 +20,11 @@ from ..schemas import (
 )
 from ..security import create_access_token, hash_token, new_magic_token
 from ..services.mailer import send_magic_link
+from ..services.supabase_auth import (
+    SupabaseRateLimited,
+    get_verified_email,
+    send_magic_link_via_supabase,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -78,6 +84,23 @@ def request_link(payload: MagicLinkRequest, db: Session = Depends(get_db)):
 
     link = f"{settings.frontend_base_url}/login/verify?token={token}"
 
+    # Bevorzugt: Login-Mail über Supabase Auth (kein eigener SMTP-Zugang nötig).
+    # Der Rückweg läuft dann über /api/auth/verify-supabase statt über `token`.
+    if settings.supabase_auth_enabled:
+        try:
+            send_magic_link_via_supabase(email, f"{settings.frontend_base_url}/login/verify")
+            return MagicLinkResponse(sent=True, message="Wir haben dir einen Link geschickt.")
+        except SupabaseRateLimited:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "Zu viele Login-Mails in kurzer Zeit – warte ein paar Minuten und versuch es nochmal.",
+            )
+        except Exception:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Mailversand momentan nicht möglich – versuch es in ein paar Minuten nochmal.",
+            )
+
     if settings.smtp_enabled:
         try:
             if send_magic_link(email, link):
@@ -128,6 +151,24 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Link ungültig oder bereits benutzt.")
     db.commit()
 
+    access = create_access_token(user.id, user.role.value)
+    return TokenResponse(access_token=access, user=UserOut.model_validate(user))
+
+
+@router.post("/verify-supabase", response_model=TokenResponse)
+def verify_supabase(payload: SupabaseVerifyRequest, db: Session = Depends(get_db)):
+    """Tauscht ein Supabase-Access-Token (aus der Login-Mail) gegen das App-JWT."""
+    email = get_verified_email(payload.access_token)
+    if email is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Link ungültig oder abgelaufen. Fordere einen neuen an."
+        )
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Kein Konto mit dieser E-Mail – registriere dich zuerst über «Neu hier».",
+        )
     access = create_access_token(user.id, user.role.value)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
