@@ -70,9 +70,8 @@ design/referenz.html   Visueller Massstab
 
 ## Am einfachsten testen: GitHub Codespaces (ohne Installation)
 
-1. Repo auf GitHub öffnen und oben links den Branch
-   `claude/math-tutor-app-build-a95adx` auswählen.
-2. Grüner Button **«Code» → Tab «Codespaces» → «Create codespace on …»**.
+1. Repo auf GitHub öffnen.
+2. Grüner Button **«Code» → Tab «Codespaces» → «Create codespace on main»**.
 3. 2–3 Minuten warten (Einrichtung läuft automatisch, Server starten von selbst).
 4. Unten im Tab **«Ports»** bei **5173 (Schrittweise App)** auf das
    Globus-Symbol «Open in Browser» klicken – fertig.
