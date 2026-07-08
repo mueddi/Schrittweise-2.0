@@ -1,0 +1,82 @@
+# Render-Blueprint fuer Schrittweise – Launch-Konfiguration.
+# Frontend = Static Site, Backend = Web Service (Docker, mit Tesseract).
+#
+# Datenbank: PostgreSQL bei SUPABASE (empfohlen – dauerhaft gratis, kein
+# 30-Tage-Ablauf wie bei Render-free-Postgres). Einrichtung siehe
+# SCHRITTWEISE.md -> Launch-Checkliste; die Connection-URL traegst du im
+# Render-Dashboard als DATABASE_URL ein (sync: false unten).
+# Wichtig: bei Supabase den «Session pooler»-Connection-String verwenden
+# (IPv4-kompatibel, unterstuetzt Prepared Statements).
+#
+# Alternative Render-eigene DB: den databases-Block unten einkommentieren und
+# DATABASE_URL stattdessen per fromDatabase verdrahten.
+#
+# databases:
+#   - name: schrittweise-db
+#     plan: basic-256mb  # free laeuft nach 30 Tagen ab
+#
+# Nach «New -> Blueprint»:
+#   1. Im Backend-Service DATABASE_URL (Supabase), ANTHROPIC_API_KEY und
+#      SMTP_* eintragen (sync: false).
+#   2. Nach dem ersten Deploy die echten URLs gegenseitig eintragen
+#      (VITE_API_BASE <-> CORS_ORIGINS/FRONTEND_BASE_URL) und redeployen.
+
+services:
+  # ---- Backend (FastAPI, Docker mit Tesseract) ----
+  - type: web
+    name: schrittweise-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false # im Render-Dashboard eintragen, nie im Repo
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_MODEL_DEFAULT
+        value: claude-haiku-4-5
+      - key: ANTHROPIC_MODEL_SMART
+        value: claude-sonnet-4-6
+      # Supabase «Session pooler»-URL, im Dashboard eintragen. Format:
+      #   postgresql://postgres.<projekt>:<PASSWORT>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
+      # (postgres:// / postgresql:// wird automatisch auf psycopg normalisiert)
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://schrittweise-web.onrender.com
+      - key: FRONTEND_BASE_URL
+        value: https://schrittweise-web.onrender.com
+      # Launch: Dev-Login AUS. Ohne SMTP gibt der Login einen klaren Fehler.
+      - key: MAGIC_LINK_DEV_RETURN
+        value: "false"
+      # SMTP fuer den Magic-Link-Versand (z.B. Brevo/Mailgun/Postmark; sync: false
+      # = Werte im Dashboard eintragen)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        value: Schrittweise <no-reply@schrittweise.ch>
+      - key: FREE_MONTHLY_QUOTA
+        value: "20"
+
+  # ---- Frontend (React/Vite, Static Site) ----
+  - type: web
+    name: schrittweise-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://schrittweise-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

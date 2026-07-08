@@ -1,0 +1,220 @@
+"""Tutor-Logik: Hinweis-Leiter-Zustand + Anthropic-Anbindung (Streaming).
+
+Der System-Prompt erzwingt die 4-Stufen-Leiter hart. Das Backend bleibt die
+Autorität über den Leiter-Zustand: es berechnet pro Turn, welche Stufe erlaubt
+ist, und das LLM formuliert nur die pädagogische Antwort dieser Stufe.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+from ..config import settings
+from .sympy_verifier import Verification
+
+try:
+    import anthropic
+except Exception:  # pragma: no cover
+    anthropic = None
+
+
+# ---- Hinweis-Leiter ----
+STUFEN = {
+    1: "Aktivierende Frage – stell eine Frage, die zum ersten Schritt hinfuehrt.",
+    2: "Kleiner Tipp – gib einen konkreten, aber kleinen Hinweis, ohne zu rechnen.",
+    3: "Teilschritt vorgemacht – mach EINEN Rechenschritt vor, aber nicht die ganze Loesung.",
+    4: "Volle Loesung – jetzt darfst du den Loesungsweg Schritt fuer Schritt zeigen.",
+}
+
+SYSTEM_PROMPT = """Du bist «Schrittweise», ein geduldiger Mathe-Tutor fuer Schweizer Oberstufen-Schueler:innen (12–15 Jahre, Lehrplan 21).
+
+DEINE EISERNE REGEL: Du verraetst die Loesung NIEMALS direkt, ausser die Regie-Anweisung erlaubt ausdruecklich Stufe 4. Du fuehrst ueber eine HINWEIS-LEITER mit vier Stufen zum eigenen Denken:
+  Stufe 1 – Aktivierende Frage («Was muesstest du tun, damit die +5 verschwindet?»)
+  Stufe 2 – Kleiner Tipp
+  Stufe 3 – Ein Teilschritt vorgemacht (aber nicht die ganze Loesung)
+  Stufe 4 – Volle Loesung, Schritt fuer Schritt – NUR wenn die Regie sie freigibt (nach mind. 2 echten eigenen Versuchen)
+
+WENN DER SCHUELER BETTELT («gib mir die Loesung 🙏», «sag einfach die Antwort»): Lehne freundlich und bestimmt ab und stell die aktivierende Frage der aktuellen Stufe. Beispiel: «Mach ich extra nicht 🙂 – aber ich helf dir hin. Was faellt dir zuerst auf?» Erhoehe die Stufe dabei NICHT.
+
+STIL:
+- Duze, sei ermutigend, nie belehrend. Schweizer Hochdeutsch: schreib «weiss» statt «weiß» – nie den Buchstaben «ß» verwenden.
+- Kurz halten (1–3 Saetze). Eine Frage oder ein Hinweis pro Antwort, nicht mehr.
+- Formeln in LaTeX zwischen Dollarzeichen, z.B. $3x + 5 = 20$.
+- Wenn der Schueler richtig liegt: freu dich echt und bestaetige knapp, warum es stimmt.
+- Wenn etwas falsch ist: sag nicht einfach «falsch», sondern frag nach oder zeig, wo es harzt.
+
+Du bekommst pro Nachricht eine REGIE-ANWEISUNG mit: erlaubter Stufe, SymPy-Pruefergebnis und Anzahl eigener Versuche. Halte dich strikt daran. Die interne Loesung, falls mitgegeben, verwendest du HOECHSTENS auf Stufe 4."""
+
+
+# "loesung" (oe), "lösung", "losung" alle abdecken
+_LOESUNG = r"l(?:oe|ö|o)sung"
+_ZIEL = rf"(?:{_LOESUNG}|antwort|ergebnis|resultat)"
+BETTEL_PATTERNS = [
+    rf"gib (mir )?die {_LOESUNG}", rf"sag(?:s)? mir die {_LOESUNG}", rf"was ist die {_LOESUNG}",
+    r"einfach die antwort", r"sag einfach", r"verrat", rf"{_LOESUNG} bitte", r"nur die antwort",
+    r"gib die antwort", r"sag mir das ergebnis", rf"{_LOESUNG}\s*🙏", r"bitte die antwort",
+    # generischer: «zeig/nenn/sag mir … Loesung/Antwort/Ergebnis», «wie lautet die Antwort»
+    rf"zeig (mir )?(die|den|das)? ?{_ZIEL}", rf"nenn(e)? (mir )?(die|das)? ?{_ZIEL}",
+    rf"wie (lautet|heisst|ist) (die|das) {_ZIEL}", rf"sag (mir )?(die|das) {_ZIEL}",
+    rf"gib (mir )?(die|das) {_ZIEL}", rf"was ist (die|das) {_ZIEL}", rf"loes(e)? (es |die aufgabe )?fuer mich",
+]
+HILFE_PATTERNS = [
+    r"weiss (es )?nicht", r"keine ahnung", r"komm(e)? nicht weiter", r"h[aä]nge", r"h[iä]lfe",
+    r"kapier", r"versteh(e)? (es )?nicht", r"tipp", r"hinweis", r"n[aä]chste stufe",
+    r"wie (geht|mach|anfangen|weiter)", r"was (jetzt|nun|soll ich)", r"stecke fest",
+]
+
+
+def detect_intent(message: str, verification: Verification) -> str:
+    """'plea' | 'correct' | 'attempt' | 'stuck'."""
+    low = message.lower()
+    if verification.status == "correct":
+        return "correct"
+    if any(re.search(p, low) for p in BETTEL_PATTERNS):
+        return "plea"
+    if verification.status in ("partial", "incorrect"):
+        return "attempt"
+    if verification.extracted:  # eine Zahl/Antwort war drin, auch wenn 'unknown'
+        return "attempt"
+    # Fragt nach Loesung/Antwort/Ergebnis OHNE eigenen Rechenversuch -> Betteln,
+    # damit «zeig mir die antwort» die Leiter nicht hochtreibt.
+    if re.search(_ZIEL, low):
+        return "plea"
+    if any(re.search(p, low) for p in HILFE_PATTERNS):
+        return "stuck"
+    return "stuck"
+
+
+@dataclass
+class LadderStep:
+    intent: str
+    allowed_stage: int
+    own_attempts: int
+    solved: bool
+    permit_solution: bool
+
+
+def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attempts: int = 2) -> LadderStep:
+    """Deterministische Zustandsmaschine der Hinweis-Leiter."""
+    solved = intent == "correct"
+    if solved:
+        return LadderStep(intent, max(current_stage, 1), own_attempts, True, False)
+
+    if intent == "plea":
+        # Betteln: Stufe bleibt, kein Versuch gezaehlt
+        stage = max(current_stage, 1)
+        return LadderStep(intent, stage, own_attempts, False, False)
+
+    if intent == "attempt":
+        own_attempts += 1
+
+    # eine Sprosse hoeher, gedeckelt bei 4
+    stage = min(max(current_stage, 0) + 1, 4)
+    permit = stage >= 4 and own_attempts >= min_attempts
+    if stage == 4 and not permit:
+        stage = 3  # volle Loesung noch gesperrt -> auf Stufe 3 halten
+    return LadderStep(intent, stage, own_attempts, False, permit)
+
+
+# ---- Modellwahl ----
+def pick_model(exercise_text: str, exercise_expr: str | None) -> str:
+    """Standard = Haiku; Sonnet nur fuer komplexe Faelle (Textaufgaben/Geometrie)."""
+    text = (exercise_text or "").lower()
+    complex_markers = ["beweis", "geometrie", "dreieck", "kreis", "winkel", "flaeche", "fläche",
+                       "volumen", "textaufgabe", "wenn", "insgesamt", "zusammen", "prozent"]
+    long_wordy = len(text.split()) > 40 and not exercise_expr
+    if long_wordy or any(m in text for m in complex_markers):
+        return settings.anthropic_model_smart
+    return settings.anthropic_model_default
+
+
+def _regie(step: LadderStep, verification: Verification, exercise_text: str, exercise_expr: str | None) -> str:
+    lines = [
+        "REGIE-ANWEISUNG (nicht an den Schueler weitergeben):",
+        f"- Aufgabe: {exercise_text}" + (f"  [Ausdruck: {exercise_expr}]" if exercise_expr else ""),
+        f"- Erlaubte Stufe: {step.allowed_stage} – {STUFEN[step.allowed_stage]}",
+        f"- SymPy-Pruefung der letzten Antwort: {verification.status} ({verification.detail})",
+        f"- Bisherige eigene Versuche: {step.own_attempts}",
+    ]
+    if step.intent == "plea":
+        lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
+    if step.intent == "correct":
+        lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")
+    if step.intent == "post_solved":
+        lines.append("- Die Aufgabe ist BEREITS GELOEST. Keine neue Leiter: beantworte Verstaendnisfragen kurz oder gratuliere; lade zu einer neuen Aufgabe ein.")
+    if step.permit_solution and verification.solution:
+        lines.append(f"- Stufe 4 freigegeben. Interne Loesung (jetzt zeigbar): {verification.solution}")
+    elif verification.solution:
+        lines.append("- Interne Loesung ist bekannt, aber NOCH GESPERRT – nicht verraten.")
+    return "\n".join(lines)
+
+
+def _build_system(step, verification, exercise_text, exercise_expr):
+    """System als Blockliste – grosser Prompt gecacht, Regie pro Turn frisch."""
+    return [
+        {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": _regie(step, verification, exercise_text, exercise_expr)},
+    ]
+
+
+# Kontext-/Kostendeckel: nur die juengsten Nachrichten gehen an die API.
+HISTORY_LIMIT = 12
+
+
+def _history_to_messages(history: list[dict]) -> list[dict]:
+    if len(history) > HISTORY_LIMIT:
+        # Eroeffnungsnachricht (Aufgabenstellung) behalten + juengster Verlauf
+        history = [history[0]] + history[-(HISTORY_LIMIT - 1):]
+    msgs = []
+    for m in history:
+        role = "assistant" if m["role"] == "tutor" else "user"
+        msgs.append({"role": role, "content": m["text"]})
+    if not msgs or msgs[0]["role"] != "user":
+        msgs.insert(0, {"role": "user", "content": "(Aufgabe gestartet)"})
+    return msgs
+
+
+def stream_reply(history, step: LadderStep, verification: Verification,
+                 exercise_text: str, exercise_expr: str | None):
+    """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming)."""
+    if not (settings.anthropic_api_key and anthropic):
+        yield from _mock_reply(step, verification, exercise_text)
+        return
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    model = pick_model(exercise_text, exercise_expr)
+    system = _build_system(step, verification, exercise_text, exercise_expr)
+    messages = _history_to_messages(history)
+    produced = False
+    try:
+        with client.messages.stream(model=model, max_tokens=400, system=system, messages=messages) as stream:
+            for text in stream.text_stream:
+                produced = True
+                yield text
+    except Exception:  # pragma: no cover – bei API-Fehler nicht die App killen, sondern Mock
+        # Nur wenn noch nichts kam, den Mock als Ersatz liefern – sonst entstuende
+        # aus Teiltext + kompletter Mock-Antwort ein zusammengeklebter Doppel-Text.
+        if not produced:
+            yield from _mock_reply(step, verification, exercise_text)
+
+
+def _mock_reply(step: LadderStep, verification: Verification, exercise_text: str):
+    """Deterministische Antworten ohne API-Key – haelt die Leiter trotzdem ein."""
+    if step.intent == "post_solved":
+        text = "Die hast du schon gelöst 🙂 Wenn du magst, erklär ich dir einen Schritt genauer – oder du startest eine neue Aufgabe."
+    elif step.intent == "correct":
+        text = "Stark, das stimmt! 🎉 Du hast sauber nach der Variablen aufgelöst. Mag noch eine Aufgabe?"
+    elif step.intent == "plea":
+        text = "Mach ich extra nicht 🙂 – aber ich bring dich hin. Was fällt dir als Erstes auf, das du wegbekommen willst?"
+    elif step.allowed_stage == 1:
+        text = "Kein Stress. Schau die Gleichung an: Was müsstest du zuerst tun, damit die Zahl auf derselben Seite wie das $x$ verschwindet?"
+    elif step.allowed_stage == 2:
+        text = "Kleiner Tipp: Was auf der einen Seite passiert, machst du auch auf der anderen. Überleg, welche Gegen-Rechnung den Störer auffliegen lässt."
+    elif step.allowed_stage == 3:
+        text = "Ich mach den ersten Schritt vor: Wir rechnen auf beiden Seiten $-5$. Was steht dann links, und was rechts? Rechne den nächsten Schritt selber."
+    else:
+        sol = verification.solution or "die Loesung"
+        text = f"Okay, jetzt gemeinsam bis zum Schluss: erst auf beiden Seiten $-5$, dann durch den Koeffizienten teilen. Damit kommst du auf {sol}. Probier den letzten Schritt nochmal selbst nach."
+    # in kleinen Haeppchen ausgeben, damit sich Streaming echt anfuehlt
+    for chunk in re.findall(r"\S+\s*", text):
+        yield chunk

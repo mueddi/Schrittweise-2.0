@@ -1,0 +1,2 @@
+# Vercel installiert Python-Dependencies aus dem Repo-Root
+-r backend/requirements.txt

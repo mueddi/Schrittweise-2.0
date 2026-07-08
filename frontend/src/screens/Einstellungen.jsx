@@ -1,0 +1,169 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
+
+const TABS = [
+  { key: "profil", icon: "👤", label: "Profil" },
+  { key: "sprache", icon: "🌐", label: "Sprache" },
+  { key: "privat", icon: "🔒", label: "Privatsphäre" },
+  { key: "abo", icon: "💳", label: "Abo & Tokens" },
+];
+const GRADES = ["1. Oberstufe", "2. Oberstufe", "3. Oberstufe"];
+
+export default function Einstellungen() {
+  const nav = useNavigate();
+  const { user, setUser } = useAuth();
+  const [tab, setTab] = useState("profil");
+  const [name, setName] = useState(user?.display_name || "");
+  const [grade, setGrade] = useState(user?.grade_level || "2. Oberstufe");
+  const [language, setLanguage] = useState(user?.language || "de");
+  const [share, setShare] = useState(user?.share_with_parents ?? true);
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function save(extra = {}) {
+    setBusy(true);
+    setSaved(false);
+    try {
+      const updated = await api.patch("/api/auth/me", {
+        display_name: name,
+        grade_level: grade,
+        language,
+        share_with_parents: share,
+        ...extra,
+      });
+      setUser(updated);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      return true;
+    } catch (e) {
+      alert(e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const initial = (user?.display_name || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ height: "100%", display: "flex" }} className="settings">
+      <div style={{ flex: "0 0 220px", background: "#fbfbfd", borderRight: "1px solid #eef0f3", padding: "18px 0" }} className="settings-nav">
+        <div style={{ padding: "0 18px 14px", fontSize: 18, fontWeight: 800, letterSpacing: "-.02em" }}>Einstellungen</div>
+        {TABS.map((t) => (
+          <div
+            key={t.key}
+            onClick={() => (t.key === "abo" ? nav("/app/preise") : setTab(t.key))}
+            style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 8px", padding: "9px 12px", borderRadius: 10, fontSize: 13, cursor: "pointer", background: tab === t.key ? "#eef0fe" : "transparent", color: tab === t.key ? "#4f46e5" : "#1a1c22", fontWeight: tab === t.key ? 600 : 400 }}
+          >
+            {t.icon} {t.label}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "30px 36px", background: "#fff" }}>
+        {tab === "profil" && (
+          <>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 24 }}>Profil</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
+              <span style={{ width: 64, height: 64, borderRadius: "50%", background: "#eef0fe", color: "#4f46e5", fontWeight: 800, fontSize: 24, display: "grid", placeItems: "center" }}>{initial}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#4f46e5", marginBottom: 4 }}>Anzeigename statt Klarname</div>
+                <div style={{ fontSize: 12, color: "#9aa0ab" }}>Wir speichern bewusst keinen echten Namen.</div>
+              </div>
+            </div>
+            <div style={{ maxWidth: 520 }}>
+              <Field label="Anzeigename">
+                <input value={name} onChange={(e) => setName(e.target.value)} className="input-clean" style={{ width: "100%", fontSize: 14 }} />
+              </Field>
+              <Field label="E-Mail">
+                <div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280" }}>
+                  <span>{user?.email}</span>
+                  <span style={{ fontSize: 11, color: "#1a7f3c", fontWeight: 700 }}>✓ bestätigt</span>
+                </div>
+              </Field>
+              <Field label="Klassenstufe">
+                <select value={grade} onChange={(e) => setGrade(e.target.value)} style={selectStyle}>
+                  {GRADES.map((g) => <option key={g}>{g}</option>)}
+                </select>
+              </Field>
+              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} />
+            </div>
+          </>
+        )}
+
+        {tab === "sprache" && (
+          <>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Sprache</div>
+            <div style={{ maxWidth: 520 }}>
+              <Field label="Sprache der App">
+                <select value={language} onChange={(e) => setLanguage(e.target.value)} style={selectStyle}>
+                  <option value="de">Deutsch (Schweiz)</option>
+                  <option value="fr">Français</option>
+                  <option value="it">Italiano</option>
+                </select>
+              </Field>
+              <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 20 }}>Weitere Sprachen folgen. Der Tutor bleibt vorerst auf Deutsch.</div>
+              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} />
+            </div>
+          </>
+        )}
+
+        {tab === "privat" && (
+          <>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Privatsphäre</div>
+            <div style={{ maxWidth: 620 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #eef0f3", padding: "16px 0" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Fortschritt für Eltern freigeben</div>
+                  <div style={{ fontSize: 12, color: "#9aa0ab" }}>Nur grober Fortschritt, keine einzelnen Nachrichten.</div>
+                </div>
+                <Toggle on={share} onClick={async () => {
+                  const next = !share;
+                  setShare(next);
+                  const ok = await save({ share_with_parents: next });
+                  if (!ok) setShare(!next); // PATCH fehlgeschlagen -> Schalter zuruecksetzen
+                }} />
+              </div>
+              <div style={{ background: "#f6f7fb", border: "1px solid #eef0f3", borderRadius: 14, padding: 16, fontSize: 13, color: "#6b7280", lineHeight: 1.55, marginTop: 12 }}>
+                🔒 Deine Chats bleiben privat. Eltern sehen nur Aggregate wie Selbständigkeit, gelöste Aufgaben und Themen-Trends – technisch gibt es aus der Eltern-Ansicht keinen Zugriff auf deine Nachrichten.
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const selectStyle = { width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 14 };
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>{label}</label>
+      <div style={{ border: "1px solid #d2d4dd", borderRadius: 11, padding: "11px 13px", fontSize: 14 }}>{children}</div>
+    </div>
+  );
+}
+
+function SaveRow({ busy, saved, onSave, onCancel }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
+      <button onClick={onSave} disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>
+        {busy ? "speichert …" : "Speichern"}
+      </button>
+      <button onClick={onCancel} className="btn-ghost" style={{ padding: "11px 20px", fontSize: 14 }}>Abbrechen</button>
+      {saved && <span style={{ fontSize: 13, color: "#1a7f3c", fontWeight: 600 }}>✓ gespeichert</span>}
+    </div>
+  );
+}
+
+function Toggle({ on, onClick }) {
+  return (
+    <div onClick={onClick} style={{ width: 42, height: 24, borderRadius: 999, position: "relative", cursor: "pointer", background: on ? "#6366f1" : "#d2d4dd", transition: "background .15s" }}>
+      <span style={{ position: "absolute", top: 2, left: on ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+    </div>
+  );
+}

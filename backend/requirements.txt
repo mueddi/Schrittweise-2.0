@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.20
+sympy==1.13.3
+anthropic==0.42.0
+pillow==11.1.0
+pytesseract==0.3.13
+email-validator==2.2.0
+# Postgres-Treiber (aktiv, damit DATABASE_URL-Wechsel auf Postgres sofort funktioniert)
+psycopg[binary]==3.2.3

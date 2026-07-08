@@ -1,0 +1,29 @@
+# --- Schrittweise ---
+# Python
+backend/.venv/
+**/__pycache__/
+*.pyc
+backend/*.db
+backend/schrittweise.db
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Env & Secrets (NIE committen)
+.env
+backend/.env
+frontend/.env
+*.local
+api/runtime-env.json
+.vercel/
+
+# Test-Screenshots / Scratch
+frontend/*.png
+*.mjs.log
+
+# OS
+.DS_Store
+frontend/dist-demo/

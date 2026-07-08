@@ -1,0 +1,26 @@
+# Secrets NIE ins Deployment laden (.vercelignore ersetzt .gitignore beim CLI-Upload).
+# runtime-env.json ist bewusst NICHT ausgeschlossen – es ist das Secrets-Sidecar.
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+frontend/.env.*
+
+node_modules
+frontend/node_modules
+frontend/dist-demo
+backend/tests
+backend/uploads
+backend/.venv
+backend/__pycache__
+**/__pycache__
+*.db
+design
+.devcontainer
+.github
+docs
+*.md
+start.sh
+start.bat
+render.yaml

@@ -1,0 +1,147 @@
+import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../lib/api.js";
+import { useShell } from "./AppShell.jsx";
+
+const BASE = import.meta.env.VITE_API_BASE || "";
+
+// Neue Aufgabe: Foto-Upload mit OCR-Preview (Phase 3) + manuelle Eingabe.
+export default function NewTaskModal({ onClose, presetTopicId }) {
+  const nav = useNavigate();
+  const shell = useShell();
+  const fileRef = useRef(null);   // Dateiauswahl (ohne capture)
+  const cameraRef = useRef(null); // Kamera (capture=environment)
+  const [text, setText] = useState("");
+  const [expr, setExpr] = useState("");
+  const [topicId, setTopicId] = useState(presetTopicId ? String(presetTopicId) : "");
+  const [imagePath, setImagePath] = useState(null);
+  const [fileName, setFileName] = useState(null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrNote, setOcrNote] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [drag, setDrag] = useState(false);
+
+  // Waehrend des Anlegens nicht schliessen – sonst navigiert start() ins Leere
+  // und verbraucht trotzdem Kontingent.
+  const safeClose = () => { if (!busy) onClose(); };
+
+  async function handleFile(file) {
+    if (!file || !file.type.startsWith("image/")) return;
+    setOcrBusy(true);
+    setError(null);
+    setFileName(file.name);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await api.upload("/api/exercises/ocr", fd);
+      setImagePath(res.image_path);
+      if (res.math_expression) {
+        setExpr(res.math_expression);
+        if (!text.trim()) setText(res.text || `Löse: ${res.math_expression}`);
+        setOcrNote(`✓ erkannt: ${res.math_expression}`);
+      } else if (res.text) {
+        if (!text.trim()) setText(res.text);
+        setOcrNote("Text erkannt – prüf und ergänz den Ausdruck bitte.");
+      } else {
+        setOcrNote("Konnte nichts sicher erkennen – tipp die Aufgabe kurz selbst ein.");
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setOcrBusy(false);
+    }
+  }
+
+  async function start() {
+    if (!text.trim()) {
+      setError("Schreib zuerst die Aufgabe auf (oder lad ein Foto hoch).");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const ex = await api.post("/api/exercises", {
+        text: text.trim(),
+        math_expression: expr.trim() || null,
+        topic_id: topicId ? Number(topicId) : null,
+        image_path: imagePath,
+      });
+      const attempt = await api.post(`/api/exercises/${ex.id}/attempts`, {});
+      shell.reloadQuota?.();
+      shell.reloadTopics?.();
+      onClose();
+      nav(`/app/lernen/${attempt.attempt.id}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div onClick={safeClose} style={{ position: "absolute", inset: 0, background: "rgba(20,20,40,.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} className="popin" style={{ width: 560, maxWidth: "92vw", maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 20, boxShadow: "0 30px 70px rgba(20,20,50,.35)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "1px solid #eef0f3", position: "sticky", top: 0, background: "#fff" }}>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>Aufgabe hochladen</div>
+          <span onClick={safeClose} style={{ width: 30, height: 30, borderRadius: "50%", background: "#f1f2f6", color: "#6b7280", display: "grid", placeItems: "center", fontSize: 15, cursor: "pointer" }}>✕</span>
+        </div>
+        <div style={{ padding: 22 }}>
+          {/* Drag & Drop / Kamera */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files?.[0]); }}
+            style={{ border: `2px dashed ${drag ? "#6366f1" : "#c3c7f0"}`, background: drag ? "#eef0fe" : "#f7f8ff", borderRadius: 16, padding: 26, textAlign: "center", marginBottom: 16 }}
+          >
+            <div style={{ width: 54, height: 54, borderRadius: 16, background: "#eef0fe", color: "#4f46e5", fontSize: 24, display: "grid", placeItems: "center", margin: "0 auto 14px" }}>📷</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 5 }}>Foto hierher ziehen oder auswählen</div>
+            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Auch krumm fotografiert oder handgeschrieben – wir erkennen es.</div>
+            <div style={{ display: "inline-flex", gap: 10 }}>
+              <button onClick={() => fileRef.current?.click()} className="btn-primary" style={{ fontSize: 13, borderRadius: 10, padding: "10px 16px", border: "none" }}>Datei wählen</button>
+              <button onClick={() => cameraRef.current?.click()} className="btn-ghost" style={{ fontSize: 13, borderRadius: 10, padding: "10px 16px" }}>📸 Kamera</button>
+            </div>
+            {/* getrennte Inputs: capture erzwingt auf Mobile die Kamera – darf nur am Kamera-Button haengen */}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ""; }} />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ""; }} />
+          </div>
+
+          {/* OCR-Preview */}
+          {(fileName || ocrBusy) && (
+            <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#f6f7fb", border: "1px solid #eef0f3", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
+              <div style={{ flex: "0 0 64px", height: 48, borderRadius: 8, background: "#fff", border: "1px solid #e7e8ee", display: "grid", placeItems: "center", fontFamily: "Georgia,serif", fontStyle: "italic", fontSize: 15, overflow: "hidden" }}>
+                {imagePath ? <img src={`${BASE}${imagePath}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "…"}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileName || "wird erkannt …"}</div>
+                <div style={{ fontSize: 12, color: ocrNote?.startsWith("✓") ? "#1a7f3c" : "#9aa0ab" }}>{ocrBusy ? "erkenne …" : ocrNote}</div>
+              </div>
+            </div>
+          )}
+
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Aufgabe (Text)</label>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="z.B. Löse nach x auf: 3x + 5 = 20" rows={2} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 12 }} />
+
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Mathe-Ausdruck (korrigierbar, hilft beim Prüfen)</label>
+          <input value={expr} onChange={(e) => setExpr(e.target.value)} placeholder="z.B. 3*x + 5 = 20" style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 12 }} />
+
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Thema (optional)</label>
+          <select value={topicId} onChange={(e) => setTopicId(e.target.value)} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 14, background: "#fff" }}>
+            <option value="">– kein Thema –</option>
+            {(shell.topics || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+
+          {error && <div style={{ fontSize: 13, color: "#c0392b", marginBottom: 12 }}>{error}</div>}
+
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12, color: "#9aa0ab" }}>
+            <span>🔒</span> Dein Bild bleibt in der Schweiz und trainiert keine Modelle.
+          </div>
+
+          <button onClick={start} disabled={busy} className="btn-primary" style={{ width: "100%", borderRadius: 12, padding: 13, fontSize: 15, border: "none", opacity: busy ? 0.7 : 1 }}>
+            {busy ? "startet …" : "Loslegen →"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

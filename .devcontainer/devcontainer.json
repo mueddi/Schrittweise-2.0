@@ -1,0 +1,11 @@
+{
+  "name": "Schrittweise",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/run.sh",
+  "forwardPorts": [5173, 8000],
+  "portsAttributes": {
+    "5173": { "label": "Schrittweise App", "onAutoForward": "notify" },
+    "8000": { "label": "Schrittweise API", "onAutoForward": "silent" }
+  }
+}
