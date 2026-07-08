@@ -1,4 +1,4 @@
-"""JWT-Erzeugung/-Pruefung und Token-Helfer fuer den Magic-Link."""
+"""JWT-Erzeugung/-Pruefung, Passwort-Hashing und Token-Helfer."""
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -19,6 +19,30 @@ def decode_access_token(token: str) -> dict | None:
         return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError:
         return None
+
+
+def hash_password(password: str) -> str:
+    """Passwort-Hash mit scrypt (Standardbibliothek, keine Zusatz-Dependency)."""
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return f"scrypt:16384:8:1${salt.hex()}${digest.hex()}"
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        params, salt_hex, digest_hex = stored.split("$")
+        _, n, r, p = params.split(":")
+        digest = hashlib.scrypt(
+            password.encode(),
+            salt=bytes.fromhex(salt_hex),
+            n=int(n),
+            r=int(r),
+            p=int(p),
+            dklen=32,
+        )
+        return secrets.compare_digest(digest.hex(), digest_hex)
+    except Exception:
+        return False
 
 
 def new_magic_token() -> str:

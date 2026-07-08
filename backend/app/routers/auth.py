@@ -12,13 +12,21 @@ from ..models import MagicLink, Role, User
 from ..schemas import (
     MagicLinkRequest,
     MagicLinkResponse,
+    PasswordLoginRequest,
+    PasswordRegisterRequest,
     SupabaseVerifyRequest,
     TokenResponse,
     UserOut,
     UserUpdate,
     VerifyRequest,
 )
-from ..security import create_access_token, hash_token, new_magic_token
+from ..security import (
+    create_access_token,
+    hash_password,
+    hash_token,
+    new_magic_token,
+    verify_password,
+)
 from ..services.mailer import send_magic_link
 from ..services.supabase_auth import (
     SupabaseRateLimited,
@@ -32,6 +40,55 @@ LINK_TTL_MINUTES = 30
 # Rate-Limit: max. Link-Anfragen pro E-Mail im Zeitfenster (Spam-/Abuse-Schutz)
 RATE_LIMIT_MAX = 5
 RATE_LIMIT_WINDOW_MINUTES = 15
+
+
+# Dummy-Hash für konstante Antwortzeit bei unbekannter E-Mail (kein User-Enumeration-Timing)
+_DUMMY_HASH = hash_password("nur-fuer-timing-vergleich")
+
+
+@router.post("/register", response_model=TokenResponse)
+def register_password(payload: PasswordRegisterRequest, db: Session = Depends(get_db)):
+    """Konto mit E-Mail + Passwort anlegen und direkt einloggen."""
+    email = payload.email.lower().strip()
+    user = db.scalar(select(User).where(User.email == email))
+
+    if user is not None and user.password_hash:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Konto existiert bereits – wechsle zu «Anmelden»."
+        )
+
+    if user is None:
+        role = Role.parent if payload.role == "parent" else Role.student
+        display = (payload.display_name or email.split("@")[0]).strip()[:80]
+        user = User(
+            email=email,
+            display_name=display,
+            role=role,
+            grade_level=payload.grade_level,
+        )
+        db.add(user)
+
+    # Passwortloses Alt-Konto (Magic-Link-Zeit, nie eingeloggt): Passwort setzen erlaubt.
+    user.password_hash = hash_password(payload.password)
+    db.commit()
+    db.refresh(user)
+
+    access = create_access_token(user.id, user.role.value)
+    return TokenResponse(access_token=access, user=UserOut.model_validate(user))
+
+
+@router.post("/login", response_model=TokenResponse)
+def login_password(payload: PasswordLoginRequest, db: Session = Depends(get_db)):
+    email = payload.email.lower().strip()
+    user = db.scalar(select(User).where(User.email == email))
+
+    stored = user.password_hash if user is not None and user.password_hash else _DUMMY_HASH
+    ok = verify_password(payload.password, stored)
+    if user is None or not user.password_hash or not ok:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-Mail oder Passwort falsch.")
+
+    access = create_access_token(user.id, user.role.value)
+    return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 
 @router.post("/request-link", response_model=MagicLinkResponse)

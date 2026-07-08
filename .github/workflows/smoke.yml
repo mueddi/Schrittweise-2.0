@@ -1,42 +1,36 @@
-name: Smoke-Test (Login-Mail)
+name: Smoke-Test (Login)
 
 on:
   workflow_dispatch:
-    inputs:
-      email:
-        description: "E-Mail für den Test-Login"
-        required: false
-        default: "schrittweise.smoketest@example.com"
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Secret-Werte prüfen (ohne Schlüssel auszugeben)
-        env:
-          RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
+      - name: Registrierung (200 beim ersten Mal, 409 danach – beides ok)
         run: |
-          echo "$RUNTIME_ENV_JSON" | jq -r 'keys' || { echo "::error::RUNTIME_ENV_JSON ist kein gültiges JSON"; exit 1; }
-          for k in ANTHROPIC_API_KEY JWT_SECRET DATABASE_URL SUPABASE_ANON_KEY; do
-            v=$(echo "$RUNTIME_ENV_JSON" | jq -r ".$k // empty")
-            if LC_ALL=C grep -qP '[^\x20-\x7e]' <<<"$v"; then
-              echo "::warning::$k enthält NICHT-ASCII-Zeichen (beim Einfügen beschädigt), Länge ${#v}"
-            else
-              echo "$k: ok (Länge ${#v})"
-            fi
-          done
-
-      - name: Supabase OTP direkt aufrufen (Publishable Key wie im Code)
-        run: |
-          curl -sS -w "\nHTTP %{http_code}\n" -X POST \
-            "https://bogrqbazqjvjpahuecon.supabase.co/auth/v1/otp?redirect_to=https://schrittweise-2-0.vercel.app/login/verify" \
-            -H "apikey: sb_publishable_Y1lYSALGd8Wdg_HoDjf0cA_217R27Ne" \
+          code=$(curl -sS -o /tmp/reg.json -w "%{http_code}" -X POST \
+            "https://schrittweise-2-0.vercel.app/api/auth/register" \
             -H "Content-Type: application/json" \
-            -d "{\"email\":\"${{ inputs.email }}\",\"create_user\":true}"
+            -d '{"email":"schrittweise.smoketest@example.com","password":"smoke-test-passwort-123","display_name":"Smoke"}')
+          echo "Register: HTTP $code"; cat /tmp/reg.json; echo ""
+          [ "$code" = "200" ] || [ "$code" = "409" ] || exit 1
 
-      - name: request-link der App aufrufen
+      - name: Login muss funktionieren
         run: |
-          curl -sS -w "\nHTTP %{http_code}\n" -X POST \
-            "https://schrittweise-2-0.vercel.app/api/auth/request-link" \
+          code=$(curl -sS -o /tmp/login.json -w "%{http_code}" -X POST \
+            "https://schrittweise-2-0.vercel.app/api/auth/login" \
             -H "Content-Type: application/json" \
-            -d "{\"email\":\"${{ inputs.email }}\",\"register\":true,\"display_name\":\"Smoke\"}"
+            -d '{"email":"schrittweise.smoketest@example.com","password":"smoke-test-passwort-123"}')
+          echo "Login: HTTP $code"
+          [ "$code" = "200" ] || { cat /tmp/login.json; exit 1; }
+          python3 -c "import json; d=json.load(open('/tmp/login.json')); assert d['access_token']; print('Token erhalten, Nutzer:', d['user']['display_name'])"
+
+      - name: Falsches Passwort muss 401 geben
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+            "https://schrittweise-2-0.vercel.app/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"schrittweise.smoketest@example.com","password":"absichtlich-falsch"}')
+          echo "Falsches Passwort: HTTP $code"
+          [ "$code" = "401" ] || exit 1

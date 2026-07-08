@@ -297,6 +297,25 @@ const J = (data, status = 200) =>
 const ERR = (detail, status) => J({ detail }, status);
 
 const routes = [
+  ["POST", /^\/api\/auth\/register$/, async (_, body) => {
+    const email = (body.email || "").toLowerCase().trim();
+    let u = db.users.find((x) => x.email === email);
+    if (u && u.password) return ERR("Konto existiert bereits – wechsle zu «Anmelden».", 409);
+    if (!u) {
+      u = { id: nid(), email, display_name: (body.display_name || email.split("@")[0]).slice(0, 80),
+        role: body.role === "parent" ? "parent" : "student",
+        grade_level: body.grade_level || null, language: "de", share_with_parents: true };
+      db.users.push(u);
+    }
+    u.password = body.password; save();
+    return J({ access_token: `demo-${u.id}`, token_type: "bearer", user: userOut(u) });
+  }],
+  ["POST", /^\/api\/auth\/login$/, async (_, body) => {
+    const email = (body.email || "").toLowerCase().trim();
+    const u = db.users.find((x) => x.email === email);
+    if (!u || !u.password || u.password !== body.password) return ERR("E-Mail oder Passwort falsch.", 401);
+    return J({ access_token: `demo-${u.id}`, token_type: "bearer", user: userOut(u) });
+  }],
   ["POST", /^\/api\/auth\/request-link$/, async (_, body) => {
     const email = (body.email || "").toLowerCase().trim();
     let u = db.users.find((x) => x.email === email);

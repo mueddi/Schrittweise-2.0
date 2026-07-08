@@ -47,6 +47,16 @@ def get_db():
 
 def init_db() -> None:
     """Erzeugt alle Tabellen (einfache Migration fuer den Start)."""
+    from sqlalchemy import inspect, text
+
     from . import models  # noqa: F401  – Modelle registrieren
 
     Base.metadata.create_all(bind=engine)
+
+    # Mini-Migration: create_all ergaenzt keine Spalten in bestehenden Tabellen.
+    inspector = inspect(engine)
+    if "users" in inspector.get_table_names():
+        existing = {col["name"] for col in inspector.get_columns("users")}
+        if "password_hash" not in existing:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"))

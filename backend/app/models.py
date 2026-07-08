@@ -67,6 +67,9 @@ class User(Base):
     grade_level: Mapped[str | None] = mapped_column(String(40), nullable=True)  # z.B. "2. Oberstufe"
     language: Mapped[str] = mapped_column(String(8), default="de", nullable=False)
 
+    # Passwort-Login (scrypt-Hash); NULL bei Alt-Konten aus der Magic-Link-Zeit
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # Abo / Kontingent
     plan: Mapped[Plan] = mapped_column(Enum(Plan), default=Plan.free, nullable=False)
     token_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

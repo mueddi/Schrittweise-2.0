@@ -37,6 +37,19 @@ class SupabaseVerifyRequest(BaseModel):
     access_token: str
 
 
+class PasswordRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str | None = Field(default=None, max_length=80)
+    role: str = "student"  # "student" | "parent"
+    grade_level: str | None = None
+
+
+class PasswordLoginRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(max_length=128)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

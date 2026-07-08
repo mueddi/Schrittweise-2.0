@@ -32,7 +32,7 @@ wenn Schüler:innen um die Lösung betteln.
 - Foto-Upload von Aufgaben mit OCR-Preview
 - Themen-Verwaltung mit Fortschrittsanzeige
 - Eltern-Dashboard (Verknüpfung per Code, nur Aggregate)
-- Magic-Link-Login (passwortlos), Gratis-Kontingent + Preisseite
+- Einfacher Login mit E-Mail + Passwort, Gratis-Kontingent + Preisseite
 - Mock-Tutor ohne API-Key — die App ist auch ohne Anthropic-Key voll testbar
 
 ## Tech-Stack
@@ -44,7 +44,7 @@ wenn Schüler:innen um die Lösung betteln.
 | Mathe-Verifikation | SymPy |
 | KI | Anthropic API (Haiku als Standard, Sonnet für komplexe Aufgaben, Prompt-Caching) |
 | Datenbank | SQLite → Postgres/Supabase via SQLAlchemy (nur Config-Wechsel) |
-| Auth | Magic-Link (passwortlos) + JWT |
+| Auth | E-Mail + Passwort (scrypt) + JWT; Magic-Link-Flows als Alternative im Code |
 | Deployment | Vercel (Serverless + Static Build) oder Render (`render.yaml`-Blueprint) |
 
 ## Schnellstart

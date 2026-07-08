@@ -1,37 +1,41 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 
 export default function Login() {
   const nav = useNavigate();
+  const { login } = useAuth();
   const [tab, setTab] = useState("an"); // "an" = anmelden, "neu" = registrieren
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [grade, setGrade] = useState("2. Oberstufe");
   const [role, setRole] = useState("student");
-  const [status, setStatus] = useState(null); // {type, text, url}
+  const [status, setStatus] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
 
   async function submit(e) {
     e?.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !password) return;
+    if (tab === "neu" && password.length < 8) {
+      setStatus({ type: "error", text: "Das Passwort braucht mindestens 8 Zeichen." });
+      return;
+    }
     setBusy(true);
     setStatus(null);
     try {
-      const body = { email: email.trim(), register: tab === "neu" };
+      let res;
       if (tab === "neu") {
-        body.display_name = name.trim() || undefined;
-        body.role = role;
+        const body = { email: email.trim(), password, role };
+        if (name.trim()) body.display_name = name.trim();
         if (role === "student") body.grade_level = grade;
-      }
-      const res = await api.post("/api/auth/request-link", body);
-      if (res.dev_token) {
-        // Dev-Modus: kein Mailserver – direkt zum Verify
-        setStatus({ type: "dev", text: "Dev-Modus: du wirst direkt eingeloggt …" });
-        nav(`/login/verify?token=${encodeURIComponent(res.dev_token)}`);
+        res = await api.post("/api/auth/register", body);
       } else {
-        setStatus({ type: "sent", text: "Wir haben dir einen Login-Link geschickt. Schau in dein E-Mail-Postfach." });
+        res = await api.post("/api/auth/login", { email: email.trim(), password });
       }
+      await login(res.access_token, res.user);
+      nav(res.user.role === "parent" ? "/eltern" : "/app/lernen", { replace: true });
     } catch (err) {
       setStatus({ type: "error", text: err.message });
     } finally {
@@ -109,10 +113,26 @@ export default function Login() {
             <span style={{ color: "#b6bcc6", fontSize: 14 }}>✉</span>
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="du@schule.ch" className="input-clean" style={{ flex: 1 }} />
           </div>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 16, lineHeight: 1.5 }}>Wir schicken dir einen Link – kein Passwort zum Merken.</div>
+
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Passwort</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #d2d4dd", borderRadius: 11, padding: "11px 13px", marginBottom: 14 }}>
+            <span style={{ color: "#b6bcc6", fontSize: 14 }}>🔒</span>
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              placeholder={tab === "neu" ? "mindestens 8 Zeichen" : "dein Passwort"}
+              autoComplete={tab === "neu" ? "new-password" : "current-password"}
+              className="input-clean"
+              style={{ flex: 1 }}
+            />
+          </div>
+          {tab === "neu" && (
+            <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 16, lineHeight: 1.5 }}>Merk dir dein Passwort gut – Tipp: drei Wörter, die du dir vorstellen kannst.</div>
+          )}
 
           <button type="submit" disabled={busy} className="btn-primary" style={{ width: "100%", borderRadius: 12, padding: 13, fontSize: 15, marginBottom: 18, opacity: busy ? 0.7 : 1 }}>
-            {busy ? "einen Moment …" : "Link senden"}
+            {busy ? "einen Moment …" : tab === "neu" ? "Konto erstellen" : "Anmelden"}
           </button>
 
           {status && (
