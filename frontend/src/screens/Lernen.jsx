@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, getToken } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
+import DrawPad from "../components/DrawPad.jsx";
 import MathText from "../lib/MathText.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
@@ -110,6 +111,7 @@ export default function Lernen() {
   const [busy, setBusy] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [drawOpen, setDrawOpen] = useState(false);
   const chatRef = useRef(null);
   // Jeder Attempt-Wechsel/Send bekommt eine Token-Nummer; abgelaufene Antworten
   // (Race beim Aufgabenwechsel waehrend des Streamens) werden verworfen.
@@ -344,6 +346,7 @@ export default function Lernen() {
       <div style={{ padding: "14px 18px", background: "#fff", borderTop: "1px solid #eef0f3" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #d2d4dd", borderRadius: 24, padding: "7px 8px 7px 14px" }}>
           <span onClick={() => shell.openNewTask()} title="Foto-Aufgabe" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>📷</span>
+          <span onClick={() => setDrawOpen(true)} title="Mit dem Stift schreiben" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -354,6 +357,13 @@ export default function Lernen() {
           <button onClick={send} disabled={busy} style={{ width: 34, height: 34, borderRadius: "50%", background: "#6366f1", color: "#fff", border: "none", display: "grid", placeItems: "center", fontSize: 15, boxShadow: "0 2px 8px rgba(99,102,241,.35)", opacity: busy ? 0.6 : 1 }}>↑</button>
         </div>
       </div>
+
+      {drawOpen && (
+        <DrawPad
+          onClose={() => setDrawOpen(false)}
+          onResult={(text) => setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))}
+        />
+      )}
     </div>
   );
 }

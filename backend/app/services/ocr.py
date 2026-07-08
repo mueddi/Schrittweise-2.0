@@ -48,6 +48,63 @@ class PytesseractOcr:
             return OcrResult(text="", math_expression=None, confidence=0.0)
 
 
+class ClaudeVisionOcr:
+    """Erkennung über Claude Vision – liest auch Handschrift (Stift-Eingabe) zuverlässig."""
+
+    name = "claude-vision"
+
+    def recognize(self, image_bytes: bytes) -> OcrResult:
+        try:
+            import base64
+
+            import anthropic
+            from PIL import Image
+
+            from ..config import settings
+
+            fmt = (Image.open(io.BytesIO(image_bytes)).format or "PNG").lower()
+            media_type = {"jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(
+                fmt, "image/png"
+            )
+            client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            resp = client.messages.create(
+                model=settings.anthropic_model_default,
+                max_tokens=300,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": base64.standard_b64encode(image_bytes).decode(),
+                                },
+                            },
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Transkribiere die (hand)geschriebene Mathe-Notiz auf dem Bild "
+                                    "als reinen Text. Formeln linear schreiben (z.B. 3x + 5 = 20, "
+                                    "Brueche als a/b, Potenzen als ^). Gib NUR die Transkription "
+                                    "zurueck, ohne Kommentar. Wenn nichts lesbar ist, gib LEER zurueck."
+                                ),
+                            },
+                        ],
+                    }
+                ],
+            )
+            text = "".join(b.text for b in resp.content if b.type == "text").strip()
+            if text.upper() == "LEER":
+                text = ""
+            expr = _guess_math_expression(text)
+            return OcrResult(text=text, math_expression=expr, confidence=0.9 if text else 0.0)
+        except Exception:
+            # Vision nicht verfuegbar/fehlgeschlagen -> klassisches OCR als Fallback
+            return PytesseractOcr().recognize(image_bytes)
+
+
 class MathpixOcr:  # pragma: no cover – Platzhalter fuer spaeteren Wechsel
     name = "mathpix"
 
@@ -56,4 +113,8 @@ class MathpixOcr:  # pragma: no cover – Platzhalter fuer spaeteren Wechsel
 
 
 def get_ocr_provider() -> OcrProvider:
+    from ..config import settings
+
+    if settings.anthropic_api_key:
+        return ClaudeVisionOcr()
     return PytesseractOcr()

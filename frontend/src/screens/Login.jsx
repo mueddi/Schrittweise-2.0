@@ -10,7 +10,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [grade, setGrade] = useState("2. Oberstufe");
+  const [grade, setGrade] = useState(""); // bewusst leer: Klasse aktiv wählen
   const [role, setRole] = useState("student");
   const [status, setStatus] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
@@ -20,6 +20,10 @@ export default function Login() {
     if (!email.trim() || !password) return;
     if (tab === "neu" && password.length < 8) {
       setStatus({ type: "error", text: "Das Passwort braucht mindestens 8 Zeichen." });
+      return;
+    }
+    if (tab === "neu" && role === "student" && !grade) {
+      setStatus({ type: "error", text: "Bitte wähle deine Klasse aus." });
       return;
     }
     setBusy(true);
@@ -105,6 +109,23 @@ export default function Login() {
                 <span style={{ color: "#b6bcc6", fontSize: 14 }}>☺</span>
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z.B. Mia" className="input-clean" style={{ flex: 1 }} />
               </div>
+              {role === "student" && (
+                <>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>In welcher Klasse bist du?</label>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                    {["1. Oberstufe", "2. Oberstufe", "3. Oberstufe"].map((g) => (
+                      <button
+                        type="button"
+                        key={g}
+                        onClick={() => setGrade(g)}
+                        style={{ flex: 1, fontSize: 12, fontWeight: 600, borderRadius: 10, padding: "9px 2px", cursor: "pointer", background: grade === g ? "#eef0fe" : "#fff", color: grade === g ? "#4f46e5" : "#6b7280", border: `1px solid ${grade === g ? "#c9ccf6" : "#e7e8ee"}` }}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
 
