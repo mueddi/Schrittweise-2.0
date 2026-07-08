@@ -12,23 +12,30 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: request-link aufrufen und Runtime-Logs einsammeln
+      - name: Secret-Werte prüfen (ohne Schlüssel auszugeben)
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
         run: |
-          DEP=$(npx --yes vercel@latest ls schrittweise-2-0 --prod --token "$VERCEL_TOKEN" 2>/dev/null \
-            | grep -oE 'https://[a-z0-9-]+\.vercel\.app' | head -1)
-          echo "Produktions-Deployment: $DEP"
+          echo "$RUNTIME_ENV_JSON" | jq -r 'keys' || { echo "::error::RUNTIME_ENV_JSON ist kein gültiges JSON"; exit 1; }
+          URL=$(echo "$RUNTIME_ENV_JSON" | jq -r .SUPABASE_URL)
+          KEY=$(echo "$RUNTIME_ENV_JSON" | jq -r .SUPABASE_ANON_KEY)
+          echo "SUPABASE_URL=[${URL}] (Klammern zeigen etwaige Leerzeichen)"
+          echo "ANON_KEY: Länge=${#KEY}, beginnt mit $(echo "$KEY" | cut -c1-10)…"
 
-          # Log-Tail zuerst starten, dann die Anfrage abschicken
-          (timeout 45 npx --yes vercel@latest logs "$DEP" --token "$VERCEL_TOKEN" > runtime.log 2>&1 || true) &
-          sleep 8
+      - name: Supabase OTP direkt aufrufen (gleiche Werte wie die App)
+        env:
+          RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
+        run: |
+          URL=$(echo "$RUNTIME_ENV_JSON" | jq -r .SUPABASE_URL)
+          KEY=$(echo "$RUNTIME_ENV_JSON" | jq -r .SUPABASE_ANON_KEY)
+          curl -sS -w "\nHTTP %{http_code}\n" -X POST \
+            "$URL/auth/v1/otp?redirect_to=https://schrittweise-2-0.vercel.app/login/verify" \
+            -H "apikey: $KEY" -H "Content-Type: application/json" \
+            -d "{\"email\":\"${{ inputs.email }}\",\"create_user\":true}"
 
+      - name: request-link der App aufrufen
+        run: |
           curl -sS -w "\nHTTP %{http_code}\n" -X POST \
             "https://schrittweise-2-0.vercel.app/api/auth/request-link" \
             -H "Content-Type: application/json" \
             -d "{\"email\":\"${{ inputs.email }}\",\"register\":true,\"display_name\":\"Smoke\"}"
-
-          wait
-          echo "===== RUNTIME-LOGS ====="
-          cat runtime.log
