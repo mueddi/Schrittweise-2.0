@@ -30,8 +30,16 @@ def tiny_png() -> bytes:
     return buf.getvalue()
 
 
+def ensure_topic(client, headers, name):
+    """Thema anlegen (409 = existiert schon, 403 = kein Admin – beides ok für Tests)."""
+    r = client.post("/api/library/topics", headers=headers, json={"name": name})
+    assert r.status_code in (201, 409, 403), r.text
+    return r
+
+
 def upload(client, headers, title="Brüche kürzen", desc="Übungen zum Kürzen von Brüchen",
-           category="zahlen", grades="1. Oberstufe,2. Oberstufe", difficulty="leicht"):
+           category="Zahlen", grades="1. Oberstufe,2. Oberstufe", difficulty="leicht"):
+    ensure_topic(client, headers, category)
     return client.post(
         "/api/library",
         headers=headers,
@@ -61,13 +69,13 @@ def test_upload_list_filter_download_roundtrip(client):
     assert "content" not in doc
 
     upload(client, admin, title="Lineare Gleichungen", desc="Gleichungen lösen",
-           category="algebra", grades="3. Oberstufe", difficulty="schwer")
+           category="Algebra", grades="3. Oberstufe", difficulty="schwer")
 
     student = register_pw(client, "mia@test.ch")
     alle = client.get("/api/library", headers=student).json()
     assert len(alle) == 2
 
-    nur_algebra = client.get("/api/library?category=algebra", headers=student).json()
+    nur_algebra = client.get("/api/library?category=Algebra", headers=student).json()
     assert [d["title"] for d in nur_algebra] == ["Lineare Gleichungen"]
 
     nur_erste = client.get("/api/library?grade=1.%20Oberstufe", headers=student).json()
@@ -107,11 +115,12 @@ def test_search_fallback_and_ai_ranking(client, monkeypatch):
 def test_upload_validation(client):
     admin = register_pw(client, "admin@test.ch")
     make_admin("admin@test.ch")
+    ensure_topic(client, admin, "Andere")
 
     # Falsche Magic-Bytes: PNG-Bytes als PDF deklariert
     r = client.post(
         "/api/library", headers=admin,
-        data={"title": "t", "description": "d", "category": "andere",
+        data={"title": "t", "description": "d", "category": "Andere",
               "grade_levels": "1. Oberstufe", "difficulty": "mittel"},
         files={"file": ("x.pdf", tiny_png(), "application/pdf")},
     )
@@ -121,7 +130,7 @@ def test_upload_validation(client):
     big = b"%PDF-" + b"0" * (4 * 1024 * 1024 + 100)
     r = client.post(
         "/api/library", headers=admin,
-        data={"title": "t", "description": "d", "category": "andere",
+        data={"title": "t", "description": "d", "category": "Andere",
               "grade_levels": "1. Oberstufe", "difficulty": "mittel"},
         files={"file": ("gross.pdf", big, "application/pdf")},
     )
@@ -145,3 +154,45 @@ def test_update_and_delete(client):
 
     assert client.delete(f"/api/library/{doc['id']}", headers=admin).status_code == 204
     assert client.get(f"/api/library/{doc['id']}/file", headers=admin).status_code == 404
+
+
+def test_topic_management(client):
+    admin = register_pw(client, "admin@test.ch")
+    make_admin("admin@test.ch")
+    student = register_pw(client, "mia@test.ch")
+
+    # Schüler dürfen Themen sehen, aber nicht verwalten
+    assert client.post("/api/library/topics", headers=student, json={"name": "X"}).status_code == 403
+
+    r = client.post("/api/library/topics", headers=admin, json={"name": "Prozentrechnen"})
+    assert r.status_code == 201, r.text
+    tid = r.json()["id"]
+
+    # Duplikat (case-insensitiv) -> 409
+    assert client.post("/api/library/topics", headers=admin, json={"name": "prozentrechnen"}).status_code == 409
+
+    # Upload mit unbekanntem Thema -> 400
+    bad = client.post(
+        "/api/library", headers=admin,
+        data={"title": "t", "description": "d", "category": "GibtEsNicht",
+              "grade_levels": "1. Oberstufe", "difficulty": "mittel"},
+        files={"file": ("x.png", tiny_png(), "image/png")},
+    )
+    assert bad.status_code == 400
+
+    # Dokument im Thema anlegen; Umbenennen zieht das Dokument mit um
+    doc = upload(client, admin, title="Rabatt-Aufgaben", desc="Prozente", category="Prozentrechnen").json()
+    r = client.patch(f"/api/library/topics/{tid}", headers=admin, json={"name": "Prozente & Zins"})
+    assert r.status_code == 200
+    assert r.json()["doc_count"] == 1
+    docs = client.get("/api/library", headers=student).json()
+    assert any(d["id"] == doc["id"] and d["category"] == "Prozente & Zins" for d in docs)
+
+    # Löschen blockiert, solange Dokumente drin sind
+    assert client.delete(f"/api/library/topics/{tid}", headers=admin).status_code == 409
+    client.delete(f"/api/library/{doc['id']}", headers=admin)
+    assert client.delete(f"/api/library/topics/{tid}", headers=admin).status_code == 204
+
+    # Themenliste mit Zählern für alle Eingeloggten sichtbar
+    names = [t["name"] for t in client.get("/api/library/topics", headers=student).json()]
+    assert "Prozente & Zins" not in names

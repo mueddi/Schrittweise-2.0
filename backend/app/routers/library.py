@@ -7,32 +7,40 @@ import io
 import re
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user, require_admin
-from ..models import LibraryDocument, User
-from ..schemas import LibraryDocOut, LibraryDocUpdate
+from ..models import LibraryDocument, LibraryTopic, User
+from ..schemas import LibraryDocOut, LibraryDocUpdate, LibraryTopicCreate, LibraryTopicOut
 from ..services.library_search import rank_documents
 
 router = APIRouter(prefix="/api/library", tags=["library"])
 
 MAX_LIB_UPLOAD = 4 * 1024 * 1024  # Vercel-Function: ~4.5 MB Body-Limit
 ALLOWED_LIB = {"application/pdf", "image/png", "image/jpeg", "image/webp"}
-CATEGORIES = {"algebra", "geometrie", "zahlen", "andere"}
 DIFFICULTIES = {"leicht", "mittel", "schwer"}
 GRADES = {"1. Oberstufe", "2. Oberstufe", "3. Oberstufe"}
 
 
-def _validate_meta(title: str, description: str, category: str, grade_levels: list[str], difficulty: str) -> str:
-    """Whitelist-Validierung; gibt die normalisierte grade_levels-Zeichenkette zurück."""
+def _validate_meta(db: Session, title: str, description: str, category: str,
+                   grade_levels: list[str], difficulty: str) -> str:
+    """Validierung; gibt die normalisierte grade_levels-Zeichenkette zurück.
+
+    Themen (``category``) sind vom Betreiber frei verwaltbar und werden gegen
+    die library_topics-Tabelle geprüft.
+    """
     if not title.strip():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Titel fehlt.")
     if not description.strip():
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Beschreibung fehlt – sie ist die Basis der Suche.")
-    if category not in CATEGORIES:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekannte Kategorie.")
+    exists = db.scalar(select(LibraryTopic.id).where(LibraryTopic.name == category))
+    if exists is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Unbekanntes Thema – leg es zuerst unter «Themen verwalten» an.",
+        )
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekannte Schwierigkeit.")
     grades = [g.strip() for g in grade_levels if g.strip()]
@@ -40,6 +48,77 @@ def _validate_meta(title: str, description: str, category: str, grade_levels: li
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte gültige Klassenstufen angeben.")
     # feste Reihenfolge + Duplikate raus
     return ",".join(sorted(set(grades)))
+
+
+# ---- Themen-Verwaltung (Titel frei benennbar; nur der Betreiber schreibt) ----
+
+@router.get("/topics", response_model=list[LibraryTopicOut])
+def list_topics(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    counts = dict(
+        db.execute(
+            select(LibraryDocument.category, func.count(LibraryDocument.id))
+            .group_by(LibraryDocument.category)
+        ).all()
+    )
+    topics = db.scalars(select(LibraryTopic).order_by(LibraryTopic.name)).all()
+    return [
+        LibraryTopicOut(id=t.id, name=t.name, doc_count=counts.get(t.name, 0)) for t in topics
+    ]
+
+
+@router.post("/topics", response_model=LibraryTopicOut, status_code=201)
+def create_topic(payload: LibraryTopicCreate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    name = payload.name.strip()[:120]
+    if not name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Themen-Titel fehlt.")
+    dup = db.scalar(select(LibraryTopic).where(func.lower(LibraryTopic.name) == name.lower()))
+    if dup is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Thema gibt es schon.")
+    topic = LibraryTopic(name=name)
+    db.add(topic)
+    db.commit()
+    db.refresh(topic)
+    return LibraryTopicOut(id=topic.id, name=topic.name, doc_count=0)
+
+
+@router.patch("/topics/{topic_id}", response_model=LibraryTopicOut)
+def rename_topic(topic_id: int, payload: LibraryTopicCreate,
+                 user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    topic = db.get(LibraryTopic, topic_id)
+    if topic is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Thema nicht gefunden.")
+    name = payload.name.strip()[:120]
+    if not name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Themen-Titel fehlt.")
+    dup = db.scalar(
+        select(LibraryTopic).where(func.lower(LibraryTopic.name) == name.lower(), LibraryTopic.id != topic_id)
+    )
+    if dup is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Thema gibt es schon.")
+    old = topic.name
+    topic.name = name
+    # Dokumente ziehen mit um (category speichert den Themen-Namen)
+    db.execute(update(LibraryDocument).where(LibraryDocument.category == old).values(category=name))
+    db.commit()
+    count = db.scalar(select(func.count(LibraryDocument.id)).where(LibraryDocument.category == name)) or 0
+    return LibraryTopicOut(id=topic.id, name=topic.name, doc_count=count)
+
+
+@router.delete("/topics/{topic_id}", status_code=204)
+def delete_topic(topic_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    topic = db.get(LibraryTopic, topic_id)
+    if topic is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Thema nicht gefunden.")
+    in_use = db.scalar(
+        select(func.count(LibraryDocument.id)).where(LibraryDocument.category == topic.name)
+    ) or 0
+    if in_use:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Das Thema hat noch {in_use} Dokument(e) – verschieb oder lösch sie zuerst.",
+        )
+    db.delete(topic)
+    db.commit()
 
 
 @router.get("", response_model=list[LibraryDocOut])
@@ -116,7 +195,7 @@ async def upload_document(
 ):
     if file.content_type not in ALLOWED_LIB:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Erlaubt sind PDF, PNG, JPG oder WebP.")
-    grades_str = _validate_meta(title, description, category, grade_levels.split(","), difficulty)
+    grades_str = _validate_meta(db, title, description, category, grade_levels.split(","), difficulty)
 
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_LIB_UPLOAD + 8192:
@@ -176,7 +255,7 @@ def update_document(
         "grade_levels": data.get("grade_levels", doc.grade_levels.split(",")),
         "difficulty": data.get("difficulty", doc.difficulty),
     }
-    grades_str = _validate_meta(**merged)
+    grades_str = _validate_meta(db, **merged)
     doc.title = merged["title"].strip()[:200]
     doc.description = merged["description"].strip()[:4000]
     doc.category = merged["category"]

@@ -4,16 +4,16 @@ import { useAuth } from "../lib/auth.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
-const CATEGORIES = [
-  ["", "Alle"],
-  ["algebra", "Algebra"],
-  ["geometrie", "Geometrie"],
-  ["zahlen", "Zahlen"],
-  ["andere", "Andere"],
-];
 const GRADES = [["", "Alle"], ["1. Oberstufe", "1. OS"], ["2. Oberstufe", "2. OS"], ["3. Oberstufe", "3. OS"]];
 const DIFFICULTIES = [["", "Alle"], ["leicht", "Leicht"], ["mittel", "Mittel"], ["schwer", "Schwer"]];
-const CAT_COLOR = { algebra: "#6366f1", geometrie: "#e0993a", zahlen: "#1a7f3c", andere: "#9aa0ab" };
+
+// Stabile Farbe pro Themen-Name (Themen sind frei benennbar)
+const PALETTE = ["#6366f1", "#e0993a", "#1a7f3c", "#c0392b", "#0e7490", "#7c3aed", "#b45309"];
+function colorFor(name) {
+  let h = 0;
+  for (const c of name || "") h = (h * 31 + c.charCodeAt(0)) % 9973;
+  return PALETTE[h % PALETTE.length];
+}
 
 function fmtSize(bytes) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -50,10 +50,23 @@ export default function Bibliothek() {
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [docs, setDocs] = useState(null); // null = lädt
+  const [topics, setTopics] = useState([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const reqToken = useRef(0);
+
+  const loadTopics = useCallback(async () => {
+    try {
+      setTopics(await api.get("/api/library/topics"));
+    } catch {
+      setTopics([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTopics();
+  }, [loadTopics]);
 
   const load = useCallback(async (searchTerm) => {
     const my = ++reqToken.current;
@@ -127,7 +140,12 @@ export default function Bibliothek() {
           )}
         </div>
 
-        {user?.is_admin && adminOpen && <AdminUpload onDone={() => load(activeQ)} />}
+        {user?.is_admin && adminOpen && (
+          <>
+            <TopicManager topics={topics} onChanged={() => { loadTopics(); load(activeQ); }} />
+            <AdminUpload topics={topics} onDone={() => { loadTopics(); load(activeQ); }} />
+          </>
+        )}
 
         <form onSubmit={submitSearch} style={{ display: "flex", gap: 8, margin: "18px 0 12px" }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "#fff", border: "1px solid #d2d4dd", borderRadius: 12, padding: "10px 14px" }}>
@@ -145,7 +163,7 @@ export default function Bibliothek() {
         </form>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-          <ChipRow label="THEMA" options={CATEGORIES} value={category} onChange={setCategory} />
+          <ChipRow label="THEMA" options={[["", "Alle"], ...topics.map((t) => [t.name, t.name])]} value={category} onChange={setCategory} />
           <ChipRow label="KLASSE" options={GRADES} value={grade} onChange={setGrade} />
           <ChipRow label="SCHWIERIGKEIT" options={DIFFICULTIES} value={difficulty} onChange={setDifficulty} />
         </div>
@@ -177,7 +195,7 @@ export default function Bibliothek() {
                   <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 3 }}>{d.title}</div>
                   <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, marginBottom: 8 }}>{d.description}</div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px", background: `${CAT_COLOR[d.category] || "#9aa0ab"}18`, color: CAT_COLOR[d.category] || "#9aa0ab" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px", background: `${colorFor(d.category)}18`, color: colorFor(d.category) }}>
                       {d.category}
                     </span>
                     {d.grade_levels.map((g) => (
@@ -206,11 +224,11 @@ export default function Bibliothek() {
   );
 }
 
-function AdminUpload({ onDone }) {
+function AdminUpload({ topics, onDone }) {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [desc, setDesc] = useState("");
-  const [category, setCategory] = useState("andere");
+  const [category, setCategory] = useState("");
   const [grades, setGrades] = useState([]);
   const [difficulty, setDifficulty] = useState("mittel");
   const [busy, setBusy] = useState(false);
@@ -227,6 +245,7 @@ function AdminUpload({ onDone }) {
     if (!title.trim()) return setNote({ type: "error", text: "Bitte einen Titel angeben." });
     if (!desc.trim()) return setNote({ type: "error", text: "Bitte das Thema beschreiben – die Beschreibung ist die Basis der KI-Suche." });
     if (grades.length === 0) return setNote({ type: "error", text: "Bitte mindestens eine Klassenstufe wählen." });
+    if (!category) return setNote({ type: "error", text: "Bitte ein Thema wählen – oder oben unter «Themen» eines anlegen." });
     setBusy(true);
     setNote(null);
     try {
@@ -273,11 +292,14 @@ function AdminUpload({ onDone }) {
         <div>
           <label style={label}>Thema</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)} style={input}>
-            <option value="algebra">Algebra</option>
-            <option value="geometrie">Geometrie</option>
-            <option value="zahlen">Zahlen</option>
-            <option value="andere">Andere</option>
+            <option value="">– wählen –</option>
+            {topics.map((t) => (
+              <option key={t.id} value={t.name}>{t.name}</option>
+            ))}
           </select>
+          {topics.length === 0 && (
+            <div style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>Noch keine Themen – leg zuerst oben eines an.</div>
+          )}
         </div>
         <div>
           <label style={label}>Klassenstufen</label>
@@ -307,5 +329,83 @@ function AdminUpload({ onDone }) {
         {busy ? "lädt hoch …" : "Hochladen"}
       </button>
     </form>
+  );
+}
+
+function TopicManager({ topics, onChanged }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null);
+
+  async function run(action) {
+    setBusy(true);
+    setNote(null);
+    try {
+      await action();
+      onChanged();
+    } catch (e) {
+      setNote(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function add(e) {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) return;
+    run(async () => {
+      await api.post("/api/library/topics", { name: n });
+      setName("");
+    });
+  }
+
+  function rename(t) {
+    const n = window.prompt("Neuer Titel für das Thema:", t.name);
+    if (!n || !n.trim() || n.trim() === t.name) return;
+    run(() => api.patch(`/api/library/topics/${t.id}`, { name: n.trim() }));
+  }
+
+  function remove(t) {
+    if (!window.confirm(`Thema «${t.name}» löschen?`)) return;
+    run(() => api.del(`/api/library/topics/${t.id}`));
+  }
+
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e0e2fb", borderRadius: 14, padding: 18, marginTop: 14 }}>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>Themen verwalten</div>
+      <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>
+        Deine eigenen Themen-Titel – sie erscheinen als Filter für die Schüler:innen und als Auswahl beim Hochladen.
+      </div>
+      <form onSubmit={add} style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="z.B. Prozentrechnen, Pythagoras, Terme umformen …"
+          style={{ flex: 1, border: "1px solid #d2d4dd", borderRadius: 10, padding: "9px 12px", fontSize: 13, outline: "none" }}
+        />
+        <button type="submit" disabled={busy || !name.trim()} className="btn-primary" style={{ borderRadius: 10, padding: "9px 16px", fontSize: 13, opacity: busy || !name.trim() ? 0.6 : 1 }}>
+          + Hinzufügen
+        </button>
+      </form>
+      {note && (
+        <div style={{ fontSize: 13, background: "#fdecec", color: "#c0392b", border: "1px solid #f5cccc", borderRadius: 10, padding: "8px 12px", marginBottom: 10 }}>{note}</div>
+      )}
+      {topics.length === 0 ? (
+        <div style={{ fontSize: 13, color: "#9aa0ab" }}>Noch keine Themen angelegt.</div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {topics.map((t) => (
+            <span key={t.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid #e7e8ee", borderRadius: 999, padding: "6px 6px 6px 12px", fontSize: 12, fontWeight: 600, background: "#fbfbfd" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: colorFor(t.name) }} />
+              {t.name}
+              <span style={{ color: "#b6bcc6", fontWeight: 400 }}>({t.doc_count})</span>
+              <button type="button" onClick={() => rename(t)} title="Umbenennen" style={{ border: "none", background: "#f1f2f6", borderRadius: 999, width: 22, height: 22, cursor: "pointer", fontSize: 11 }}>✎</button>
+              <button type="button" onClick={() => remove(t)} title="Löschen" style={{ border: "none", background: "#fdecec", color: "#c0392b", borderRadius: 999, width: 22, height: 22, cursor: "pointer", fontSize: 11 }}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

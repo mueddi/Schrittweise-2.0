@@ -240,6 +240,17 @@ class LibraryDocOut(BaseModel):
         return v
 
 
+class LibraryTopicCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class LibraryTopicOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    doc_count: int = 0
+
+
 class LibraryDocUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, min_length=1, max_length=4000)

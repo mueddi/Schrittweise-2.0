@@ -222,3 +222,13 @@ class LibraryDocument(Base):
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class LibraryTopic(Base):
+    """Vom Betreiber verwaltete Themen-Titel der Bibliothek (frei benennbar)."""
+
+    __tablename__ = "library_topics"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
