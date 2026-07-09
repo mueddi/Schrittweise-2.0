@@ -72,9 +72,6 @@ export default function Landing() {
             <button onClick={() => nav("/login")} className="btn-primary" style={{ fontSize: 16, padding: "15px 26px", borderRadius: 13 }}>
               Kostenlos loslegen
             </button>
-            <button onClick={() => nav("/login")} className="btn-ghost" style={{ fontSize: 16, padding: "15px 24px", borderRadius: 13 }}>
-              Demo ansehen
-            </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>
             <Badge>Passt zum Lehrplan 21</Badge>
