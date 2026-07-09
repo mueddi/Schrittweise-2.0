@@ -21,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -76,6 +77,9 @@ class User(Base):
 
     # Privacy-Schalter: gibt der/die Schueler:in Aggregate fuer Eltern frei?
     share_with_parents: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Betreiber-Konto: darf die Aufgaben-Bibliothek verwalten
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
@@ -194,3 +198,27 @@ class ParentLink(Base):
     status: Mapped[str] = mapped_column(String(16), default="pending", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
     linked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class LibraryDocument(Base):
+    """Vom Betreiber hochgeladenes Aufgaben-Dokument (Arbeitsblatt, meist PDF).
+
+    Die Datei-Bytes liegen direkt in Postgres (Supabase) – auf Vercel ist /tmp
+    fluechtig und Uploads sind ohnehin auf ~4 MB begrenzt. ``content`` ist
+    deferred, damit Listen-/Such-Queries nie die Dokumente mitladen.
+    """
+
+    __tablename__ = "library_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(40), default="andere", nullable=False)
+    # komma-verbunden, z.B. "1. Oberstufe,2. Oberstufe"
+    grade_levels: Mapped[str] = mapped_column(String(80), nullable=False)
+    difficulty: Mapped[str] = mapped_column(String(20), default="mittel", nullable=False)
+    file_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)

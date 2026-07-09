@@ -8,6 +8,7 @@ import LoginVerify from "./screens/LoginVerify.jsx";
 import AppShell from "./components/AppShell.jsx";
 import Lernen from "./screens/Lernen.jsx";
 import Themen from "./screens/Themen.jsx";
+import Bibliothek from "./screens/Bibliothek.jsx";
 import Eltern from "./screens/Eltern.jsx";
 import Preise from "./screens/Preise.jsx";
 import Einstellungen from "./screens/Einstellungen.jsx";
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="lernen/:attemptId" element={<Lernen />} />
         <Route path="themen" element={<Themen />} />
         <Route path="themen/:topicId" element={<Themen />} />
+        <Route path="bibliothek" element={<Bibliothek />} />
         <Route path="eltern" element={<Eltern />} />
         <Route path="preise" element={<Preise />} />
         <Route path="einstellungen" element={<Einstellungen />} />

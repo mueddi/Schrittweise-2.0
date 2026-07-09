@@ -53,17 +53,25 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
 
-    # Mini-Migration: create_all ergaenzt keine Spalten in bestehenden Tabellen.
+    # Mini-Migrationen: create_all ergaenzt keine Spalten in bestehenden Tabellen.
     # Fehler (z.B. fehlende Owner-Rechte) duerfen den Kaltstart nicht killen –
     # dann fehlt zwar die Spalte, aber der Rest der App laeuft und das Log zeigt warum.
     import logging
 
+    migrations = [
+        ("users", "password_hash", "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"),
+        ("users", "is_admin", "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE NOT NULL"),
+    ]
     inspector = inspect(engine)
-    try:
-        if "users" in inspector.get_table_names():
-            existing = {col["name"] for col in inspector.get_columns("users")}
-            if "password_hash" not in existing:
-                with engine.begin() as conn:
-                    conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"))
-    except Exception:
-        logging.getLogger("schrittweise.db").exception("Auto-Migration fehlgeschlagen")
+    tables = set(inspector.get_table_names())
+    for table, column, ddl in migrations:
+        try:
+            if table in tables:
+                existing = {col["name"] for col in inspector.get_columns(table)}
+                if column not in existing:
+                    with engine.begin() as conn:
+                        conn.execute(text(ddl))
+        except Exception:
+            logging.getLogger("schrittweise.db").exception(
+                "Auto-Migration fehlgeschlagen (%s.%s)", table, column
+            )

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # ---------- Auth ----------
@@ -67,6 +67,7 @@ class UserOut(BaseModel):
     plan: str
     token_balance: int
     share_with_parents: bool
+    is_admin: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -215,6 +216,36 @@ class ParentChildSummary(BaseModel):
     daily_activity: list[int]
     week_start: date | None
     shared: bool  # Schueler hat Freigabe erteilt?
+
+
+# ---------- Aufgaben-Bibliothek ----------
+class LibraryDocOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    title: str
+    description: str
+    category: str
+    grade_levels: list[str]
+    difficulty: str
+    file_name: str
+    mime_type: str
+    size_bytes: int
+    created_at: datetime
+
+    @field_validator("grade_levels", mode="before")
+    @classmethod
+    def _split_grades(cls, v):
+        if isinstance(v, str):
+            return [g.strip() for g in v.split(",") if g.strip()]
+        return v
+
+
+class LibraryDocUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, min_length=1, max_length=4000)
+    category: str | None = None
+    grade_levels: list[str] | None = None
+    difficulty: str | None = None
 
 
 TokenResponse.model_rebuild()
