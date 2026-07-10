@@ -66,8 +66,8 @@ function Bubble({ role, verifyStatus, children }) {
             borderBottomRightRadius: tutor ? 18 : 5,
             boxShadow: tutor ? "0 1px 2px rgba(40,40,90,.05),0 6px 16px rgba(40,40,90,.06)" : "none",
             padding: tutor ? "12px 16px" : "11px 16px",
-            fontSize: 14,
-            lineHeight: 1.5,
+            fontSize: 14.5,
+            lineHeight: 1.6,
             whiteSpace: "pre-wrap",
           }}
         >
@@ -314,7 +314,7 @@ export default function Lernen() {
         </div>
       </div>
 
-      <div ref={chatRef} style={{ flex: 1, background: "#f6f7fb", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto" }}>
+      <div ref={chatRef} style={{ flex: 1, background: "#f6f7fb", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         {state.messages.map((m) => (
           <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status}>
             <MathText text={m.text} />

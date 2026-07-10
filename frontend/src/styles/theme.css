@@ -134,8 +134,14 @@ a {
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-/* KaTeX-Formeln im Chat nicht zu gross */
-.katex { font-size: 1.02em; }
+/* KaTeX-Formeln: etwas groesser als der Fliesstext – Mathe soll herausstechen */
+.katex { font-size: 1.12em; }
+.katex-display { margin: 8px 0; }
+
+/* MathText: Absatz-Abstand + Aufzaehlungen mit haengendem Einzug */
+.mt-par { display: block; height: 9px; }
+.mt-li { display: block; position: relative; padding-left: 18px; margin: 3px 0; }
+.mt-li::before { content: "•"; position: absolute; left: 4px; color: var(--indigo); font-weight: 700; }
 
 /* Buttons */
 .btn-primary {
