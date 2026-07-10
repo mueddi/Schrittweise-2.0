@@ -5,6 +5,7 @@ import { useAuth } from "../lib/auth.jsx";
 
 const TABS = [
   { key: "profil", icon: "👤", label: "Profil" },
+  { key: "passwort", icon: "🔑", label: "Passwort" },
   { key: "sprache", icon: "🌐", label: "Sprache" },
   { key: "privat", icon: "🔒", label: "Privatsphäre" },
   { key: "abo", icon: "💳", label: "Abo & Tokens" },
@@ -93,6 +94,8 @@ export default function Einstellungen() {
           </>
         )}
 
+        {tab === "passwort" && <PasswordTab />}
+
         {tab === "sprache" && (
           <>
             <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Sprache</div>
@@ -134,6 +137,68 @@ export default function Einstellungen() {
         )}
       </div>
     </div>
+  );
+}
+
+function PasswordTab() {
+  const { login } = useAuth();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null); // {type, text}
+
+  async function change() {
+    if (next.length < 8) {
+      setNote({ type: "error", text: "Das neue Passwort braucht mindestens 8 Zeichen." });
+      return;
+    }
+    if (next !== repeat) {
+      setNote({ type: "error", text: "Die beiden neuen Passwörter stimmen nicht überein." });
+      return;
+    }
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await api.post("/api/auth/change-password", {
+        current_password: current || null,
+        new_password: next,
+      });
+      await login(res.access_token, res.user); // frisches Token übernehmen
+      setCurrent(""); setNext(""); setRepeat("");
+      setNote({ type: "ok", text: "✓ Passwort geändert." });
+    } catch (e) {
+      setNote({ type: "error", text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Passwort ändern</div>
+      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 24, maxWidth: 520 }}>
+        Passwort vergessen? Melde dich ab und nutze auf der Anmelde-Seite «Passwort vergessen» –
+        dann kommst du per E-Mail-Link zurück und kannst hier ohne altes Passwort ein neues setzen.
+      </div>
+      <div style={{ maxWidth: 520 }}>
+        <Field label="Aktuelles Passwort">
+          <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" className="input-clean" style={{ width: "100%", fontSize: 14 }} />
+        </Field>
+        <Field label="Neues Passwort (mind. 8 Zeichen)">
+          <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" className="input-clean" style={{ width: "100%", fontSize: 14 }} />
+        </Field>
+        <Field label="Neues Passwort wiederholen">
+          <input type="password" value={repeat} onChange={(e) => setRepeat(e.target.value)} autoComplete="new-password" className="input-clean" style={{ width: "100%", fontSize: 14 }} />
+        </Field>
+        {note && (
+          <div style={{ fontSize: 13, marginBottom: 12, color: note.type === "error" ? "#c0392b" : "#1a7f3c", fontWeight: 600 }}>{note.text}</div>
+        )}
+        <button onClick={change} disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none", opacity: busy ? 0.7 : 1 }}>
+          {busy ? "ändert …" : "Passwort ändern"}
+        </button>
+      </div>
+    </>
   );
 }
 

@@ -19,7 +19,7 @@ from ..schemas import (
     OcrResult,
 )
 from ..services import quota
-from ..services.ocr import get_ocr_provider
+from ..services.ocr import OcrUnavailable, get_ocr_provider
 from ..services.sympy_verifier import extract_expression
 
 router = APIRouter(prefix="/api/exercises", tags=["exercises"])
@@ -61,7 +61,13 @@ async def ocr_upload(request: Request, file: UploadFile = File(...), user: User 
     name = f"{secrets.token_hex(16)}{ext}"
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)  # /tmp kann zwischen Cold-Starts leer sein
     (UPLOAD_DIR / name).write_bytes(data)
-    result = get_ocr_provider().recognize(data)
+    try:
+        result = get_ocr_provider().recognize(data)
+    except OcrUnavailable:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Die Erkennung ist gerade nicht erreichbar – dein Geschriebenes bleibt erhalten, versuch es gleich nochmal.",
+        )
     result.image_path = f"/uploads/{name}"
     return result
 

@@ -44,7 +44,7 @@ export default function DrawPad({ onResult, onClose }) {
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = "#1a1c22";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3.2;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     for (const stroke of strokes.current) {
@@ -83,7 +83,7 @@ export default function DrawPad({ onResult, onClose }) {
     const a = pts[pts.length - 2] || pts[pts.length - 1];
     const b = pts[pts.length - 1];
     ctx.strokeStyle = "#1a1c22";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3.2;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
@@ -118,7 +118,9 @@ export default function DrawPad({ onResult, onClose }) {
       const fd = new FormData();
       fd.append("file", blob, "stift-eingabe.png");
       const res = await api.upload("/api/exercises/ocr", fd);
-      const text = (res.math_expression || res.text || "").trim();
+      // Vollen erkannten Text nehmen – math_expression ist nur ein per Regex
+      // herausgezogenes Fragment (mit «=») und verstuemmelt mehrzeilige Rechnungen.
+      const text = (res.text || res.math_expression || "").trim();
       if (!text) {
         setError("Konnte nichts erkennen – schreib etwas grösser und deutlicher.");
         return;

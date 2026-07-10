@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useShell } from "./AppShell.jsx";
+import DrawPad from "./DrawPad.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
@@ -21,6 +22,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [drag, setDrag] = useState(false);
+  const [drawOpen, setDrawOpen] = useState(false);
 
   // Waehrend des Anlegens nicht schliessen – sonst navigiert start() ins Leere
   // und verbraucht trotzdem Kontingent.
@@ -97,9 +99,10 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
             <div style={{ width: 54, height: 54, borderRadius: 16, background: "#eef0fe", color: "#4f46e5", fontSize: 24, display: "grid", placeItems: "center", margin: "0 auto 14px" }}>📷</div>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 5 }}>Foto hierher ziehen oder auswählen</div>
             <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Auch krumm fotografiert oder handgeschrieben – wir erkennen es.</div>
-            <div style={{ display: "inline-flex", gap: 10 }}>
+            <div style={{ display: "inline-flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
               <button onClick={() => fileRef.current?.click()} className="btn-primary" style={{ fontSize: 13, borderRadius: 10, padding: "10px 16px", border: "none" }}>Datei wählen</button>
               <button onClick={() => cameraRef.current?.click()} className="btn-ghost" style={{ fontSize: 13, borderRadius: 10, padding: "10px 16px" }}>📸 Kamera</button>
+              <button onClick={() => setDrawOpen(true)} className="btn-ghost" style={{ fontSize: 13, borderRadius: 10, padding: "10px 16px" }}>✍️ Mit Stift schreiben</button>
             </div>
             {/* getrennte Inputs: capture erzwingt auf Mobile die Kamera – darf nur am Kamera-Button haengen */}
             <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { handleFile(e.target.files?.[0]); e.target.value = ""; }} />
@@ -134,7 +137,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
           {error && <div style={{ fontSize: 13, color: "#c0392b", marginBottom: 12 }}>{error}</div>}
 
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12, color: "#9aa0ab" }}>
-            <span>🔒</span> Dein Bild bleibt in der Schweiz und trainiert keine Modelle.
+            <span>🔒</span> Dein Bild wird nur für die Erkennung verwendet und trainiert keine KI-Modelle.
           </div>
 
           <button onClick={start} disabled={busy} className="btn-primary" style={{ width: "100%", borderRadius: 12, padding: 13, fontSize: 15, border: "none", opacity: busy ? 0.7 : 1 }}>
@@ -142,6 +145,16 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
           </button>
         </div>
       </div>
+      {drawOpen && (
+        // stopPropagation: Klick auf den DrawPad-Hintergrund darf nur den
+        // DrawPad schliessen, nicht (durchgereicht) auch dieses Modal.
+        <div onClick={(e) => e.stopPropagation()}>
+          <DrawPad
+            onClose={() => setDrawOpen(false)}
+            onResult={(t) => setText((prev) => (prev.trim() ? `${prev.trim()}\n${t}` : t))}
+          />
+        </div>
+      )}
     </div>
   );
 }

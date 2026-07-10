@@ -99,6 +99,16 @@ class MagicLink(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 
+class LoginAttempt(Base):
+    """Fehlgeschlagene Passwort-Logins pro E-Mail – Grundlage fuer das Rate-Limit
+    (Brute-Force-Schutz). Erfolgreicher Login loescht die Eintraege der E-Mail."""
+    __tablename__ = "login_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
 class Topic(Base):
     """Manuell angelegter Themen-Container. Keine automatische Klassifikation."""
     __tablename__ = "topics"

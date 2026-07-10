@@ -8,9 +8,11 @@ from jose import JWTError, jwt
 from .config import settings
 
 
-def create_access_token(user_id: int, role: str) -> str:
+def create_access_token(user_id: int, role: str, via: str = "password") -> str:
+    """via="email": Login kam ueber einen Mail-Link – erlaubt Passwort-Neusetzen
+    ohne altes Passwort (Passwort-vergessen-Flow)."""
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
-    payload = {"sub": str(user_id), "role": role, "exp": expire}
+    payload = {"sub": str(user_id), "role": role, "via": via, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 

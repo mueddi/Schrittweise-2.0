@@ -1,4 +1,6 @@
-"""Passwort-Login: Registrierung, Anmeldung, Fehlerfälle."""
+"""Passwort-Login: Registrierung, Anmeldung, Fehlerfälle, Rate-Limit, Passwort ändern."""
+from app.routers.auth import LOGIN_FAIL_MAX
+from app.security import create_access_token
 
 
 def test_register_logs_in_directly(client):
@@ -52,6 +54,76 @@ def test_register_short_password_rejected(client):
         json={"email": "mia@test.ch", "password": "kurz", "display_name": "Mia"},
     )
     assert r.status_code == 422
+
+
+def test_login_rate_limit_blocks_after_too_many_failures(client):
+    client.post(
+        "/api/auth/register",
+        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+    )
+    for _ in range(LOGIN_FAIL_MAX):
+        r = client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "falsch-falsch"})
+        assert r.status_code == 401
+    # Limit erreicht: auch das KORREKTE Passwort wird jetzt abgewiesen (429)
+    r = client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "drei-worte-merken"})
+    assert r.status_code == 429
+    # Andere E-Mail bleibt unbetroffen
+    client.post(
+        "/api/auth/register",
+        json={"email": "ben@test.ch", "password": "drei-worte-merken", "display_name": "Ben"},
+    )
+    assert client.post("/api/auth/login", json={"email": "ben@test.ch", "password": "drei-worte-merken"}).status_code == 200
+
+
+def test_login_success_resets_failure_counter(client):
+    client.post(
+        "/api/auth/register",
+        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+    )
+    for _ in range(LOGIN_FAIL_MAX - 1):
+        client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "falsch-falsch"})
+    assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "drei-worte-merken"}).status_code == 200
+    # Zaehler zurueckgesetzt: erneute Fehlversuche starten wieder bei 0
+    assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "falsch-falsch"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "drei-worte-merken"}).status_code == 200
+
+
+def test_change_password_requires_current_password(client):
+    r = client.post(
+        "/api/auth/register",
+        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+    )
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    # Falsches/fehlendes aktuelles Passwort -> 403
+    assert client.post("/api/auth/change-password", headers=headers,
+                       json={"current_password": "falsch-falsch", "new_password": "neues-passwort-1"}).status_code == 403
+    assert client.post("/api/auth/change-password", headers=headers,
+                       json={"new_password": "neues-passwort-1"}).status_code == 403
+
+    # Korrekt -> Login nur noch mit dem neuen Passwort moeglich
+    ok = client.post("/api/auth/change-password", headers=headers,
+                     json={"current_password": "drei-worte-merken", "new_password": "neues-passwort-1"})
+    assert ok.status_code == 200, ok.text
+    assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "drei-worte-merken"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "neues-passwort-1"}).status_code == 200
+
+
+def test_change_password_via_email_link_needs_no_current(client):
+    """Passwort-vergessen-Flow: Login kam per Mail-Link (via=email) ->
+    neues Passwort ohne altes setzbar."""
+    r = client.post(
+        "/api/auth/register",
+        json={"email": "mia@test.ch", "password": "vergessenes-passwort", "display_name": "Mia"},
+    )
+    user_id = r.json()["user"]["id"]
+    email_token = create_access_token(user_id, "student", via="email")
+    headers = {"Authorization": f"Bearer {email_token}"}
+
+    ok = client.post("/api/auth/change-password", headers=headers,
+                     json={"new_password": "frisch-gesetzt-99"})
+    assert ok.status_code == 200, ok.text
+    assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "frisch-gesetzt-99"}).status_code == 200
 
 
 def test_passwordless_legacy_account_can_set_password(client):

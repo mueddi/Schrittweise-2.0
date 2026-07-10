@@ -2,16 +2,18 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select, update
+from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..deps import get_current_user
-from ..models import MagicLink, Role, User
+from ..deps import bearer, get_current_user
+from ..models import LoginAttempt, MagicLink, Role, User
 from ..schemas import (
     MagicLinkRequest,
     MagicLinkResponse,
+    PasswordChangeRequest,
     PasswordLoginRequest,
     PasswordRegisterRequest,
     SupabaseVerifyRequest,
@@ -22,6 +24,7 @@ from ..schemas import (
 )
 from ..security import (
     create_access_token,
+    decode_access_token,
     hash_password,
     hash_token,
     new_magic_token,
@@ -40,6 +43,9 @@ LINK_TTL_MINUTES = 30
 # Rate-Limit: max. Link-Anfragen pro E-Mail im Zeitfenster (Spam-/Abuse-Schutz)
 RATE_LIMIT_MAX = 5
 RATE_LIMIT_WINDOW_MINUTES = 15
+# Brute-Force-Schutz Passwort-Login: max. Fehlversuche pro E-Mail im Zeitfenster
+LOGIN_FAIL_MAX = 8
+LOGIN_FAIL_WINDOW_MINUTES = 15
 
 
 # Dummy-Hash für konstante Antwortzeit bei unbekannter E-Mail (kein User-Enumeration-Timing)
@@ -80,13 +86,66 @@ def register_password(payload: PasswordRegisterRequest, db: Session = Depends(ge
 @router.post("/login", response_model=TokenResponse)
 def login_password(payload: PasswordLoginRequest, db: Session = Depends(get_db)):
     email = payload.email.lower().strip()
+
+    # Brute-Force-Bremse: zu viele Fehlversuche fuer diese E-Mail -> 429,
+    # noch BEVOR das Passwort geprueft wird (auch ein korrektes zaehlt dann nicht).
+    fail_window = datetime.now(timezone.utc) - timedelta(minutes=LOGIN_FAIL_WINDOW_MINUTES)
+    fails = db.scalar(
+        select(func.count(LoginAttempt.id)).where(
+            LoginAttempt.email == email, LoginAttempt.created_at >= fail_window
+        )
+    ) or 0
+    if fails >= LOGIN_FAIL_MAX:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Zu viele fehlgeschlagene Versuche – warte 15 Minuten und versuch es dann nochmal.",
+        )
+
     user = db.scalar(select(User).where(User.email == email))
 
     stored = user.password_hash if user is not None and user.password_hash else _DUMMY_HASH
     ok = verify_password(payload.password, stored)
     if user is None or not user.password_hash or not ok:
+        # Fehlversuch protokollieren; alte Eintraege gleich mit aufraeumen,
+        # damit die Tabelle nicht unbegrenzt waechst.
+        db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < fail_window))
+        db.add(LoginAttempt(email=email))
+        db.commit()
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-Mail oder Passwort falsch.")
 
+    # Erfolg: Fehlversuchs-Zaehler dieser E-Mail zuruecksetzen
+    if fails:
+        db.execute(delete(LoginAttempt).where(LoginAttempt.email == email))
+        db.commit()
+
+    access = create_access_token(user.id, user.role.value)
+    return TokenResponse(access_token=access, user=UserOut.model_validate(user))
+
+
+@router.post("/change-password", response_model=TokenResponse)
+def change_password(
+    payload: PasswordChangeRequest,
+    user: User = Depends(get_current_user),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+):
+    """Neues Passwort setzen. Ohne aktuelles Passwort nur, wenn der Login per
+    Mail-Link kam (Passwort-vergessen-Flow) oder noch kein Passwort existiert."""
+    token_payload = decode_access_token(creds.credentials) if creds else None
+    via_email = bool(token_payload) and token_payload.get("via") == "email"
+
+    if user.password_hash and not via_email:
+        if not payload.current_password or not verify_password(
+            payload.current_password, user.password_hash
+        ):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Das aktuelle Passwort stimmt nicht."
+            )
+
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()
+    db.refresh(user)
+    # Frisches Token ausgeben (via=password), damit die Session normal weiterlaeuft.
     access = create_access_token(user.id, user.role.value)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
@@ -208,7 +267,7 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Link ungültig oder bereits benutzt.")
     db.commit()
 
-    access = create_access_token(user.id, user.role.value)
+    access = create_access_token(user.id, user.role.value, via="email")
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 
@@ -226,7 +285,7 @@ def verify_supabase(payload: SupabaseVerifyRequest, db: Session = Depends(get_db
             status.HTTP_404_NOT_FOUND,
             "Kein Konto mit dieser E-Mail – registriere dich zuerst über «Neu hier».",
         )
-    access = create_access_token(user.id, user.role.value)
+    access = create_access_token(user.id, user.role.value, via="email")
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 

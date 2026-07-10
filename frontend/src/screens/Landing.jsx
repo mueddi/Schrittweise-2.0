@@ -75,7 +75,7 @@ export default function Landing() {
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>
             <Badge>Passt zum Lehrplan 21</Badge>
-            <Badge>Daten in der Schweiz</Badge>
+            <Badge>Verrät die Lösung nie direkt</Badge>
             <Badge>Kein Klarname nötig</Badge>
           </div>
         </div>
@@ -120,7 +120,7 @@ export default function Landing() {
           <span>© {new Date().getFullYear()} Schrittweise</span>
           <Link to="/impressum" style={{ color: "#aab0bd" }}>Impressum</Link>
           <Link to="/datenschutz" style={{ color: "#aab0bd" }}>Datenschutz</Link>
-          <span>Daten in der Schweiz · kein Klarname nötig</span>
+          <span>Verschlüsselte Übertragung · kein Klarname nötig</span>
         </div>
       </div>
     </div>

@@ -15,6 +15,26 @@ export default function Login() {
   const [status, setStatus] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
 
+  async function forgotPassword() {
+    if (!email.trim()) {
+      setStatus({ type: "error", text: "Gib zuerst deine E-Mail ein, dann klick auf «Passwort vergessen»." });
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      await api.post("/api/auth/request-link", { email: email.trim() });
+      setStatus({
+        type: "ok",
+        text: "Wir haben dir einen Anmelde-Link geschickt. Nach dem Klick bist du drin und kannst in den Einstellungen ein neues Passwort setzen.",
+      });
+    } catch (err) {
+      setStatus({ type: "error", text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(e) {
     e?.preventDefault();
     if (!email.trim() || !password) return;
@@ -151,6 +171,13 @@ export default function Login() {
           {tab === "neu" && (
             <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 16, lineHeight: 1.5 }}>Merk dir dein Passwort gut – Tipp: drei Wörter, die du dir vorstellen kannst.</div>
           )}
+          {tab === "an" && (
+            <div style={{ textAlign: "right", marginBottom: 16 }}>
+              <button type="button" onClick={forgotPassword} disabled={busy} style={{ border: "none", background: "transparent", fontSize: 12, color: "#4f46e5", fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                Passwort vergessen?
+              </button>
+            </div>
+          )}
 
           <button type="submit" disabled={busy} className="btn-primary" style={{ width: "100%", borderRadius: 12, padding: 13, fontSize: 15, marginBottom: 18, opacity: busy ? 0.7 : 1 }}>
             {busy ? "einen Moment …" : tab === "neu" ? "Konto erstellen" : "Anmelden"}
@@ -182,7 +209,7 @@ export default function Login() {
             Weiter mit Google
           </div>
           <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", marginTop: 22, lineHeight: 1.5 }}>
-            Daten in der Schweiz · kein Klarname nötig
+            Verschlüsselte Übertragung · kein Klarname nötig
             <br />
             <Link to="/impressum" style={{ color: "#9aa0ab", textDecoration: "underline" }}>Impressum</Link>
             {" · "}

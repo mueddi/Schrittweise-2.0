@@ -50,6 +50,13 @@ class PasswordLoginRequest(BaseModel):
     password: str = Field(max_length=128)
 
 
+class PasswordChangeRequest(BaseModel):
+    # Ohne current_password nur erlaubt, wenn der Login per Mail-Link kam
+    # (Passwort-vergessen-Flow) oder das Konto noch kein Passwort hat.
+    current_password: str | None = Field(default=None, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -7,10 +7,17 @@ Frontend erlaubt ohnehin die manuelle Korrektur des erkannten Ausdrucks.
 from __future__ import annotations
 
 import io
+import logging
 import re
 from typing import Protocol
 
 from ..schemas import OcrResult
+
+log = logging.getLogger("schrittweise.ocr")
+
+
+class OcrUnavailable(Exception):
+    """Erkennung momentan nicht möglich (API-Fehler) – Aufrufer meldet es ehrlich."""
 
 
 class OcrProvider(Protocol):
@@ -67,9 +74,11 @@ class ClaudeVisionOcr:
                 fmt, "image/png"
             )
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+            # Bewusst das staerkere Modell: Handschrift-Erkennung ist die
+            # Kernfunktion der App – Erkennungsqualitaet schlaegt hier Kosten.
             resp = client.messages.create(
-                model=settings.anthropic_model_default,
-                max_tokens=300,
+                model=settings.anthropic_model_smart,
+                max_tokens=500,
                 messages=[
                     {
                         "role": "user",
@@ -85,10 +94,19 @@ class ClaudeVisionOcr:
                             {
                                 "type": "text",
                                 "text": (
-                                    "Transkribiere die (hand)geschriebene Mathe-Notiz auf dem Bild "
-                                    "als reinen Text. Formeln linear schreiben (z.B. 3x + 5 = 20, "
-                                    "Brueche als a/b, Potenzen als ^). Gib NUR die Transkription "
-                                    "zurueck, ohne Kommentar. Wenn nichts lesbar ist, gib LEER zurueck."
+                                    "Auf dem Bild steht eine handgeschriebene Mathe-Notiz einer "
+                                    "Schuelerin/eines Schuelers (12-15 Jahre, Stift auf Tablet oder "
+                                    "Papier). Die Schrift kann krakelig, schraeg oder mehrzeilig sein. "
+                                    "Transkribiere ALLES, was geschrieben steht, vollstaendig und in "
+                                    "der Original-Reihenfolge (jede Zeile der Rechnung als eigene "
+                                    "Zeile). Formeln linear schreiben: Brueche als a/b, Potenzen als "
+                                    "x^2, Mal als *, Wurzel als sqrt(...). Beispiel: aus zwei "
+                                    "handschriftlichen Zeilen wird\n3x + 5 = 20\n3x = 15\n"
+                                    "Verwechsle nicht: 1 vs 7, x vs *, 6 vs b, 2 vs z. Wenn ein "
+                                    "Zeichen unsicher ist, waehle die in einer Schulrechnung "
+                                    "plausibelste Lesart. Gib NUR die Transkription zurueck, ohne "
+                                    "Kommentar oder Einleitung. Wenn wirklich nichts lesbar ist, "
+                                    "gib exakt LEER zurueck."
                                 ),
                             },
                         ],
@@ -101,8 +119,11 @@ class ClaudeVisionOcr:
             expr = _guess_math_expression(text)
             return OcrResult(text=text, math_expression=expr, confidence=0.9 if text else 0.0)
         except Exception:
-            # Vision nicht verfuegbar/fehlgeschlagen -> klassisches OCR als Fallback
-            return PytesseractOcr().recognize(image_bytes)
+            # KEIN stiller pytesseract-Fallback mehr: der kann Handschrift nicht
+            # und ist auf dem Server gar nicht installiert – das ergab "Konnte
+            # nichts erkennen" ohne echten Grund. Ehrlich melden statt raten.
+            log.exception("Claude-Vision-Erkennung fehlgeschlagen")
+            raise OcrUnavailable()
 
 
 class MathpixOcr:  # pragma: no cover – Platzhalter fuer spaeteren Wechsel
