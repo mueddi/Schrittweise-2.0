@@ -1,7 +1,10 @@
 """Hinweis-Leiter: Zustandsmaschine (Unit) + Einfrieren nach Loesung (HTTP)."""
-from app.services.tutor import advance_ladder
+from app.services.sympy_verifier import Verification
+from app.services.tutor import advance_ladder, detect_intent
 
 from .conftest import register
+
+_UNKNOWN = Verification("unknown", "test")
 
 
 # ---------- Unit: Zustandsmaschine ----------
@@ -29,6 +32,23 @@ def test_full_solution_locked_until_two_attempts():
     assert step.own_attempts == 2
     assert step.allowed_stage == 4
     assert step.permit_solution
+
+
+def test_simpler_keeps_stage():
+    """«Verstehe es nicht» / «erklaer einfacher» = gleiche Stufe, einfacher erklaert
+    – die Leiter darf dadurch NICHT hochklettern."""
+    assert detect_intent("Ich verstehe es nicht.", _UNKNOWN) == "simpler"
+    assert detect_intent("Kannst du es mir einfacher erklären?", _UNKNOWN) == "simpler"
+    assert detect_intent("das kapier ich nicht", _UNKNOWN) == "simpler"
+    step = advance_ladder(2, 1, "simpler")
+    assert step.allowed_stage == 2
+    assert step.own_attempts == 1
+    assert not step.permit_solution
+
+
+def test_tip_requests_still_advance():
+    assert detect_intent("Gib mir bitte einen Tipp.", _UNKNOWN) == "stuck"
+    assert detect_intent("Zeig mir bitte den ersten Schritt.", _UNKNOWN) == "stuck"
 
 
 def test_plea_unlocks_solution_after_earned_attempts():

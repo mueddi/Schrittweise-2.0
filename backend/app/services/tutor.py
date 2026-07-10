@@ -68,15 +68,22 @@ BETTEL_PATTERNS = [
     rf"wie (lautet|heisst|ist) (die|das) {_ZIEL}", rf"sag (mir )?(die|das) {_ZIEL}",
     rf"gib (mir )?(die|das) {_ZIEL}", rf"was ist (die|das) {_ZIEL}", rf"loes(e)? (es |die aufgabe )?fuer mich",
 ]
+# «Ich verstehe es nicht» / «erklär es einfacher»: der Schueler braucht KEINE
+# neue Hilfestufe, sondern DIESELBE Erklaerung in einfacheren Worten. Diese
+# Muster duerfen die Leiter deshalb NICHT hochtreiben.
+SIMPLER_PATTERNS = [
+    r"einfacher", r"versteh(e)? ?(es |das |ich )?nicht", r"kapier", r"check(e)? (es |das )?nicht",
+    r"nochmal erkl[aä]r", r"erkl[aä]r.{0,20}nochmal", r"zu schwierig", r"zu kompliziert",
+]
 HILFE_PATTERNS = [
     r"weiss (es )?nicht", r"keine ahnung", r"komm(e)? nicht weiter", r"h[aä]nge", r"h[iä]lfe",
-    r"kapier", r"versteh(e)? (es )?nicht", r"tipp", r"hinweis", r"n[aä]chste stufe",
+    r"tipp", r"hinweis", r"n[aä]chste stufe",
     r"wie (geht|mach|anfangen|weiter)", r"was (jetzt|nun|soll ich)", r"stecke fest",
 ]
 
 
 def detect_intent(message: str, verification: Verification) -> str:
-    """'plea' | 'correct' | 'attempt' | 'stuck'."""
+    """'plea' | 'correct' | 'attempt' | 'simpler' | 'stuck'."""
     low = message.lower()
     if verification.status == "correct":
         return "correct"
@@ -90,6 +97,8 @@ def detect_intent(message: str, verification: Verification) -> str:
     # damit «zeig mir die antwort» die Leiter nicht hochtreibt.
     if re.search(_ZIEL, low):
         return "plea"
+    if any(re.search(p, low) for p in SIMPLER_PATTERNS):
+        return "simpler"
     if any(re.search(p, low) for p in HILFE_PATTERNS):
         return "stuck"
     return "stuck"
@@ -119,6 +128,11 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
         # Betteln davor: Stufe bleibt, kein Versuch gezaehlt
         stage = max(current_stage, 1)
         return LadderStep(intent, stage, own_attempts, False, False)
+
+    if intent == "simpler":
+        # «Verstehe es nicht» / «erklaer einfacher»: dieselbe Stufe, nur in
+        # einfacheren Worten – Nachfragen kostet keine Sprosse und keinen Versuch.
+        return LadderStep(intent, max(current_stage, 1), own_attempts, False, False)
 
     if intent == "attempt":
         own_attempts += 1
@@ -156,6 +170,8 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         lines.append(f"- Klassenstufe: {grade_level} – passe Sprache und Beispiele an dieses Niveau an.")
     if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
+    if step.intent == "simpler":
+        lines.append("- Der Schueler versteht die aktuelle Erklaerung NICHT. Erklaere DENSELBEN Punkt nochmal EINFACHER: kleinerer Schritt, Alltagsbeispiel mit konkreten Zahlen, andere Worte. Nichts Neues verraten, Stufe nicht erhoehen.")
     if step.intent == "correct":
         lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")
     if step.intent == "post_solved":
@@ -225,6 +241,8 @@ def _mock_reply(step: LadderStep, verification: Verification, exercise_text: str
         text = "Stark, das stimmt! 🎉 Du hast sauber nach der Variablen aufgelöst. Mag noch eine Aufgabe?"
     elif step.intent == "plea":
         text = "Mach ich extra nicht 🙂 – aber ich bring dich hin. Was fällt dir als Erstes auf, das du wegbekommen willst?"
+    elif step.intent == "simpler":
+        text = "Okay, ganz langsam nochmal. Schau nur auf die linke Seite der Gleichung: Was steht dort? Sag es mir in deinen eigenen Worten."
     elif step.allowed_stage == 1:
         text = "Kein Stress. Schau die Gleichung an: Was müsstest du zuerst tun, damit die Zahl auf derselben Seite wie das $x$ verschwindet?"
     elif step.allowed_stage == 2:

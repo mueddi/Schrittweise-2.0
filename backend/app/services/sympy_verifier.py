@@ -124,6 +124,15 @@ def extract_expression(text: str) -> str | None:
     """
     if not text or "=" not in text:
         return None
+    # Mehrzeilige Eingaben (Stift/Foto-Erkennung): erst Zeile fuer Zeile
+    # versuchen, dann alles zu EINER Zeile verbunden («2 + 3\n= 2y»).
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if len(lines) > 1:
+        for ln in lines:
+            found = extract_expression(ln)
+            if found:
+                return found
+        return extract_expression(" ".join(lines))
     # Fuehrendes Prosa-Label mit Doppelpunkt abtrennen («Berechne x: 2x+4=10»),
     # damit der Doppelpunkt nicht als Division normalisiert wird.
     label = re.match(r"^\s*[A-Za-zÀ-ÿ ]+:\s*(.+)$", text)
@@ -147,7 +156,10 @@ def extract_expression(text: str) -> str | None:
         return None
     lhs_tokens = m.group(1).split()
     # Von links Prosa-Tokens abwerfen, bis eine loesbare Gleichung mit genau
-    # einer einbuchstabigen Variablen uebrig bleibt («Berechne x wenn 2x+4 = 10»)
+    # einer einbuchstabigen Variablen uebrig bleibt («Berechne x wenn 2x+4 = 10»).
+    # Es duerfen NUR reine Buchstaben-Woerter fallen – wird ein Mathe-Token
+    # (Zahl, «3x», Operator) abgeworfen, waere die Rest-Gleichung eine ANDERE
+    # Aufgabe («3x + 5 = 2y» darf nicht zu «+5 = 2y» verstuemmelt werden).
     while lhs_tokens:
         try:
             lhs = _parse(" ".join(lhs_tokens))
@@ -158,6 +170,8 @@ def extract_expression(text: str) -> str | None:
             if len(syms) == 1 and all(len(str(s)) == 1 for s in syms):
                 if _solutions(lhs, rhs, next(iter(syms))):
                     return f"{' '.join(lhs_tokens)} = {' '.join(rhs_tokens)}"
+        if not re.fullmatch(r"[A-Za-zÀ-ÿ]+", lhs_tokens[0]):
+            return None  # Mathe-Token muesste fallen -> keine saubere Gleichung
         lhs_tokens.pop(0)
     return None
 
@@ -198,11 +212,16 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
             # Fremd-Symbole (aus Prosa wie "ich glaube x = 5") -> kein sauberer Kandidat
             if (c_lhs.free_symbols | c_rhs.free_symbols) - {sym}:
                 continue
-            # Endantwort 'x = wert'?
+            # Endantwort 'x = wert' – oder gespiegelt 'wert = x' («5/2 = y»)?
+            value = None
             if c_lhs == sym and c_rhs.is_number:
+                value = c_rhs
+            elif c_rhs == sym and c_lhs.is_number:
+                value = c_lhs
+            if value is not None:
                 for s in sols:
                     try:
-                        if sp.simplify(c_rhs - s) == 0:
+                        if sp.simplify(value - s) == 0:
                             return Verification("correct", "Endwert stimmt", sol_str, cand, 1.0)
                     except Exception:
                         pass

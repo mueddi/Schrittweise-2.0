@@ -1,7 +1,7 @@
 """SymPy-Verifier: Endwerte, Umformungsschritte, Prosa-Robustheit."""
 import pytest
 
-from app.services.sympy_verifier import verify
+from app.services.sympy_verifier import extract_expression, verify
 
 
 @pytest.mark.parametrize(
@@ -17,10 +17,23 @@ from app.services.sympy_verifier import verify
         ("2x = 8", "4", "correct"),
         ("x^2 = 9", "x = 3", "correct"),
         ("3x+5=20", "gib mir die lösung 🙏", "unknown"),
+        # gespiegelte Endantwort «wert = variable» zaehlt genauso
+        ("2 + 3 = 2*y", "5/2 = y", "correct"),
+        ("2 + 3 = 2*y", "5/2=y", "correct"),
+        ("2 + 3 = 2*y", "3 = y", "incorrect"),
     ],
 )
 def test_verify(expr, answer, expected):
     assert verify(expr, answer).status == expected
+
+
+def test_extract_expression_multiline():
+    """Stift-/Foto-Eingaben sind oft mehrzeilig – die Gleichung muss trotzdem
+    gefunden werden, sonst ist die Aufgabe nie als geloest erkennbar."""
+    assert extract_expression("2 + 3\n= 2 * y") is not None
+    assert verify(extract_expression("2 + 3\n= 2 * y"), "y = 5/2").status == "correct"
+    # mehrere Zeilen mit eigener Gleichung: die erste loesbare gewinnt
+    assert extract_expression("Löse nach x auf:\n3x + 5 = 20") == "3x + 5 = 20"
 
 
 def test_solution_never_in_context():
