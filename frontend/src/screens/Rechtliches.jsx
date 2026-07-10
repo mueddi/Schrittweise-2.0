@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 
 // Impressum & Datenschutzerklärung – öffentlich erreichbar, im Design-Look.
-// Platzhalter [BITTE ERGÄNZEN] vor dem Launch mit echten Betreiber-Angaben füllen.
 
 function Shell({ title, children }) {
   return (
@@ -25,25 +24,22 @@ function Shell({ title, children }) {
 
 const H = ({ children }) => <h2 style={{ fontSize: 17, fontWeight: 800, margin: "26px 0 8px", letterSpacing: "-.01em" }}>{children}</h2>;
 const P = ({ children }) => <p style={{ margin: "0 0 12px", color: "#3a3d46" }}>{children}</p>;
-const Todo = ({ children }) => (
-  <span style={{ background: "#fdf3e6", color: "#a05c12", borderRadius: 6, padding: "1px 6px", fontWeight: 600 }}>{children}</span>
-);
 
 export function Impressum() {
   return (
     <Shell title="Impressum">
       <H>Betreiber</H>
       <P>
-        <Todo>[BITTE ERGÄNZEN: Name / Firma]</Todo><br />
-        <Todo>[Strasse Nr.]</Todo><br />
-        <Todo>[PLZ Ort, Schweiz]</Todo>
+        Mahmmoud Said<br />
+        St. Georgen-Strasse<br />
+        9000 St.Gallen, Schweiz
       </P>
       <H>Kontakt</H>
       <P>
-        E-Mail: <Todo>[kontakt@deine-domain.ch]</Todo>
+        E-Mail: <a href="mailto:mahmmouds62@gmail.com" style={{ color: "#4f46e5" }}>mahmmouds62@gmail.com</a>
       </P>
       <H>Verantwortlich für den Inhalt</H>
-      <P><Todo>[Name der verantwortlichen Person]</Todo></P>
+      <P>Mahmmoud Said</P>
       <H>Haftungsausschluss</H>
       <P>
         Schrittweise ist ein Lernwerkzeug und ersetzt keinen Unterricht. Trotz sorgfältiger
@@ -60,28 +56,34 @@ export function Datenschutz() {
     <Shell title="Datenschutzerklärung">
       <P>
         Diese Datenschutzerklärung informiert darüber, welche Personendaten Schrittweise
-        bearbeitet – gemäss dem Schweizer Datenschutzgesetz (revDSG).{" "}
-        <Todo>[Vor dem Launch juristisch prüfen lassen und Betreiber-Angaben ergänzen.]</Todo>
+        bearbeitet – gemäss dem Schweizer Datenschutzgesetz (revDSG). Stand: Juli 2026.
       </P>
 
       <H>1. Verantwortliche Stelle</H>
-      <P><Todo>[Name / Firma, Adresse, E-Mail – wie im Impressum]</Todo></P>
+      <P>
+        Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Schweiz<br />
+        E-Mail: <a href="mailto:mahmmouds62@gmail.com" style={{ color: "#4f46e5" }}>mahmmouds62@gmail.com</a>
+      </P>
 
       <H>2. Welche Daten wir bearbeiten</H>
       <P>
-        <b>Konto:</b> E-Mail-Adresse und ein frei wählbarer Anzeigename (bewusst kein
-        Klarname nötig), optional die Klassenstufe.<br />
-        <b>Lerninhalte:</b> eingegebene oder fotografierte Aufgaben und der Chat-Verlauf
-        mit dem Tutor.<br />
+        <b>Konto:</b> E-Mail-Adresse, ein Passwort (nur als kryptografischer Hash
+        gespeichert) und ein frei wählbarer Anzeigename (bewusst kein Klarname nötig),
+        optional die Klassenstufe.<br />
+        <b>Lerninhalte:</b> eingegebene, fotografierte oder mit dem Stift geschriebene
+        Aufgaben und der Chat-Verlauf mit dem Tutor.<br />
         <b>Lernfortschritt:</b> daraus berechnete grobe Aggregate (gelöste Aufgaben,
-        Selbständigkeits-Quote, aktive Tage, Themen-Trends).
+        Selbständigkeits-Quote, aktive Tage, Themen-Trends).<br />
+        <b>Käufe:</b> bei einem Token-Kauf den Betrag und den Zeitpunkt der Gutschrift
+        (keine Zahlungsdaten, siehe Ziffer 7).
       </P>
 
       <H>3. Wofür (Zweck)</H>
       <P>
-        Ausschliesslich für den Betrieb des Lern-Tutors: Anmeldung per Login-Link,
-        pädagogische Hinweise entlang der Hinweis-Leiter, Fortschrittsanzeige und – nur
-        mit ausdrücklicher Freigabe – die aggregierte Elternansicht.
+        Ausschliesslich für den Betrieb des Lern-Tutors: Anmeldung mit E-Mail und
+        Passwort (bei vergessenem Passwort per einmaligem E-Mail-Link), pädagogische
+        Hinweise entlang der Hinweis-Leiter, Fortschrittsanzeige und – nur mit
+        ausdrücklicher Freigabe – die aggregierte Elternansicht.
       </P>
 
       <H>4. Privacy by Design: Was Eltern sehen (und was nicht)</H>
@@ -94,34 +96,45 @@ export function Datenschutz() {
       <H>5. KI-Verarbeitung (Auftragsbearbeiter)</H>
       <P>
         Zur Erzeugung der Tutor-Antworten werden Aufgabentext und Chat-Verlauf an die
-        Anthropic API (Anthropic PBC, USA) übermittelt. Gemäss den API-Bedingungen von
-        Anthropic werden diese Daten nicht zum Training von Modellen verwendet.
-        Hochgeladene Aufgabenfotos werden auf unserem Server erkannt (OCR) und nicht an
-        Dritte weitergegeben.
+        Anthropic API (Anthropic PBC, USA) übermittelt. Auch hochgeladene Aufgabenfotos
+        und Stift-Eingaben werden zur Erkennung des Geschriebenen an Anthropic
+        übermittelt. Gemäss den API-Bedingungen von Anthropic werden diese Daten nicht
+        zum Training von KI-Modellen verwendet.
       </P>
 
-      <H>6. Hosting</H>
+      <H>6. Hosting und Speicherort</H>
       <P>
-        Die Anwendung wird bei <Todo>[Hosting-Anbieter + Region eintragen, z.B. Render
-        (Region Frankfurt/EU)]</Todo> betrieben. Es gelten zusätzlich dessen
-        Datenschutzbestimmungen.
+        Die Anwendung läuft bei Vercel Inc. (USA); die Datenbank mit Konto- und
+        Lerndaten liegt bei Supabase (Rechenzentrum in Frankfurt, EU). Ein Teil der
+        Verarbeitung findet damit in den USA statt. Es gelten zusätzlich die
+        Datenschutzbestimmungen dieser Anbieter.
       </P>
 
-      <H>7. Aufbewahrung & Löschung</H>
+      <H>7. Zahlungsabwicklung</H>
+      <P>
+        Token-Käufe werden über Stripe Payments Europe Ltd. abgewickelt. Karten- oder
+        TWINT-Daten werden direkt von Stripe verarbeitet und erreichen unsere Server
+        nie; wir speichern nur den Betrag und den Zeitpunkt der Gutschrift.
+        Minderjährige benötigen für Käufe das Einverständnis ihrer
+        Erziehungsberechtigten.
+      </P>
+
+      <H>8. Aufbewahrung &amp; Löschung</H>
       <P>
         Konto- und Lerndaten bleiben gespeichert, solange das Konto besteht. Auf Anfrage
         an die oben genannte Adresse löschen wir ein Konto samt aller zugehörigen Daten
-        vollständig. Login-Links sind 30 Minuten gültig und einmalig verwendbar.
+        vollständig. E-Mail-Login-Links (Passwort vergessen) sind 30 Minuten gültig und
+        einmalig verwendbar.
       </P>
 
-      <H>8. Deine Rechte</H>
+      <H>9. Deine Rechte</H>
       <P>
         Auskunft, Berichtigung, Löschung und Datenherausgabe – Anfrage genügt per E-Mail
         an die verantwortliche Stelle. Bei Minderjährigen können die
         Erziehungsberechtigten diese Rechte ausüben.
       </P>
 
-      <H>9. Keine Werbung, kein Tracking</H>
+      <H>10. Keine Werbung, kein Tracking</H>
       <P>
         Schrittweise setzt keine Werbe- oder Tracking-Cookies ein. Es wird nur ein
         technisch notwendiges Login-Token im Browser gespeichert.
