@@ -44,6 +44,15 @@ STIL:
 - Wenn der Schueler richtig liegt: freu dich echt und bestaetige knapp, warum es stimmt.
 - Wenn etwas falsch ist: sag nicht einfach «falsch», sondern frag nach oder zeig, wo es harzt.
 
+SO ERKLAERST DU (SEHR WICHTIG):
+- Die meisten Schueler:innen hier haben Muehe mit Mathe und wenig Selbstvertrauen. Geh IMMER davon aus, dass die Grundlagen wackeln.
+- Extrem einfache Sprache: kurze Saetze. Ein Gedanke pro Satz.
+- KEIN Fachwort ohne sofortige Alltags-Erklaerung in Klammern, z.B. «Term (= ein Rechenausdruck)», «Variable (= die unbekannte Zahl, hier $x$)».
+- Nutze Alltagsbilder: die Waage fuer Gleichungen (beide Seiten gleich schwer halten), die Pizza fuer Brueche, das Sackgeld fuer Prozente.
+- Sag NIE «das ist einfach» oder «das ist doch klar» – das beschaemt. Sag stattdessen «das ueben wir kurz zusammen».
+- Wenn der Schueler «ich verstehe es nicht» sagt: NICHT dasselbe wiederholen, sondern EINFACHER erklaeren – kleinerer Schritt, konkretes Alltagsbeispiel mit Zahlen.
+- Lob konkret statt pauschal: nicht «super!», sondern «stark – das Minusrechnen auf beiden Seiten hat gestimmt».
+
 Du bekommst pro Nachricht eine REGIE-ANWEISUNG mit: erlaubter Stufe, SymPy-Pruefergebnis und Anzahl eigener Versuche. Halte dich strikt daran. Die interne Loesung, falls mitgegeben, verwendest du HOECHSTENS auf Stufe 4."""
 
 
@@ -129,7 +138,8 @@ def pick_model(exercise_text: str, exercise_expr: str | None) -> str:
     return settings.anthropic_model_default
 
 
-def _regie(step: LadderStep, verification: Verification, exercise_text: str, exercise_expr: str | None) -> str:
+def _regie(step: LadderStep, verification: Verification, exercise_text: str, exercise_expr: str | None,
+           grade_level: str | None = None) -> str:
     lines = [
         "REGIE-ANWEISUNG (nicht an den Schueler weitergeben):",
         f"- Aufgabe: {exercise_text}" + (f"  [Ausdruck: {exercise_expr}]" if exercise_expr else ""),
@@ -137,6 +147,8 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         f"- SymPy-Pruefung der letzten Antwort: {verification.status} ({verification.detail})",
         f"- Bisherige eigene Versuche: {step.own_attempts}",
     ]
+    if grade_level:
+        lines.append(f"- Klassenstufe: {grade_level} – passe Sprache und Beispiele an dieses Niveau an.")
     if step.intent == "plea":
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "correct":
@@ -150,11 +162,11 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     return "\n".join(lines)
 
 
-def _build_system(step, verification, exercise_text, exercise_expr):
+def _build_system(step, verification, exercise_text, exercise_expr, grade_level=None):
     """System als Blockliste – grosser Prompt gecacht, Regie pro Turn frisch."""
     return [
         {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": _regie(step, verification, exercise_text, exercise_expr)},
+        {"type": "text", "text": _regie(step, verification, exercise_text, exercise_expr, grade_level)},
     ]
 
 
@@ -176,7 +188,8 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
 
 
 def stream_reply(history, step: LadderStep, verification: Verification,
-                 exercise_text: str, exercise_expr: str | None):
+                 exercise_text: str, exercise_expr: str | None,
+                 grade_level: str | None = None):
     """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming)."""
     if not (settings.anthropic_api_key and anthropic):
         yield from _mock_reply(step, verification, exercise_text)
@@ -184,7 +197,7 @@ def stream_reply(history, step: LadderStep, verification: Verification,
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     model = pick_model(exercise_text, exercise_expr)
-    system = _build_system(step, verification, exercise_text, exercise_expr)
+    system = _build_system(step, verification, exercise_text, exercise_expr, grade_level)
     messages = _history_to_messages(history)
     produced = False
     try:

@@ -136,7 +136,15 @@ a {
 
 /* KaTeX-Formeln: etwas groesser als der Fliesstext – Mathe soll herausstechen */
 .katex { font-size: 1.12em; }
-.katex-display { margin: 8px 0; }
+/* Eigenstaendige Rechenschritte ($$...$$) als «Schulheft-Box» */
+.katex-display {
+  margin: 8px 0;
+  background: #f7f8ff;
+  border: 1px solid #e0e2fb;
+  border-left: 3px solid var(--indigo);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
 
 /* MathText: Absatz-Abstand + Aufzaehlungen mit haengendem Einzug */
 .mt-par { display: block; height: 9px; }

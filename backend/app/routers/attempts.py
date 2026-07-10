@@ -87,13 +87,14 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     ex_text, ex_expr = ex.text, ex.math_expression
     attempt_id_local = attempt.id
     user_id_local = user.id
+    grade_level = user.grade_level
     # Aggregate nur beim Uebergang zu «geloest» neu rechnen, nicht bei jedem Post-Solved-Chat
     solved_now = step.solved and not already_solved
 
     def generate():
         parts: list[str] = []
         try:
-            for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr):
+            for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr, grade_level):
                 parts.append(chunk)
                 yield chunk
         finally:

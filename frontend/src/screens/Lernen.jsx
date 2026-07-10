@@ -49,22 +49,30 @@ const VERIFY_CHIP = {
 function Bubble({ role, verifyStatus, children }) {
   const tutor = role === "tutor";
   const chip = !tutor && VERIFY_CHIP[verifyStatus];
+  // Feedback direkt an der Bubble: richtig = gruen + ✓-Badge; falsch = weicher
+  // roter Ring (bewusst NICHT rot gefuellt – soll nicht bestrafend wirken).
+  const correct = !tutor && verifyStatus === "correct";
+  const incorrect = !tutor && verifyStatus === "incorrect";
   return (
     <div style={{ alignSelf: tutor ? "flex-start" : "flex-end", maxWidth: "78%", display: "flex", flexDirection: "column", alignItems: tutor ? "flex-start" : "flex-end", gap: 4 }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8, position: "relative" }}>
         {tutor && (
           <span aria-hidden style={{ flex: "0 0 26px", width: 26, height: 26, borderRadius: "50%", background: "#eef0fe", color: "#4f46e5", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 800, border: "1px solid #e0e2fb" }}>∑</span>
         )}
         <div
           className="popin"
           style={{
-            background: tutor ? "#fff" : "#6366f1",
+            background: tutor ? "#fff" : correct ? "#1f9048" : "#6366f1",
             color: tutor ? "#1a1c22" : "#fff",
             border: tutor ? "1px solid #e7e8ee" : "none",
             borderRadius: 18,
             borderBottomLeftRadius: tutor ? 5 : 18,
             borderBottomRightRadius: tutor ? 18 : 5,
-            boxShadow: tutor ? "0 1px 2px rgba(40,40,90,.05),0 6px 16px rgba(40,40,90,.06)" : "none",
+            boxShadow: tutor
+              ? "0 1px 2px rgba(40,40,90,.05),0 6px 16px rgba(40,40,90,.06)"
+              : incorrect
+                ? "0 0 0 2.5px #f3c1bc"
+                : "none",
             padding: tutor ? "12px 16px" : "11px 16px",
             fontSize: 14.5,
             lineHeight: 1.6,
@@ -73,12 +81,43 @@ function Bubble({ role, verifyStatus, children }) {
         >
           {children}
         </div>
+        {correct && (
+          <span aria-hidden style={{ position: "absolute", top: -8, right: -8, width: 21, height: 21, borderRadius: "50%", background: "#1a7f3c", color: "#fff", fontSize: 11, fontWeight: 800, display: "grid", placeItems: "center", border: "2px solid #f6f7fb" }}>✓</span>
+        )}
       </div>
       {chip && (
         <span className="verify-chip" style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px", background: chip.bg, color: chip.fg }}>
           {chip.label}
         </span>
       )}
+    </div>
+  );
+}
+
+// Schnell-Antworten: ein Tipp genuegt – junge Schueler muessen nicht tippen.
+function QuickReplies({ solved, onSend, onNew }) {
+  const items = solved
+    ? [
+        { label: "🎯 Erklär mir den Weg nochmal", act: () => onSend("Erklär mir den Lösungsweg nochmal Schritt für Schritt.") },
+        { label: "➕ Neue Aufgabe", act: onNew },
+      ]
+    : [
+        { label: "🤔 Ich verstehe es nicht", act: () => onSend("Ich verstehe es nicht.") },
+        { label: "💡 Gib mir einen Tipp", act: () => onSend("Gib mir bitte einen Tipp.") },
+        { label: "👣 Zeig mir den ersten Schritt", act: () => onSend("Zeig mir bitte den ersten Schritt.") },
+        { label: "🐢 Erklär es einfacher", act: () => onSend("Kannst du es mir einfacher erklären?") },
+      ];
+  return (
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 2px 9px", WebkitOverflowScrolling: "touch" }}>
+      {items.map((it) => (
+        <button
+          key={it.label}
+          onClick={it.act}
+          style={{ flex: "0 0 auto", border: "1px solid #dcdff5", background: "#f8f8ff", color: "#4f46e5", borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}
+        >
+          {it.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -161,14 +200,16 @@ export default function Lernen() {
     if (nearBottom()) scrollDown();
   }, [streaming, state]);
 
-  async function send() {
-    const text = input.trim();
+  async function send(overrideText) {
+    // onClick={send} liefert ein Event-Objekt als erstes Argument – nur echte
+    // Strings (Schnell-Antworten) zaehlen als Override.
+    const text = (typeof overrideText === "string" ? overrideText : input).trim();
     if (!text || busy) return;
     const myToken = ++reqToken.current;
     const myAttempt = attemptId;
     const controller = new AbortController();
     abortRef.current = controller;
-    setInput("");
+    if (typeof overrideText !== "string") setInput(""); // getippten Entwurf nicht wegwerfen
     setBusy(true);
     // Schüler-Bubble sofort optimistisch anzeigen
     setState((s) => (s ? { ...s, messages: [...s.messages, { id: `tmp-${Date.now()}`, role: "student", text }] } : s));
@@ -314,7 +355,17 @@ export default function Lernen() {
         </div>
       </div>
 
-      <div ref={chatRef} style={{ flex: 1, background: "#f6f7fb", padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+      {/* Aufgabe immer sichtbar – Schueler muessen nie hochscrollen */}
+      <div style={{ background: "#f6f7fb", padding: "12px 24px 0" }}>
+        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: 120, overflowY: "auto" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", color: "#4f46e5", marginBottom: 3 }}>DEINE AUFGABE</div>
+          <div style={{ fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+            <MathText text={exercise.text} />
+          </div>
+        </div>
+      </div>
+
+      <div ref={chatRef} style={{ flex: 1, background: "#f6f7fb", padding: "18px 24px 22px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
         {state.messages.map((m) => (
           <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status}>
             <MathText text={m.text} />
@@ -343,7 +394,14 @@ export default function Lernen() {
         )}
       </div>
 
-      <div style={{ padding: "14px 18px", background: "#fff", borderTop: "1px solid #eef0f3" }}>
+      <div style={{ padding: "12px 18px 14px", background: "#fff", borderTop: "1px solid #eef0f3" }}>
+        {!busy && (
+          <QuickReplies
+            solved={attempt.solved}
+            onSend={(t) => send(t)}
+            onNew={() => shell.openNewTask(exercise.topic_id ?? undefined)}
+          />
+        )}
         <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #d2d4dd", borderRadius: 24, padding: "7px 8px 7px 14px" }}>
           <span onClick={() => shell.openNewTask()} title="Foto-Aufgabe" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>📷</span>
           <span onClick={() => setDrawOpen(true)} title="Mit dem Stift schreiben" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
