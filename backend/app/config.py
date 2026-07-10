@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     # Kontingent
     free_monthly_quota: int = 20
 
+    # Stripe (Token-Paket-Kauf); beide leer = Zahlung deaktiviert
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+
+    @property
+    def payments_enabled(self) -> bool:
+        return bool(self.stripe_secret_key and self.stripe_webhook_secret)
+
     # Upload-Verzeichnis (leer = backend/uploads; auf Serverless z.B. /tmp/uploads)
     upload_dir: str = ""
 

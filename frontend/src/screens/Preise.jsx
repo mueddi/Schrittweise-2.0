@@ -1,4 +1,6 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { api } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
 
 function Feature({ children, color = "#1a7f3c" }) {
@@ -13,7 +15,37 @@ function Feature({ children, color = "#1a7f3c" }) {
 export default function Preise() {
   const nav = useNavigate();
   const shell = useShell();
+  const [params] = useSearchParams();
   const plan = shell.quota?.plan || "free";
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null); // {type, text}
+
+  // Rückkehr von der Stripe-Bezahlseite (?zahlung=ok|abbruch)
+  useEffect(() => {
+    const z = params.get("zahlung");
+    if (z === "ok") {
+      setNote({ type: "ok", text: "Zahlung erhalten – deine Tokens werden in wenigen Sekunden gutgeschrieben. 🎉" });
+      // Webhook braucht evtl. 1–2 Sekunden; Kontingent verzögert nachladen
+      const t1 = setTimeout(() => shell.reloadQuota?.(), 2500);
+      const t2 = setTimeout(() => shell.reloadQuota?.(), 8000);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+    if (z === "abbruch") {
+      setNote({ type: "error", text: "Zahlung abgebrochen – es wurde nichts belastet." });
+    }
+  }, [params, shell]);
+
+  async function buy() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const res = await api.post("/api/pay/checkout", {});
+      window.location.href = res.url; // weiter zur Stripe-Bezahlseite (Karte/TWINT)
+    } catch (e) {
+      setNote({ type: "error", text: e.message });
+      setBusy(false);
+    }
+  }
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "#fbfbfd", padding: "36px 40px" }}>
@@ -21,6 +53,11 @@ export default function Preise() {
         <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" }}>Preise &amp; Tokens</div>
         <span onClick={() => nav("/app/lernen")} style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>← zur App</span>
       </div>
+      {note && (
+        <div style={{ maxWidth: 920, margin: "0 auto 18px", fontSize: 13, borderRadius: 12, padding: "11px 16px", background: note.type === "error" ? "#fdecec" : "#e8f6ec", color: note.type === "error" ? "#c0392b" : "#1a7f3c", border: `1px solid ${note.type === "error" ? "#f5cccc" : "#cde7d6"}` }}>
+          {note.text}
+        </div>
+      )}
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.025em", marginBottom: 8 }}>Fair bleiben, ohne Bezahlschranke.</div>
         <div style={{ fontSize: 14, color: "#6b7280", maxWidth: "60ch", margin: "0 auto" }}>
@@ -59,12 +96,16 @@ export default function Preise() {
             <Feature color="#8be0a4">Priorität bei Antwortzeit</Feature>
           </div>
           <button
-            onClick={() => alert("Zahlungsanbindung folgt später – dies ist ein Prototyp.")}
+            onClick={buy}
+            disabled={busy}
             className="btn-primary"
-            style={{ width: "100%", borderRadius: 11, padding: 12, fontSize: 14 }}
+            style={{ width: "100%", borderRadius: 11, padding: 12, fontSize: 14, opacity: busy ? 0.6 : 1 }}
           >
-            Tokens kaufen
+            {busy ? "einen Moment …" : "Tokens kaufen"}
           </button>
+          <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", marginTop: 10 }}>
+            Sichere Zahlung über Stripe · Karte oder TWINT
+          </div>
         </div>
 
         {/* Schule */}

@@ -37,6 +37,8 @@ jobs:
         env:
           RUNTIME_ENV_JSON: ${{ secrets.RUNTIME_ENV_JSON }}
           ANTHROPIC_API_KEY_OVERRIDE: ${{ secrets.ANTHROPIC_API_KEY }}
+          STRIPE_SECRET_KEY_IN: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET_IN: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
         run: |
           python3 - <<'EOF'
           import json, os
@@ -45,6 +47,11 @@ jobs:
           override = (os.environ.get("ANTHROPIC_API_KEY_OVERRIDE") or "").strip()
           if override:
               env["ANTHROPIC_API_KEY"] = override
+          for name, target in (("STRIPE_SECRET_KEY_IN", "STRIPE_SECRET_KEY"),
+                               ("STRIPE_WEBHOOK_SECRET_IN", "STRIPE_WEBHOOK_SECRET")):
+              value = (os.environ.get(name) or "").strip()
+              if value:
+                  env[target] = value
           for key, value in list(env.items()):
               if isinstance(value, str) and not value.isascii():
                   print(f"::warning::{key} enthält Nicht-ASCII-Zeichen (Einfüge-Schaden) und wird verworfen")

@@ -232,3 +232,17 @@ class LibraryTopic(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class Payment(Base):
+    """Abgeschlossene Käufe (Stripe). session_id unique = Webhook-Idempotenz."""
+
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(20), default="stripe", nullable=False)
+    session_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    amount_rappen: Mapped[int] = mapped_column(Integer, nullable=False)
+    tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
