@@ -14,12 +14,14 @@ const STUFEN_LABEL = {
   4: "Stufe 4: Volle Lösung",
 };
 
-function Ladder({ level, solved }) {
-  const accent = solved ? "#1a7f3c" : "#4f46e5";
-  const bg = solved ? "#e8f6ec" : "#eef0fe";
+function Ladder({ level, solved, ownAttempts = 0 }) {
+  // Nach 2 echten eigenen Versuchen auf hoher Stufe ist die Loesung verdient
+  const unlocked = !solved && level >= 3 && ownAttempts >= 2;
+  const accent = solved || unlocked ? "#1a7f3c" : "#4f46e5";
+  const bg = solved || unlocked ? "#e8f6ec" : "#eef0fe";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, background: bg, borderRadius: 999, padding: "6px 14px", transition: "background .3s" }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>HINWEIS-LEITER</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>HILFE</span>
       {[1, 2, 3, 4].map((i) => (
         <span
           key={i}
@@ -28,16 +30,24 @@ function Ladder({ level, solved }) {
           style={{
             width: 9, height: 9, borderRadius: "50%", display: "inline-block", cursor: "help",
             background: i <= level ? accent : "#fff",
-            border: i <= level ? "none" : `1.5px solid ${solved ? "#bfe3cb" : "#c9ccf6"}`,
+            border: i <= level ? "none" : `1.5px solid ${solved || unlocked ? "#bfe3cb" : "#c9ccf6"}`,
           }}
         />
       ))}
       <span style={{ fontSize: 11, fontWeight: 600, color: accent }}>
-        {solved ? "Gelöst 🎉" : `Stufe ${Math.max(level, 0)}/4`}
+        {solved ? "Gelöst 🎉" : unlocked ? "🔓 Lösung verfügbar" : `Stufe ${Math.max(level, 0)}/4`}
       </span>
     </div>
   );
 }
+
+// Was diese Tutor-Antwort ist – macht die Hilfe-Stufen im Chat sichtbar.
+const STAGE_TAG = {
+  1: { label: "💬 Frage zum Nachdenken", bg: "#eef0fe", fg: "#4f46e5" },
+  2: { label: "💡 Kleiner Tipp", bg: "#fdf3e6", fg: "#a05c12" },
+  3: { label: "👣 Teilschritt vorgemacht", bg: "#e7f0fd", fg: "#1d4ed8" },
+  4: { label: "🔓 Ganzer Lösungsweg", bg: "#e8f6ec", fg: "#1a7f3c" },
+};
 
 // Visuelles Feedback zur SymPy-Prüfung unter der Schüler-Bubble (nie die Lösung)
 const VERIFY_CHIP = {
@@ -46,15 +56,21 @@ const VERIFY_CHIP = {
   incorrect: { label: "✗ noch nicht – bleib dran", bg: "#fdecec", fg: "#c0392b" },
 };
 
-function Bubble({ role, verifyStatus, children }) {
+function Bubble({ role, verifyStatus, hintLevel, children }) {
   const tutor = role === "tutor";
   const chip = !tutor && VERIFY_CHIP[verifyStatus];
+  const tag = tutor && STAGE_TAG[hintLevel];
   // Feedback direkt an der Bubble: richtig = gruen + ✓-Badge; falsch = weicher
   // roter Ring (bewusst NICHT rot gefuellt – soll nicht bestrafend wirken).
   const correct = !tutor && verifyStatus === "correct";
   const incorrect = !tutor && verifyStatus === "incorrect";
   return (
     <div style={{ alignSelf: tutor ? "flex-start" : "flex-end", maxWidth: "78%", display: "flex", flexDirection: "column", alignItems: tutor ? "flex-start" : "flex-end", gap: 4 }}>
+      {tag && (
+        <span style={{ marginLeft: 34, fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: "2px 9px", background: tag.bg, color: tag.fg }}>
+          {tag.label}
+        </span>
+      )}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, position: "relative" }}>
         {tutor && (
           <span aria-hidden style={{ flex: "0 0 26px", width: 26, height: 26, borderRadius: "50%", background: "#eef0fe", color: "#4f46e5", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 800, border: "1px solid #e0e2fb" }}>∑</span>
@@ -95,13 +111,15 @@ function Bubble({ role, verifyStatus, children }) {
 }
 
 // Schnell-Antworten: ein Tipp genuegt – junge Schueler muessen nicht tippen.
-function QuickReplies({ solved, onSend, onNew }) {
+function QuickReplies({ solved, unlocked, onSend, onNew }) {
   const items = solved
     ? [
         { label: "🎯 Erklär mir den Weg nochmal", act: () => onSend("Erklär mir den Lösungsweg nochmal Schritt für Schritt.") },
         { label: "➕ Neue Aufgabe", act: onNew },
       ]
     : [
+        // verdient nach 2 eigenen Versuchen: die Loesung ist jetzt abholbar
+        ...(unlocked ? [{ label: "🔓 Zeig mir die ganze Lösung", act: () => onSend("Zeig mir die Lösung bitte."), accent: true }] : []),
         { label: "🤔 Ich verstehe es nicht", act: () => onSend("Ich verstehe es nicht.") },
         { label: "💡 Gib mir einen Tipp", act: () => onSend("Gib mir bitte einen Tipp.") },
         { label: "👣 Zeig mir den ersten Schritt", act: () => onSend("Zeig mir bitte den ersten Schritt.") },
@@ -113,7 +131,12 @@ function QuickReplies({ solved, onSend, onNew }) {
         <button
           key={it.label}
           onClick={it.act}
-          style={{ flex: "0 0 auto", border: "1px solid #dcdff5", background: "#f8f8ff", color: "#4f46e5", borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}
+          style={{
+            flex: "0 0 auto", borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap",
+            border: it.accent ? "1px solid #bfe3cb" : "1px solid #dcdff5",
+            background: it.accent ? "#e8f6ec" : "#f8f8ff",
+            color: it.accent ? "#1a7f3c" : "#4f46e5",
+          }}
         >
           {it.label}
         </button>
@@ -351,7 +374,7 @@ export default function Lernen() {
               ↻ Nochmal üben
             </button>
           )}
-          <Ladder level={attempt.hint_level} solved={attempt.solved} />
+          <Ladder level={attempt.hint_level} solved={attempt.solved} ownAttempts={attempt.own_attempts} />
         </div>
       </div>
 
@@ -366,11 +389,28 @@ export default function Lernen() {
       </div>
 
       <div ref={chatRef} style={{ flex: 1, background: "#f6f7fb", padding: "18px 24px 22px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
-        {state.messages.map((m) => (
-          <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status}>
-            <MathText text={m.text} />
-          </Bubble>
-        ))}
+        {(() => {
+          const out = [];
+          let lastLevel = 0;
+          for (const m of state.messages) {
+            if (m.role === "tutor" && m.hint_level) {
+              if (lastLevel && m.hint_level > lastLevel) {
+                out.push(
+                  <div key={`lvl-${m.id}`} style={{ alignSelf: "center", fontSize: 11, fontWeight: 700, color: "#4f46e5", background: "#eef0fe", border: "1px solid #e0e2fb", borderRadius: 999, padding: "4px 13px" }}>
+                    ⬆️ Nächste Hilfe-Stufe
+                  </div>
+                );
+              }
+              lastLevel = m.hint_level;
+            }
+            out.push(
+              <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status} hintLevel={m.role === "tutor" ? m.hint_level : null}>
+                <MathText text={m.text} />
+              </Bubble>
+            );
+          }
+          return out;
+        })()}
         {streaming && (
           <Bubble role="tutor">
             <MathText text={streaming} />
@@ -398,6 +438,7 @@ export default function Lernen() {
         {!busy && (
           <QuickReplies
             solved={attempt.solved}
+            unlocked={attempt.hint_level >= 3 && attempt.own_attempts >= 2}
             onSend={(t) => send(t)}
             onNew={() => shell.openNewTask(exercise.topic_id ?? undefined)}
           />

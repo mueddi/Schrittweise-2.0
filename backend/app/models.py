@@ -172,6 +172,8 @@ class Message(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     # feinkoerniger Score intern (0..1), nach aussen nie sichtbar
     verification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Hilfe-Stufe, mit der diese Tutor-Antwort erzeugt wurde (Anzeige im Chat)
+    hint_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
     attempt: Mapped[Attempt] = relationship(back_populates="messages")

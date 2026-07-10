@@ -111,7 +111,12 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
         return LadderStep(intent, max(current_stage, 1), own_attempts, True, False)
 
     if intent == "plea":
-        # Betteln: Stufe bleibt, kein Versuch gezaehlt
+        # Verdiente Freigabe: wer auf hoher Stufe schon genug eigene Versuche
+        # gemacht hat, bekommt die Loesung auf Nachfrage WIRKLICH – sonst
+        # waere die Regel «nach 2 Versuchen» nie aktiv nutzbar.
+        if current_stage >= 3 and own_attempts >= min_attempts:
+            return LadderStep(intent, 4, own_attempts, False, True)
+        # Betteln davor: Stufe bleibt, kein Versuch gezaehlt
         stage = max(current_stage, 1)
         return LadderStep(intent, stage, own_attempts, False, False)
 
@@ -149,7 +154,7 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     ]
     if grade_level:
         lines.append(f"- Klassenstufe: {grade_level} – passe Sprache und Beispiele an dieses Niveau an.")
-    if step.intent == "plea":
+    if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "correct":
         lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")

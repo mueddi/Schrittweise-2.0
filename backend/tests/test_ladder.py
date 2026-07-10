@@ -31,6 +31,25 @@ def test_full_solution_locked_until_two_attempts():
     assert step.permit_solution
 
 
+def test_plea_unlocks_solution_after_earned_attempts():
+    """Nach 2 echten Versuchen auf Stufe 3 ist die Loesung auf Nachfrage frei."""
+    step = advance_ladder(3, 2, "plea")
+    assert step.allowed_stage == 4
+    assert step.permit_solution
+    assert step.own_attempts == 2  # Nachfragen zaehlt nicht als Versuch
+
+
+def test_plea_stays_locked_without_enough_attempts():
+    # Stufe 3, aber erst 1 Versuch -> weiterhin gesperrt
+    step = advance_ladder(3, 1, "plea")
+    assert step.allowed_stage == 3
+    assert not step.permit_solution
+    # genug Versuche, aber Stufe noch tief -> weiterhin gesperrt
+    step = advance_ladder(1, 2, "plea")
+    assert step.allowed_stage == 1
+    assert not step.permit_solution
+
+
 def test_correct_marks_solved():
     step = advance_ladder(2, 1, "correct")
     assert step.solved
@@ -43,6 +62,20 @@ def _chat(client, headers, attempt_id, text):
         assert r.status_code == 200
         "".join(r.iter_text())
     return client.get(f"/api/attempts/{attempt_id}", headers=headers).json()["attempt"]
+
+
+def test_tutor_messages_carry_hint_level(client):
+    """Tutor-Antworten tragen ihre Hilfe-Stufe (fuer das Stufen-Tag im Chat)."""
+    h = register(client, "stufen@test.ch", name="Stufen")
+    ex = client.post("/api/exercises", headers=h,
+                     json={"text": "3x+5=20", "math_expression": "3*x+5=20"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=h).json()["attempt"]["id"]
+
+    _chat(client, h, aid, "keine ahnung wie anfangen")
+    msgs = client.get(f"/api/attempts/{aid}", headers=h).json()["messages"]
+    tutor_msgs = [m for m in msgs if m["role"] == "tutor"]
+    assert tutor_msgs[0]["hint_level"] is None  # Eroeffnung hat keine Stufe
+    assert tutor_msgs[-1]["hint_level"] == 1  # erste Hilfe = Stufe 1
 
 
 def test_solved_attempt_state_frozen(client):

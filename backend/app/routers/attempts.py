@@ -91,6 +91,9 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     # Aggregate nur beim Uebergang zu «geloest» neu rechnen, nicht bei jedem Post-Solved-Chat
     solved_now = step.solved and not already_solved
 
+    # Stufe der Antwort fuer die Chat-Anzeige; nach der Loesung keine Stufe mehr
+    reply_level = None if already_solved else step.allowed_stage
+
     def generate():
         parts: list[str] = []
         try:
@@ -102,7 +105,8 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
             # und ggf. die Aggregate persistieren, damit kein Turn verloren geht.
             full = "".join(parts).strip() or "Erzähl mir, wie du an die Aufgabe rangehst."
             with SessionLocal() as s:
-                s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full))
+                s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full,
+                              hint_level=reply_level))
                 if solved_now:
                     aggregates.recompute_week(s, user_id_local)
                 s.commit()

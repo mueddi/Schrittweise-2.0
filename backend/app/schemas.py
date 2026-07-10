@@ -149,6 +149,8 @@ class MessageOut(BaseModel):
     # Nur der grobe Pruef-Status (correct/partial/incorrect/unknown) fuer das
     # visuelle Feedback im Chat – NIE die interne Loesung.
     verification_status: str | None = None
+    # Hilfe-Stufe der Tutor-Antwort (1-4) fuer das Stufen-Tag im Chat
+    hint_level: int | None = None
 
 
 def message_out(m) -> "MessageOut":
