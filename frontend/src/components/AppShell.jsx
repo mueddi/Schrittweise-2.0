@@ -116,7 +116,7 @@ export default function AppShell() {
 
           <div style={{ padding: "12px 16px 4px", fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#9aa0ab" }}>MEHR</div>
           <div onClick={() => nav("/app/bibliothek")} style={{ ...navItem(isActive("bibliothek")), margin: "0 8px" }}>📚 Bibliothek</div>
-          <div onClick={() => nav("/app/eltern")} style={{ ...navItem(isActive("eltern")), margin: "0 8px" }}>👪 Eltern-Ansicht</div>
+          <div onClick={() => nav("/app/eltern")} style={{ ...navItem(isActive("eltern")), margin: "0 8px" }}>👪 Eltern verbinden</div>
 
           <div style={{ marginTop: "auto", borderTop: "1px solid #eef0f3", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div onClick={() => nav("/app/einstellungen")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
