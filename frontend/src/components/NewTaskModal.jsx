@@ -45,7 +45,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
         setOcrNote(`✓ erkannt: ${res.math_expression}`);
       } else if (res.text) {
         if (!text.trim()) setText(res.text);
-        setOcrNote("Text erkannt – prüf und ergänz den Ausdruck bitte.");
+        setOcrNote("Text erkannt – schau kurz, ob alles stimmt.");
       } else {
         setOcrNote("Konnte nichts sicher erkennen – tipp die Aufgabe kurz selbst ein.");
       }
@@ -87,7 +87,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
     <div onClick={safeClose} style={{ position: "absolute", inset: 0, background: "rgba(20,20,40,.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 20 }}>
       <div onClick={(e) => e.stopPropagation()} className="popin" style={{ width: 560, maxWidth: "92vw", maxHeight: "90vh", overflowY: "auto", background: "#fff", borderRadius: 20, boxShadow: "0 30px 70px rgba(20,20,50,.35)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "1px solid #eef0f3", position: "sticky", top: 0, background: "#fff" }}>
-          <div style={{ fontSize: 17, fontWeight: 700 }}>Aufgabe hochladen</div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>Neue Aufgabe</div>
           <span onClick={safeClose} style={{ width: 30, height: 30, borderRadius: "50%", background: "#f1f2f6", color: "#6b7280", display: "grid", placeItems: "center", fontSize: 15, cursor: "pointer" }}>✕</span>
         </div>
         <div style={{ padding: 22 }}>
@@ -124,11 +124,12 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
             </div>
           )}
 
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Aufgabe (Text)</label>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="z.B. Löse nach x auf: 3x + 5 = 20" rows={2} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 12 }} />
-
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Mathe-Ausdruck (korrigierbar, hilft beim Prüfen)</label>
-          <input value={expr} onChange={(e) => setExpr(e.target.value)} placeholder="z.B. 3*x + 5 = 20" style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 12 }} />
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Deine Aufgabe</label>
+          {/* expr (Erkennungs-Ausdruck vom Foto) bleibt unsichtbar erhalten;
+              tippt der Schueler den Text um, wird er verworfen – sonst wuerde
+              ein veralteter Ausdruck gegen den neuen Text geprueft. Das
+              Backend extrahiert die Gleichung dann selbst aus dem Text. */}
+          <textarea value={text} onChange={(e) => { setText(e.target.value); setExpr(""); }} placeholder="z.B. Löse nach x auf: 3x + 5 = 20" rows={2} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 12 }} />
 
           <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Thema (optional)</label>
           <select value={topicId} onChange={(e) => setTopicId(e.target.value)} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 14, background: "#fff" }}>
@@ -170,7 +171,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
         <div onClick={(e) => e.stopPropagation()}>
           <DrawPad
             onClose={() => setDrawOpen(false)}
-            onResult={(t) => setText((prev) => (prev.trim() ? `${prev.trim()}\n${t}` : t))}
+            onResult={(t) => { setText((prev) => (prev.trim() ? `${prev.trim()}\n${t}` : t)); setExpr(""); }}
           />
         </div>
       )}
