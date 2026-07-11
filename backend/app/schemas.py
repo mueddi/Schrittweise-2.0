@@ -190,6 +190,23 @@ class ExerciseListItem(BaseModel):
     solved: bool = False
 
 
+# ---------- Feedback ----------
+class FeedbackCreate(BaseModel):
+    text: str = Field(min_length=3, max_length=2000)
+    page: str | None = Field(default=None, max_length=80)
+
+
+class FeedbackOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    text: str
+    page: str | None
+    created_at: datetime
+    # Absender (nur fuer die Admin-Liste angereichert)
+    display_name: str = ""
+    role: str = ""
+
+
 # ---------- Zahlung ----------
 class CheckoutRequest(BaseModel):
     # Schluessel eines Eintrags in routers.pay.PACKAGES

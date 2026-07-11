@@ -13,7 +13,7 @@ import Eltern from "./screens/Eltern.jsx";
 import Preise from "./screens/Preise.jsx";
 import Einstellungen from "./screens/Einstellungen.jsx";
 import ParentDashboard from "./screens/ParentDashboard.jsx";
-import { Impressum, Datenschutz } from "./screens/Rechtliches.jsx";
+import { Impressum, Datenschutz, Agb } from "./screens/Rechtliches.jsx";
 
 function Loader() {
   return (
@@ -56,6 +56,7 @@ export default function App() {
       <Route path="/login/verify" element={<LoginVerify />} />
       <Route path="/impressum" element={<Impressum />} />
       <Route path="/datenschutz" element={<Datenschutz />} />
+      <Route path="/agb" element={<Agb />} />
       <Route
         path="/eltern"
         element={

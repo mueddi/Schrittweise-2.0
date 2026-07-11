@@ -126,6 +126,8 @@ export default function Preise() {
           </div>
           <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center" }}>
             Sichere Zahlung über Stripe · Minderjährige: bitte Eltern fragen
+            <br />
+            Mit dem Kauf akzeptierst du die <a href="/agb" target="_blank" rel="noreferrer" style={{ color: "#c9ccf6", textDecoration: "underline" }}>AGB</a>
           </div>
         </div>
 

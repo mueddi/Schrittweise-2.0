@@ -114,6 +114,7 @@ export default function Landing() {
           <span>© {new Date().getFullYear()} Schrittweise</span>
           <Link to="/impressum" style={{ color: "#aab0bd" }}>Impressum</Link>
           <Link to="/datenschutz" style={{ color: "#aab0bd" }}>Datenschutz</Link>
+          <Link to="/agb" style={{ color: "#aab0bd" }}>AGB</Link>
           <span>Verschlüsselte Übertragung · kein Klarname nötig</span>
         </div>
       </div>

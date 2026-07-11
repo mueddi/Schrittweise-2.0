@@ -143,7 +143,75 @@ export function Datenschutz() {
   );
 }
 
+export function Agb() {
+  return (
+    <Shell title="AGB">
+      <P>
+        Allgemeine Geschäftsbedingungen für die Nutzung von Schrittweise, betrieben von
+        Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Schweiz
+        (<a href="mailto:mahmmouds62@gmail.com" style={{ color: "#4f46e5" }}>mahmmouds62@gmail.com</a>).
+        Stand: Juli 2026.
+      </P>
+
+      <H>1. Leistung</H>
+      <P>
+        Schrittweise ist ein KI-gestützter Mathe-Lern-Tutor für die Oberstufe. Das
+        Gratis-Kontingent umfasst 5 Aufgaben pro Monat. Zusätzlich können einmalige
+        Token-Pakete gekauft werden: 1 Token = 1 gestartete Aufgabe. Tokens sind kein
+        Abo, verlängern sich nicht automatisch und laufen nicht ab.
+      </P>
+
+      <H>2. Preise</H>
+      <P>
+        Schnupper-Paket: CHF 2.– (20 Aufgaben) · Starter-Paket: CHF 9.– (100 Aufgaben) ·
+        Power-Paket: CHF 19.– (300 Aufgaben). Alle Preise in Schweizer Franken, einmalig.
+      </P>
+
+      <H>3. Zahlung</H>
+      <P>
+        Die Zahlung erfolgt über Stripe (Karte oder TWINT). Die Tokens werden nach
+        Zahlungseingang automatisch dem Konto gutgeschrieben – in der Regel innert
+        Sekunden.
+      </P>
+
+      <H>4. Minderjährige</H>
+      <P>
+        Für Käufe durch Minderjährige ist das Einverständnis der Erziehungsberechtigten
+        erforderlich. Mit dem Kauf bestätigst du, dass dieses Einverständnis vorliegt.
+      </P>
+
+      <H>5. Rückerstattung</H>
+      <P>
+        Ungenutzte Tokens können innert 14 Tagen nach dem Kauf per E-Mail an die oben
+        genannte Adresse zurückgegeben werden (anteilige Rückerstattung). Für bereits
+        verbrauchte Tokens ist die Leistung erbracht – dafür gibt es keine Rückerstattung.
+      </P>
+
+      <H>6. Verfügbarkeit und Gewähr</H>
+      <P>
+        Schrittweise ist ein Lernwerkzeug und ersetzt keinen Unterricht. KI-generierte
+        Hinweise können im Einzelfall fehlerhaft sein; dafür wird keine Gewähr
+        übernommen. Eine ununterbrochene Verfügbarkeit wird angestrebt, aber nicht
+        garantiert. Bei längeren Ausfällen werden betroffene Tokens auf Anfrage ersetzt.
+      </P>
+
+      <H>7. Konto und Missbrauch</H>
+      <P>
+        Pro Person ein Konto. Bei Missbrauch (z.B. automatisierte Anfragen,
+        Weiterverkauf von Zugängen) kann das Konto gesperrt werden.
+      </P>
+
+      <H>8. Anwendbares Recht</H>
+      <P>
+        Es gilt Schweizer Recht. Gerichtsstand ist St.Gallen, zwingende gesetzliche
+        Gerichtsstände bleiben vorbehalten.
+      </P>
+    </Shell>
+  );
+}
+
 export default function Rechtliches() {
   const { pathname } = useLocation();
+  if (pathname.includes("agb")) return <Agb />;
   return pathname.includes("datenschutz") ? <Datenschutz /> : <Impressum />;
 }

@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import init_db
-from .routers import auth, topics, exercises, attempts, parents, quota, library, pay
+from .routers import auth, topics, exercises, attempts, parents, quota, library, pay, feedback
 
 
 logger = logging.getLogger("schrittweise")
@@ -94,3 +94,4 @@ app.include_router(parents.router)
 app.include_router(quota.router)
 app.include_router(library.router)
 app.include_router(pay.router)
+app.include_router(feedback.router)

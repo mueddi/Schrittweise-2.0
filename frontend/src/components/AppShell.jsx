@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation, Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import NewTaskModal from "./NewTaskModal.jsx";
+import FeedbackModal from "./FeedbackModal.jsx";
 
 const ShellCtx = createContext(null);
 export function useShell() {
@@ -23,6 +24,7 @@ export default function AppShell() {
   const [topics, setTopics] = useState([]);
   const [quota, setQuota] = useState(null);
   const [modal, setModal] = useState(null); // null | {topicId?}
+  const [fbOpen, setFbOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
 
   const loadTopics = useCallback(async () => {
@@ -117,6 +119,7 @@ export default function AppShell() {
           <div style={{ padding: "12px 16px 4px", fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#9aa0ab" }}>MEHR</div>
           <div onClick={() => nav("/app/bibliothek")} style={{ ...navItem(isActive("bibliothek")), margin: "0 8px" }}>📚 Bibliothek</div>
           <div onClick={() => nav("/app/eltern")} style={{ ...navItem(isActive("eltern")), margin: "0 8px" }}>👪 Eltern verbinden</div>
+          <div onClick={() => setFbOpen(true)} style={{ ...navItem(false), margin: "0 8px" }}>💬 Feedback</div>
 
           <div style={{ marginTop: "auto", borderTop: "1px solid #eef0f3", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
             <div onClick={() => nav("/app/einstellungen")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
@@ -153,6 +156,7 @@ export default function AppShell() {
         </div>
 
         {modal && <NewTaskModal presetTopicId={modal.topicId} onClose={() => setModal(null)} />}
+        {fbOpen && <FeedbackModal onClose={() => setFbOpen(false)} />}
       </div>
     </ShellCtx.Provider>
   );

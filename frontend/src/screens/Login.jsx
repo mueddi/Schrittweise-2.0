@@ -207,6 +207,8 @@ export default function Login() {
             <Link to="/impressum" style={{ color: "#9aa0ab", textDecoration: "underline" }}>Impressum</Link>
             {" · "}
             <Link to="/datenschutz" style={{ color: "#9aa0ab", textDecoration: "underline" }}>Datenschutz</Link>
+            {" · "}
+            <Link to="/agb" style={{ color: "#9aa0ab", textDecoration: "underline" }}>AGB</Link>
           </div>
         </form>
       </div>

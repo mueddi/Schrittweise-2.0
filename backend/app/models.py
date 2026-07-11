@@ -212,6 +212,19 @@ class ParentLink(Base):
     linked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Feedback(Base):
+    """Nutzer-Feedback aus der App – wird gespeichert und ist nur fuer das
+    Betreiber-Konto (Admin) einsehbar."""
+    __tablename__ = "feedback"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # von welcher Seite abgeschickt (z.B. /app/lernen) – hilft beim Einordnen
+    page: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
 class UploadedImage(Base):
     """Aufgaben-Fotos und Stift-Bilder als Bytes in Postgres.
 
