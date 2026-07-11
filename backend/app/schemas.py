@@ -190,6 +190,12 @@ class ExerciseListItem(BaseModel):
     solved: bool = False
 
 
+# ---------- Zahlung ----------
+class CheckoutRequest(BaseModel):
+    # Schluessel eines Eintrags in routers.pay.PACKAGES
+    package: str = Field(default="power", max_length=20)
+
+
 # ---------- Quota ----------
 class QuotaOut(BaseModel):
     plan: str

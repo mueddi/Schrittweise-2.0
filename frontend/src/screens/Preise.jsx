@@ -17,7 +17,7 @@ export default function Preise() {
   const shell = useShell();
   const [params] = useSearchParams();
   const plan = shell.quota?.plan || "free";
-  const [busy, setBusy] = useState(false);
+  const [busyPkg, setBusyPkg] = useState(null); // Paket-Key waehrend des Checkouts
   const [note, setNote] = useState(null); // {type, text}
 
   // Rückkehr von der Stripe-Bezahlseite (?zahlung=ok|abbruch)
@@ -35,17 +35,24 @@ export default function Preise() {
     }
   }, [params, shell]);
 
-  async function buy() {
-    setBusy(true);
+  async function buy(pkg) {
+    setBusyPkg(pkg);
     setNote(null);
     try {
-      const res = await api.post("/api/pay/checkout", {});
+      const res = await api.post("/api/pay/checkout", { package: pkg });
       window.location.href = res.url; // weiter zur Stripe-Bezahlseite (Karte/TWINT)
     } catch (e) {
       setNote({ type: "error", text: e.message });
-      setBusy(false);
+      setBusyPkg(null);
     }
   }
+
+  // Sackgeld-Modell: drei Einmal-Pakete, kein Abo
+  const PAKETE = [
+    { key: "schnupper", preis: "2.–", aufgaben: 10, hint: "zum Reinschnuppern" },
+    { key: "starter", preis: "9.–", aufgaben: 100, hint: "der Klassiker" },
+    { key: "power", preis: "19.–", aufgaben: 300, hint: "bester Preis pro Aufgabe", beliebt: true },
+  ];
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "#fbfbfd", padding: "36px 40px" }}>
@@ -81,30 +88,44 @@ export default function Preise() {
           </div>
         </div>
 
-        {/* Token-Paket */}
+        {/* Token-Pakete (einmalig, kein Abo) */}
         <div style={{ background: "#1a1c22", borderRadius: 18, padding: 24, position: "relative", color: "#fff", transform: "translateY(-8px)", boxShadow: "0 20px 44px rgba(26,28,34,.28)" }}>
-          <span style={{ position: "absolute", top: 16, right: 16, fontSize: 11, fontWeight: 700, color: "#1a1c22", background: "#fff", borderRadius: 999, padding: "4px 10px" }}>Beliebt</span>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#c9ccf6", marginBottom: 12 }}>Token-Paket</div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 6 }}>
-            <span style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-.02em" }}>19.–</span>
-            <span style={{ fontSize: 14, color: "#9aa0ab" }}>/ einmalig</span>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#c9ccf6", marginBottom: 4 }}>Token-Pakete</div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 16 }}>einmalig kaufen · kein Abo · läuft nie ab</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+            {PAKETE.map((p) => (
+              <div key={p.key} style={{ background: p.beliebt ? "#26293346" : "transparent", border: `1px solid ${p.beliebt ? "#8b8ef7" : "#3a3d49"}`, borderRadius: 13, padding: "12px 14px", position: "relative" }}>
+                {p.beliebt && (
+                  <span style={{ position: "absolute", top: -9, right: 12, fontSize: 10, fontWeight: 700, color: "#1a1c22", background: "#fff", borderRadius: 999, padding: "2px 9px" }}>Beliebt</span>
+                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                      <span style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-.02em" }}>{p.preis}</span>
+                      <span style={{ fontSize: 12.5, color: "#c5c9d2" }}>{p.aufgaben} Aufgaben</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9aa0ab" }}>{p.hint}</div>
+                  </div>
+                  <button
+                    onClick={() => buy(p.key)}
+                    disabled={busyPkg !== null}
+                    className="btn-primary"
+                    style={{ borderRadius: 10, padding: "9px 15px", fontSize: 13, opacity: busyPkg && busyPkg !== p.key ? 0.5 : 1 }}
+                  >
+                    {busyPkg === p.key ? "Moment …" : "Kaufen"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 20 }}>300 Aufgaben · läuft nicht ab</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 22 }}>
-            <Feature color="#8be0a4">300 Aufgaben</Feature>
-            <Feature color="#8be0a4">Kein Ablaufdatum</Feature>
-            <Feature color="#8be0a4">Priorität bei Antwortzeit</Feature>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 14 }}>
+            <Feature color="#8be0a4">Tokens laufen nie ab</Feature>
+            <Feature color="#8be0a4">Karte oder TWINT</Feature>
           </div>
-          <button
-            onClick={buy}
-            disabled={busy}
-            className="btn-primary"
-            style={{ width: "100%", borderRadius: 11, padding: 12, fontSize: 14, opacity: busy ? 0.6 : 1 }}
-          >
-            {busy ? "einen Moment …" : "Tokens kaufen"}
-          </button>
-          <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", marginTop: 10 }}>
-            Sichere Zahlung über Stripe · Karte oder TWINT
+          <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center" }}>
+            Sichere Zahlung über Stripe · Minderjährige: bitte Eltern fragen
           </div>
         </div>
 

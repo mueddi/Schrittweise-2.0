@@ -22,24 +22,31 @@ from ..config import settings
 from ..database import get_db
 from ..deps import require_student
 from ..models import Payment, Plan, User
+from ..schemas import CheckoutRequest
 
 router = APIRouter(prefix="/api/pay", tags=["pay"])
 log = logging.getLogger("schrittweise.pay")
 
-# Das eine Produkt der Preise-Seite: Token-Paket
-PACKAGE_TOKENS = 300
-PACKAGE_RAPPEN = 1900  # CHF 19.00
-PACKAGE_NAME = "Schrittweise Token-Paket – 300 Aufgaben"
+# Die Token-Pakete der Preise-Seite (Sackgeld-Modell: Einmal-Käufe, kein Abo)
+PACKAGES = {
+    "schnupper": {"tokens": 10, "rappen": 200, "name": "Schrittweise Schnupper-Paket – 10 Aufgaben"},
+    "starter": {"tokens": 100, "rappen": 900, "name": "Schrittweise Starter-Paket – 100 Aufgaben"},
+    "power": {"tokens": 300, "rappen": 1900, "name": "Schrittweise Power-Paket – 300 Aufgaben"},
+}
 
 
 @router.post("/checkout")
-def create_checkout(user: User = Depends(require_student)):
+def create_checkout(payload: CheckoutRequest | None = None, user: User = Depends(require_student)):
     """Erstellt eine Stripe-Checkout-Session und gibt deren Bezahl-URL zurück."""
     if not settings.payments_enabled:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Zahlung ist noch nicht eingerichtet – bitte den Betreiber informieren.",
         )
+    pkg_key = payload.package if payload else "power"
+    pkg = PACKAGES.get(pkg_key)
+    if pkg is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekanntes Paket.")
     base = settings.frontend_base_url.rstrip("/")
     data = {
         "mode": "payment",
@@ -48,10 +55,11 @@ def create_checkout(user: User = Depends(require_student)):
         "client_reference_id": str(user.id),
         "customer_email": user.email,
         "metadata[user_id]": str(user.id),
+        "metadata[package]": pkg_key,
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": "chf",
-        "line_items[0][price_data][unit_amount]": str(PACKAGE_RAPPEN),
-        "line_items[0][price_data][product_data][name]": PACKAGE_NAME,
+        "line_items[0][price_data][unit_amount]": str(pkg["rappen"]),
+        "line_items[0][price_data][product_data][name]": pkg["name"],
     }
     try:
         resp = httpx.post(
@@ -102,7 +110,26 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     if session.get("payment_status") != "paid":
         return {"received": True}
 
-    user_id = int(session.get("client_reference_id") or session["metadata"]["user_id"])
+    # Paket bestimmen und Betrag/Waehrung HART validieren: gutgeschrieben wird
+    # nur, was exakt zum Paket passt – ein manipulierter/fremder Event kann so
+    # keine Tokens erschleichen. Bei Abweichung: loggen, aber 200 zurueckgeben
+    # (sonst wiederholt Stripe den Webhook endlos).
+    pkg_key = (session.get("metadata") or {}).get("package") or "power"
+    pkg = PACKAGES.get(pkg_key)
+    amount = session.get("amount_total")
+    currency = (session.get("currency") or "").lower()
+    if pkg is None or amount != pkg["rappen"] or currency != "chf":
+        log.error(
+            "Webhook: Betrag/Waehrung passt nicht zum Paket (%s: %s %s, Session %s) – KEINE Gutschrift",
+            pkg_key, amount, currency, session.get("id"),
+        )
+        return {"received": True}
+
+    try:
+        user_id = int(session.get("client_reference_id") or session["metadata"]["user_id"])
+    except (TypeError, ValueError, KeyError):
+        log.error("Webhook: Nutzer-ID fehlt oder ungueltig (Session %s)", session.get("id"))
+        return {"received": True}
     user = db.get(User, user_id)
     if user is None:
         log.error("Webhook: unbekannter Nutzer %s (Session %s)", user_id, session.get("id"))
@@ -113,8 +140,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         Payment(
             user_id=user.id,
             session_id=session["id"],
-            amount_rappen=session.get("amount_total") or PACKAGE_RAPPEN,
-            tokens=PACKAGE_TOKENS,
+            amount_rappen=amount,
+            tokens=pkg["tokens"],
         )
     )
     try:
@@ -124,10 +151,10 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
         return {"received": True}  # schon verarbeitet
 
     db.execute(
-        update(User).where(User.id == user.id).values(token_balance=User.token_balance + PACKAGE_TOKENS)
+        update(User).where(User.id == user.id).values(token_balance=User.token_balance + pkg["tokens"])
     )
     if user.plan == Plan.free:
         user.plan = Plan.token
     db.commit()
-    log.info("Zahlung verbucht: Nutzer %s, +%s Tokens (Session %s)", user.id, PACKAGE_TOKENS, session["id"])
+    log.info("Zahlung verbucht: Nutzer %s, +%s Tokens (%s, Session %s)", user.id, pkg["tokens"], pkg_key, session["id"])
     return {"received": True}
