@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     smtp_from: str = "Schrittweise <no-reply@schrittweise.ch>"
 
     # Kontingent
-    free_monthly_quota: int = 20
+    free_monthly_quota: int = 5
 
     # Stripe (Token-Paket-Kauf); beide leer = Zahlung deaktiviert
     stripe_secret_key: str = ""

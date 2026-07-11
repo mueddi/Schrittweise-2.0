@@ -29,7 +29,7 @@ log = logging.getLogger("schrittweise.pay")
 
 # Die Token-Pakete der Preise-Seite (Sackgeld-Modell: Einmal-Käufe, kein Abo)
 PACKAGES = {
-    "schnupper": {"tokens": 10, "rappen": 200, "name": "Schrittweise Schnupper-Paket – 10 Aufgaben"},
+    "schnupper": {"tokens": 20, "rappen": 200, "name": "Schrittweise Schnupper-Paket – 20 Aufgaben"},
     "starter": {"tokens": 100, "rappen": 900, "name": "Schrittweise Starter-Paket – 100 Aufgaben"},
     "power": {"tokens": 300, "rappen": 1900, "name": "Schrittweise Power-Paket – 300 Aufgaben"},
 }

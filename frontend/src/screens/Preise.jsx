@@ -49,7 +49,7 @@ export default function Preise() {
 
   // Sackgeld-Modell: drei Einmal-Pakete, kein Abo
   const PAKETE = [
-    { key: "schnupper", preis: "2.–", aufgaben: 10, hint: "zum Reinschnuppern" },
+    { key: "schnupper", preis: "2.–", aufgaben: 20, hint: "zum Reinschnuppern" },
     { key: "starter", preis: "9.–", aufgaben: 100, hint: "der Klassiker" },
     { key: "power", preis: "19.–", aufgaben: 300, hint: "bester Preis pro Aufgabe", beliebt: true },
   ];
@@ -79,7 +79,7 @@ export default function Preise() {
           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 6 }}>0.–</div>
           <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 20 }}>zum Ausprobieren</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 22 }}>
-            <Feature>20 Aufgaben pro Monat</Feature>
+            <Feature>5 Aufgaben pro Monat</Feature>
             <Feature>Alle Themen</Feature>
             <Feature>Foto-Upload</Feature>
           </div>

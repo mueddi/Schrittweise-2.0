@@ -103,11 +103,11 @@ def test_webhook_credits_each_package_size(client, monkeypatch):
 
     p1 = paid_event(me["id"], session_id="cs_s1", package="schnupper")
     assert client.post("/api/pay/webhook", content=p1, headers=signed_headers(p1)).status_code == 200
-    assert token_balance("mia@test.ch") == 10
+    assert token_balance("mia@test.ch") == 20
 
     p2 = paid_event(me["id"], session_id="cs_s2", package="starter")
     client.post("/api/pay/webhook", content=p2, headers=signed_headers(p2))
-    assert token_balance("mia@test.ch") == 110
+    assert token_balance("mia@test.ch") == 120
 
 
 def test_webhook_rejects_wrong_amount_or_currency(client, monkeypatch):

@@ -440,7 +440,7 @@ const routes = [
   ["GET", /^\/api\/quota$/, async (_, __, u) => {
     if (u?.role !== "student") return ERR("Nur für Schüler-Konten", 403);
     const used = db.exercises.filter((e) => e.user_id === u.id).length;
-    return J({ plan: "free", used_this_month: used, monthly_free_quota: 20, token_balance: 0,
+    return J({ plan: "free", used_this_month: used, monthly_free_quota: 5, token_balance: 0,
       remaining: Math.max(20 - used, 0), percent_used: Math.min(Math.round((used / 20) * 100), 100) });
   }],
 

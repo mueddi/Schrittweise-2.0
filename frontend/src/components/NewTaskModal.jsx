@@ -143,7 +143,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
               <div style={{ fontSize: 14, fontWeight: 700, color: "#a05c12", marginBottom: 4 }}>Dein Gratis-Kontingent ist aufgebraucht 🙌</div>
               <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.55, marginBottom: 12 }}>
                 Du hast diesen Monat fleissig geübt! Mit einem Token-Paket geht es sofort weiter –
-                oder du wartest auf den nächsten Monat (dann gibt es wieder 20 Gratis-Aufgaben).
+                oder du wartest auf den nächsten Monat (dann gibt es wieder 5 Gratis-Aufgaben).
               </div>
               <button
                 onClick={() => { onClose(); nav("/app/preise"); }}
