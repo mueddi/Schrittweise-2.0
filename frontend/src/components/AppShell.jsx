@@ -26,6 +26,35 @@ export default function AppShell() {
   const [modal, setModal] = useState(null); // null | {topicId?}
   const [fbOpen, setFbOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [updateReady, setUpdateReady] = useState(false);
+
+  // Update-Erkennung: alte, lange offene Tabs zeigten sonst ein veraltetes
+  // Bundle (kaputte Skizzen/Formatierung). Beim Zurueckkehren in den Tab und
+  // alle 15 Min wird das aktuelle index.html geholt und der Bundle-Name mit
+  // dem geladenen Script verglichen – weicht er ab, erscheint der Reload-Knopf.
+  useEffect(() => {
+    const current = document.querySelector('script[src*="/assets/index-"]')?.getAttribute("src");
+    if (!current) return; // Dev-Server: kein gebautes Bundle
+    let stop = false;
+    const check = async () => {
+      try {
+        const res = await fetch("/", { cache: "no-store" });
+        const m = (await res.text()).match(/\/assets\/index-[^"]+\.js/);
+        if (!stop && m && m[0] !== current) setUpdateReady(true);
+      } catch { /* offline o.ae. – beim naechsten Check erneut versuchen */ }
+    };
+    const onVis = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    const id = setInterval(check, 15 * 60 * 1000);
+    check();
+    return () => {
+      stop = true;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   const loadTopics = useCallback(async () => {
     try {
@@ -164,6 +193,17 @@ export default function AppShell() {
 
         {modal && <NewTaskModal presetTopicId={modal.topicId} onClose={() => setModal(null)} />}
         {fbOpen && <FeedbackModal onClose={() => setFbOpen(false)} />}
+        {updateReady && (
+          <div style={{ position: "fixed", bottom: 18, left: "50%", transform: "translateX(-50%)", zIndex: 300, background: "#1a1c22", color: "#fff", borderRadius: 999, padding: "9px 10px 9px 18px", display: "flex", gap: 14, alignItems: "center", boxShadow: "0 10px 30px rgba(0,0,0,.28)", fontSize: 13, whiteSpace: "nowrap" }}>
+            ✨ Neue Version verfügbar
+            <button
+              onClick={() => window.location.reload()}
+              style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 999, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >
+              Jetzt aktualisieren
+            </button>
+          </div>
+        )}
       </div>
     </ShellCtx.Provider>
   );
