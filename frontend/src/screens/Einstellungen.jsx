@@ -150,6 +150,22 @@ function AboTab({ onBuy }) {
 
   if (!quota) return <div style={{ fontSize: 14, color: "#9aa0ab" }}>lädt …</div>;
 
+  if (quota.unlimited) {
+    return (
+      <>
+        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Abo &amp; Tokens</div>
+        <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 20, maxWidth: 620 }}>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Plan</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>∞ Unbegrenzt</div>
+          <div style={{ fontSize: 13, color: "#6b7280", marginTop: 8, lineHeight: 1.55 }}>
+            Dieses Konto ist ein Betreiber-Konto: Aufgaben sind unbegrenzt und kostenlos –
+            es werden weder Gratis-Kontingent noch Tokens abgebucht.
+          </div>
+        </div>
+      </>
+    );
+  }
+
   const freeUsed = Math.min(quota.used_this_month, quota.monthly_free_quota);
   const freePct = quota.monthly_free_quota ? Math.min(100, Math.round((freeUsed / quota.monthly_free_quota) * 100)) : 0;
 

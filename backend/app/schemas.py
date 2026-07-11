@@ -221,6 +221,8 @@ class QuotaOut(BaseModel):
     token_balance: int
     remaining: int  # verbleibend (free + token)
     percent_used: int
+    # Betreiber-Konto / Schul-Plan: keine Abbuchung, unbegrenzte Aufgaben
+    unlimited: bool = False
 
 
 # ---------- Parent ----------

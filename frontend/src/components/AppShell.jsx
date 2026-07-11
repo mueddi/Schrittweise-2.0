@@ -133,14 +133,18 @@ export default function AppShell() {
               </div>
               <span style={{ marginLeft: "auto", color: "#9aa0ab", fontSize: 15 }}>⚙</span>
             </div>
-            <div onClick={() => nav("/app/preise")} style={{ cursor: "pointer" }}>
-              <div style={{ fontSize: 10, color: "#9aa0ab", marginBottom: 4 }}>
-                Gratis-Kontingent · {quota ? `${quotaPct} %` : "…"}
+            {quota?.unlimited ? (
+              <div style={{ fontSize: 10, color: "#9aa0ab" }}>∞ Unbegrenzte Aufgaben (Betreiber)</div>
+            ) : (
+              <div onClick={() => nav("/app/preise")} style={{ cursor: "pointer" }}>
+                <div style={{ fontSize: 10, color: "#9aa0ab", marginBottom: 4 }}>
+                  Gratis-Kontingent · {quota ? `${quotaPct} %` : "…"}
+                </div>
+                <div style={{ height: 5, borderRadius: 999, background: "#e7e8ee", overflow: "hidden" }}>
+                  <div style={{ width: `${quotaPct}%`, height: "100%", background: quotaPct >= 90 ? "#d9573a" : "#cdd2db" }} />
+                </div>
               </div>
-              <div style={{ height: 5, borderRadius: 999, background: "#e7e8ee", overflow: "hidden" }}>
-                <div style={{ width: `${quotaPct}%`, height: "100%", background: quotaPct >= 90 ? "#d9573a" : "#cdd2db" }} />
-              </div>
-            </div>
+            )}
             <div onClick={logout} style={{ fontSize: 11, color: "#b6bcc6", cursor: "pointer" }}>Abmelden</div>
           </div>
         </div>

@@ -105,6 +105,31 @@ def test_kosten_leer_ohne_daten(client):
     assert data["nach_typ"] == []
 
 
+def test_admin_hat_unbegrenzte_aufgaben(client):
+    """Betreiber-Konto: kein Gratis-Limit, keine Token-Abbuchung."""
+    admin = register_pw(client, "chef@test.ch")
+    make_admin("chef@test.ch")
+
+    # deutlich mehr Aufgaben als das Gratis-Kontingent (5) – alle gehen durch
+    for i in range(8):
+        r = client.post("/api/exercises", headers=admin, json={"text": f"{i}x + 1 = {i + 2}"})
+        assert r.status_code == 201, r.text
+
+    q = client.get("/api/quota", headers=admin).json()
+    assert q["unlimited"] is True
+    assert q["token_balance"] == 0  # nichts abgebucht, nichts noetig
+    assert q["percent_used"] == 0
+
+    # Schueler laufen weiterhin ins Limit
+    student = register_pw(client, "mia@test.ch")
+    for i in range(5):
+        assert client.post("/api/exercises", headers=student,
+                           json={"text": f"{i}y = {i}"}).status_code == 201
+    assert client.post("/api/exercises", headers=student,
+                       json={"text": "z = 1"}).status_code == 402
+    assert client.get("/api/quota", headers=student).json()["unlimited"] is False
+
+
 def test_mock_chat_erzeugt_keine_usage_zeile(client):
     # Ohne API-Key antwortet der Mock-Tutor – es darf KEINE Kostenzeile entstehen
     headers = register_pw(client, "mia@test.ch")

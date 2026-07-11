@@ -26,10 +26,15 @@ def used_this_month(db: Session, user_id: int) -> int:
     ) or 0
 
 
+def _unlimited(user: User) -> bool:
+    # Betreiber-Konto (Admin) und Schul-Plan zahlen nie: unbegrenzte Aufgaben.
+    return user.is_admin or user.plan == Plan.school
+
+
 def quota_state(db: Session, user: User) -> dict:
     used = used_this_month(db, user.id)
     free = settings.free_monthly_quota
-    if user.plan == Plan.school:
+    if _unlimited(user):
         remaining = 10**9
         percent = 0
     else:
@@ -43,11 +48,12 @@ def quota_state(db: Session, user: User) -> dict:
         "token_balance": user.token_balance,
         "remaining": remaining,
         "percent_used": percent,
+        "unlimited": _unlimited(user),
     }
 
 
 def can_start_new(db: Session, user: User) -> bool:
-    if user.plan == Plan.school:
+    if _unlimited(user):
         return True
     if used_this_month(db, user.id) < settings.free_monthly_quota:
         return True
@@ -56,7 +62,7 @@ def can_start_new(db: Session, user: User) -> bool:
 
 def consume(db: Session, user: User) -> None:
     """Bucht eine Aufgabe ab: erst Gratis-Kontingent, dann Tokens."""
-    if user.plan == Plan.school:
+    if _unlimited(user):
         return
     # Aufgabe ist bereits angelegt und mitgezaehlt; nur ueber dem Gratis-Limit Token abbuchen.
     if used_this_month(db, user.id) > settings.free_monthly_quota:
