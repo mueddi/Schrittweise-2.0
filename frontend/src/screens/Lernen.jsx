@@ -324,7 +324,7 @@ export default function Lernen() {
             <div style={{ fontSize: 15, fontWeight: 700 }}>Lernen</div>
             <div style={{ fontSize: 12, color: "#9aa0ab" }}>Schritt für Schritt zur Lösung</div>
           </div>
-          <Ladder level={0} />
+          {/* keine Hilfe-Anzeige: sie gilt pro Aufgabe – hier ist keine offen */}
         </div>
         <div style={{ flex: 1, background: "#f6f7fb", display: "grid", placeItems: "center", padding: 24 }}>
           <div style={{ textAlign: "center", maxWidth: 420 }}>
