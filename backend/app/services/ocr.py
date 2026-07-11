@@ -60,7 +60,12 @@ class ClaudeVisionOcr:
 
     name = "claude-vision"
 
+    def __init__(self) -> None:
+        # nach recognize(): {"model": ..., "usage": ...} fuer die Kostenerfassung
+        self.last_usage: dict | None = None
+
     def recognize(self, image_bytes: bytes) -> OcrResult:
+        self.last_usage = None
         try:
             import base64
 
@@ -113,6 +118,7 @@ class ClaudeVisionOcr:
                     }
                 ],
             )
+            self.last_usage = {"model": settings.anthropic_model_smart, "usage": resp.usage}
             text = "".join(b.text for b in resp.content if b.type == "text").strip()
             if text.upper() == "LEER":
                 text = ""

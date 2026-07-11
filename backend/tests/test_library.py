@@ -103,12 +103,12 @@ def test_search_fallback_and_ai_ranking(client, monkeypatch):
     assert [d["id"] for d in hit] == [b["id"]]
 
     # KI-Ranking bestimmt die Reihenfolge
-    monkeypatch.setattr(library_router, "rank_documents", lambda q, docs: [b["id"], a["id"]])
+    monkeypatch.setattr(library_router, "rank_documents", lambda q, docs, usage_out=None: [b["id"], a["id"]])
     ranked = client.get("/api/library?q=irgendwas", headers=student).json()
     assert [d["id"] for d in ranked] == [b["id"], a["id"]]
 
     # KI sagt «nichts passt» ([]) -> leeres Ergebnis, kein Fallback
-    monkeypatch.setattr(library_router, "rank_documents", lambda q, docs: [])
+    monkeypatch.setattr(library_router, "rank_documents", lambda q, docs, usage_out=None: [])
     assert client.get("/api/library?q=quantenphysik", headers=student).json() == []
 
 

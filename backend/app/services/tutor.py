@@ -265,8 +265,14 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
 def stream_reply(history, step: LadderStep, verification: Verification,
                  exercise_text: str, exercise_expr: str | None,
                  grade_level: str | None = None,
-                 image: tuple[bytes, str] | None = None):
-    """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming)."""
+                 image: tuple[bytes, str] | None = None,
+                 usage_out: dict | None = None):
+    """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming).
+
+    ``usage_out``: optionales dict, das nach Stream-Ende mit ``model`` und
+    ``usage`` (Token-Verbrauch der API-Antwort) gefuellt wird – Grundlage
+    der Admin-Kostenauswertung. Im Mock-/Fehlerfall bleibt es leer.
+    """
     if not (settings.anthropic_api_key and anthropic):
         yield from _mock_reply(step, verification, exercise_text)
         return
@@ -282,6 +288,9 @@ def stream_reply(history, step: LadderStep, verification: Verification,
             for text in stream.text_stream:
                 produced = True
                 yield text
+            if usage_out is not None:
+                usage_out["model"] = model
+                usage_out["usage"] = stream.get_final_message().usage
     except Exception:
         # KEIN stiller Mock mehr: der passte nicht zur Aufgabe und der Betreiber
         # erfuhr nie, dass die KI down ist. Ehrlich melden + Fehler ins Log.

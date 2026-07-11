@@ -19,8 +19,11 @@ MAX_RESULTS = 20
 DESC_CHARS = 300
 
 
-def rank_documents(q: str, docs: list[dict]) -> list[int] | None:
-    """Gerankte Dokument-IDs zur Suchanfrage; None => Aufrufer nutzt ILIKE-Fallback."""
+def rank_documents(q: str, docs: list[dict], usage_out: dict | None = None) -> list[int] | None:
+    """Gerankte Dokument-IDs zur Suchanfrage; None => Aufrufer nutzt ILIKE-Fallback.
+
+    ``usage_out``: optionales dict, das mit ``model`` und ``usage`` der
+    API-Antwort gefuellt wird (Kostenerfassung)."""
     if not settings.anthropic_api_key or not docs:
         return None
     try:
@@ -56,6 +59,9 @@ def rank_documents(q: str, docs: list[dict]) -> list[int] | None:
                 }
             ],
         )
+        if usage_out is not None:
+            usage_out["model"] = settings.anthropic_model_default
+            usage_out["usage"] = resp.usage
         raw = "".join(b.text for b in resp.content if b.type == "text").strip()
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         ranked = json.loads(raw)

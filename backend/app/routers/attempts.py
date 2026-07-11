@@ -15,7 +15,7 @@ from ..schemas import (
     MessageOut,
     message_out,
 )
-from ..services import aggregates, tutor
+from ..services import aggregates, tutor, usage
 from ..services.sympy_verifier import verify
 
 router = APIRouter(prefix="/api/attempts", tags=["attempts"])
@@ -103,10 +103,14 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     # Stufe der Antwort fuer die Chat-Anzeige; nach der Loesung keine Stufe mehr
     reply_level = None if already_solved else step.allowed_stage
 
+    exercise_id_local = ex.id
+
     def generate():
         parts: list[str] = []
+        usage_out: dict = {}
         try:
-            for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr, grade_level, image):
+            for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr,
+                                            grade_level, image, usage_out):
                 parts.append(chunk)
                 yield chunk
         finally:
@@ -116,6 +120,9 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
             with SessionLocal() as s:
                 s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full,
                               hint_level=reply_level))
+                if usage_out.get("usage") is not None:
+                    usage.record(s, "chat", usage_out.get("model", ""), usage_out["usage"],
+                                 user_id=user_id_local, exercise_id=exercise_id_local)
                 if solved_now:
                     aggregates.recompute_week(s, user_id_local)
                 s.commit()

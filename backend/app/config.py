@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # Kontingent
     free_monthly_quota: int = 5
 
+    # Umrechnungskurs fuer die Kosten-Anzeige im Admin-Bereich (Anthropic
+    # rechnet in USD ab, der Betreiber denkt in CHF/Rappen)
+    usd_chf_rate: float = 0.90
+
     # Stripe (Token-Paket-Kauf); beide leer = Zahlung deaktiviert
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""

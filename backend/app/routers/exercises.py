@@ -19,7 +19,7 @@ from ..schemas import (
     message_out,
     OcrResult,
 )
-from ..services import quota
+from ..services import quota, usage
 from ..services.ocr import OcrUnavailable, get_ocr_provider
 from ..services.sympy_verifier import extract_expression
 
@@ -80,8 +80,9 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
         Image.open(io.BytesIO(data)).verify()
     except Exception:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist kein gueltiges Bild.")
+    provider = get_ocr_provider()
     try:
-        result = get_ocr_provider().recognize(data)
+        result = provider.recognize(data)
     except OcrUnavailable:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -92,6 +93,9 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
     token = secrets.token_hex(16)
     db.add(UploadedImage(user_id=user.id, token=token, mime_type=mime,
                          size_bytes=len(stored), content=stored))
+    last = getattr(provider, "last_usage", None)
+    if last:
+        usage.record(db, "ocr", last["model"], last["usage"], user_id=user.id)
     db.commit()
     result.image_path = f"/api/exercises/images/{token}"
     return result

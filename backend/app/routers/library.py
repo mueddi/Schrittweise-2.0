@@ -14,6 +14,7 @@ from ..database import get_db
 from ..deps import get_current_user, require_admin
 from ..models import LibraryDocument, LibraryTopic, User
 from ..schemas import LibraryDocOut, LibraryDocUpdate, LibraryTopicCreate, LibraryTopicOut
+from ..services import usage
 from ..services.library_search import rank_documents
 
 router = APIRouter(prefix="/api/library", tags=["library"])
@@ -144,6 +145,7 @@ def list_documents(
     if not q:
         return docs
 
+    usage_out: dict = {}
     ranked = rank_documents(
         q,
         [
@@ -157,7 +159,11 @@ def list_documents(
             }
             for d in docs
         ],
+        usage_out,
     )
+    if usage_out.get("usage") is not None:
+        usage.record(db, "suche", usage_out.get("model", ""), usage_out["usage"], user_id=user.id)
+        db.commit()
     if ranked is not None:
         by_id = {d.id: d for d in docs}
         return [by_id[i] for i in ranked if i in by_id]

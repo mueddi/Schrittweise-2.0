@@ -246,6 +246,28 @@ class UploadedImage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 
+class ApiUsage(Base):
+    """Token-Verbrauch je Anthropic-Aufruf – Grundlage der Admin-Kostenauswertung.
+
+    Jede echte API-Antwort liefert die Verbraeuche mit; hier landen sie samt
+    berechneten Kosten (USD). ``kind`` unterscheidet Chat/Erkennung/KI-Suche.
+    """
+
+    __tablename__ = "api_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    exercise_id: Mapped[int | None] = mapped_column(ForeignKey("exercises.id"), index=True, nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True, nullable=False)  # chat | ocr | suche
+    model: Mapped[str] = mapped_column(String(60), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
 class LibraryDocument(Base):
     """Vom Betreiber hochgeladenes Aufgaben-Dokument (Arbeitsblatt, meist PDF).
 
