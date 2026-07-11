@@ -21,6 +21,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
   const [ocrNote, setOcrNote] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [quotaOut, setQuotaOut] = useState(false); // 402: Kontingent aufgebraucht
   const [drag, setDrag] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
 
@@ -75,7 +76,8 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
       onClose();
       nav(`/app/lernen/${attempt.attempt.id}`);
     } catch (err) {
-      setError(err.message);
+      if (err.status === 402) setQuotaOut(true); // Sackgasse -> Kauf-Weg zeigen
+      else setError(err.message);
     } finally {
       setBusy(false);
     }
@@ -135,6 +137,23 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
           </select>
 
           {error && <div style={{ fontSize: 13, color: "#c0392b", marginBottom: 12 }}>{error}</div>}
+
+          {quotaOut && (
+            <div style={{ background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#a05c12", marginBottom: 4 }}>Dein Gratis-Kontingent ist aufgebraucht 🙌</div>
+              <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.55, marginBottom: 12 }}>
+                Du hast diesen Monat fleissig geübt! Mit einem Token-Paket geht es sofort weiter –
+                oder du wartest auf den nächsten Monat (dann gibt es wieder 20 Gratis-Aufgaben).
+              </div>
+              <button
+                onClick={() => { onClose(); nav("/app/preise"); }}
+                className="btn-primary"
+                style={{ fontSize: 13, borderRadius: 10, padding: "10px 18px", border: "none" }}
+              >
+                Tokens laden →
+              </button>
+            </div>
+          )}
 
           <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16, fontSize: 12, color: "#9aa0ab" }}>
             <span>🔒</span> Dein Bild wird nur für die Erkennung verwendet und trainiert keine KI-Modelle.

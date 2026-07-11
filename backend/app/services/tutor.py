@@ -6,11 +6,14 @@ ist, und das LLM formuliert nur die pädagogische Antwort dieser Stufe.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
 from ..config import settings
 from .sympy_verifier import Verification
+
+log = logging.getLogger("schrittweise.tutor")
 
 try:
     import anthropic
@@ -226,11 +229,15 @@ def stream_reply(history, step: LadderStep, verification: Verification,
             for text in stream.text_stream:
                 produced = True
                 yield text
-    except Exception:  # pragma: no cover – bei API-Fehler nicht die App killen, sondern Mock
-        # Nur wenn noch nichts kam, den Mock als Ersatz liefern – sonst entstuende
-        # aus Teiltext + kompletter Mock-Antwort ein zusammengeklebter Doppel-Text.
-        if not produced:
-            yield from _mock_reply(step, verification, exercise_text)
+    except Exception:
+        # KEIN stiller Mock mehr: der passte nicht zur Aufgabe und der Betreiber
+        # erfuhr nie, dass die KI down ist. Ehrlich melden + Fehler ins Log.
+        log.exception("Anthropic-Stream fehlgeschlagen (Antwort begonnen: %s)", produced)
+        if produced:
+            yield "\n\n⚠️ (Die Verbindung ist mittendrin abgebrochen – frag einfach nochmal, dann mache ich fertig.)"
+        else:
+            yield ("⚠️ Ich habe gerade technische Probleme und kann dir nicht richtig antworten. "
+                   "Schick deine Nachricht in einem Moment einfach nochmal – dein Fortschritt bleibt erhalten.")
 
 
 def _mock_reply(step: LadderStep, verification: Verification, exercise_text: str):

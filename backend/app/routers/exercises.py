@@ -1,14 +1,15 @@
 """Aufgaben anlegen und Attempts (Hinweis-Leiter-Sessions) starten + Foto-OCR."""
+import io
 import secrets
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
 from ..deps import require_student
-from ..models import Attempt, Exercise, Message, MessageRole, Topic, User
+from ..models import Attempt, Exercise, Message, MessageRole, Topic, UploadedImage, User
 from ..schemas import (
     AttemptOut,
     AttemptStateOut,
@@ -33,8 +34,31 @@ ALLOWED_IMG = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic
 MAX_UPLOAD = 8 * 1024 * 1024
 
 
+def _shrink_for_storage(data: bytes) -> tuple[bytes, str]:
+    """Verkleinert Fotos fuer die DB-Ablage (laengste Kante 1600px, JPEG q85).
+
+    Kleine PNGs (Stift-Eingabe) bleiben verlustfrei PNG. Haelt die Antwort des
+    Bild-Endpoints sicher unter dem Vercel-Limit (~4.5 MB) und die DB schlank.
+    """
+    from PIL import Image
+
+    try:
+        img = Image.open(io.BytesIO(data))
+        if (img.format or "").upper() == "PNG" and len(data) <= 1024 * 1024:
+            return data, "image/png"
+        if max(img.size) > 1600:
+            img.thumbnail((1600, 1600))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "JPEG", quality=85)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:
+        # im Zweifel Original speichern – besser gross als gar kein Bild
+        return data, "image/jpeg"
+
+
 @router.post("/ocr", response_model=OcrResult)
-async def ocr_upload(request: Request, file: UploadFile = File(...), user: User = Depends(require_student)):
+async def ocr_upload(request: Request, file: UploadFile = File(...),
+                     user: User = Depends(require_student), db: Session = Depends(get_db)):
     """Foto hochladen -> OCR-Preview (erkannter Text + Mathe-Ausdruck)."""
     if file.content_type not in ALLOWED_IMG:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte ein Bild hochladen (PNG/JPG/WebP).")
@@ -56,11 +80,6 @@ async def ocr_upload(request: Request, file: UploadFile = File(...), user: User 
         Image.open(io.BytesIO(data)).verify()
     except Exception:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist kein gueltiges Bild.")
-    ext = {"image/png": ".png", "image/webp": ".webp"}.get(file.content_type, ".jpg")
-    # 128-Bit-Zufallsname: Bild-URL wirkt als unerratbare Capability-URL
-    name = f"{secrets.token_hex(16)}{ext}"
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)  # /tmp kann zwischen Cold-Starts leer sein
-    (UPLOAD_DIR / name).write_bytes(data)
     try:
         result = get_ocr_provider().recognize(data)
     except OcrUnavailable:
@@ -68,8 +87,25 @@ async def ocr_upload(request: Request, file: UploadFile = File(...), user: User 
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Die Erkennung ist gerade nicht erreichbar – dein Geschriebenes bleibt erhalten, versuch es gleich nochmal.",
         )
-    result.image_path = f"/uploads/{name}"
+    # Bild dauerhaft in der DB ablegen – /tmp verliert Dateien bei jedem Kaltstart.
+    stored, mime = _shrink_for_storage(data)
+    token = secrets.token_hex(16)
+    db.add(UploadedImage(user_id=user.id, token=token, mime_type=mime,
+                         size_bytes=len(stored), content=stored))
+    db.commit()
+    result.image_path = f"/api/exercises/images/{token}"
     return result
+
+
+@router.get("/images/{token}")
+def get_image(token: str, db: Session = Depends(get_db)):
+    """Liefert ein gespeichertes Aufgaben-Bild. Bewusst ohne Auth: <img src>
+    schickt keinen Bearer-Header; der 128-Bit-Token macht die URL unerratbar."""
+    img = db.scalar(select(UploadedImage).where(UploadedImage.token == token))
+    if img is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bild nicht gefunden")
+    return Response(content=img.content, media_type=img.mime_type,
+                    headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.post("", response_model=ExerciseOut, status_code=201)

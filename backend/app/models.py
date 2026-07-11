@@ -212,6 +212,27 @@ class ParentLink(Base):
     linked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class UploadedImage(Base):
+    """Aufgaben-Fotos und Stift-Bilder als Bytes in Postgres.
+
+    /tmp ist auf Vercel fluechtig – Dateien verschwinden bei jedem Kaltstart
+    und hinterlassen tote Bild-Links im Verlauf. ``content`` ist deferred,
+    damit Abfragen ohne Bildbedarf die Bytes nie mitladen.
+    """
+
+    __tablename__ = "uploaded_images"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    # 128-Bit-Zufalls-Capability: die Bild-URL ist unerratbar (dasselbe
+    # Sicherheitsmodell wie vorher der Zufalls-Dateiname unter /uploads)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
 class LibraryDocument(Base):
     """Vom Betreiber hochgeladenes Aufgaben-Dokument (Arbeitsblatt, meist PDF).
 

@@ -33,7 +33,9 @@ async function handle(res) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data?.detail || data?.message || `Fehler ${res.status}`;
-    throw new Error(typeof msg === "string" ? msg : "Unbekannter Fehler");
+    const err = new Error(typeof msg === "string" ? msg : "Unbekannter Fehler");
+    err.status = res.status; // z.B. 402 = Kontingent aufgebraucht -> Kauf-Hinweis
+    throw err;
   }
   return data;
 }
