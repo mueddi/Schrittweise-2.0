@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
@@ -55,7 +55,7 @@ export default function Einstellungen() {
         {TABS.map((t) => (
           <div
             key={t.key}
-            onClick={() => (t.key === "abo" ? nav("/app/preise") : setTab(t.key))}
+            onClick={() => setTab(t.key)}
             style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 8px", padding: "9px 12px", borderRadius: 10, fontSize: 13, cursor: "pointer", background: tab === t.key ? "#eef0fe" : "transparent", color: tab === t.key ? "#4f46e5" : "#1a1c22", fontWeight: tab === t.key ? 600 : 400 }}
           >
             {t.icon} {t.label}
@@ -95,6 +95,8 @@ export default function Einstellungen() {
         )}
 
         {tab === "passwort" && <PasswordTab />}
+
+        {tab === "abo" && <AboTab onBuy={() => nav("/app/preise")} />}
 
         {tab === "sprache" && (
           <>
@@ -137,6 +139,47 @@ export default function Einstellungen() {
         )}
       </div>
     </div>
+  );
+}
+
+function AboTab({ onBuy }) {
+  const [quota, setQuota] = useState(null);
+  useEffect(() => {
+    api.get("/api/quota").then(setQuota).catch(() => setQuota(null));
+  }, []);
+
+  if (!quota) return <div style={{ fontSize: 14, color: "#9aa0ab" }}>lädt …</div>;
+
+  const freeUsed = Math.min(quota.used_this_month, quota.monthly_free_quota);
+  const freePct = quota.monthly_free_quota ? Math.min(100, Math.round((freeUsed / quota.monthly_free_quota) * 100)) : 0;
+
+  return (
+    <>
+      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Abo &amp; Tokens</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, maxWidth: 620, marginBottom: 20 }} className="eltern-tiles">
+        <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Plan</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{quota.plan === "free" ? "Gratis" : "Token"}</div>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Gratis-Aufgaben (Monat)</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{freeUsed} <span style={{ fontSize: 13, color: "#9aa0ab" }}>von {quota.monthly_free_quota}</span></div>
+          <div style={{ height: 5, borderRadius: 999, background: "#eef0f3", overflow: "hidden", marginTop: 8 }}>
+            <div style={{ width: `${freePct}%`, height: "100%", background: freePct >= 90 ? "#d9573a" : "#6366f1" }} />
+          </div>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Token-Guthaben</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: quota.token_balance > 0 ? "#1a7f3c" : "#1a1c22" }}>{quota.token_balance}</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 18, lineHeight: 1.55 }}>
+        Tokens laufen nie ab · 1 Token = 1 gestartete Aufgabe · kein Abo, keine automatische Verlängerung
+      </div>
+      <button onClick={onBuy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>
+        Tokens kaufen →
+      </button>
+    </>
   );
 }
 
