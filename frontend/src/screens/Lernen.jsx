@@ -4,6 +4,7 @@ import { api, getToken } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
 import DrawPad from "../components/DrawPad.jsx";
 import MathText from "../lib/MathText.jsx";
+import MathFigure from "../components/MathFigure.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
@@ -39,6 +40,42 @@ function Ladder({ level, solved, ownAttempts = 0 }) {
       </span>
     </div>
   );
+}
+
+// Tutor-Text mit eingebetteten Skizzen: [[FIGUR]]{json}[[/FIGUR]]-Bloecke
+// werden zu praezisen MathFigure-Vorlagen, der Rest bleibt MathText.
+const FIG_RE = /\[\[FIGUR\]\]([\s\S]*?)\[\[\/FIGUR\]\]/g;
+
+function TutorContent({ text, streaming = false }) {
+  let src = text || "";
+  let drawing = false;
+  if (streaming) {
+    // unvollstaendiger Block am Ende: ausblenden statt rohes JSON zu zeigen
+    const open = src.lastIndexOf("[[FIGUR]]");
+    if (open !== -1 && src.indexOf("[[/FIGUR]]", open) === -1) {
+      src = src.slice(0, open);
+      drawing = true;
+    }
+  }
+  const parts = [];
+  let last = 0;
+  let i = 0;
+  const re = new RegExp(FIG_RE.source, "g");
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    if (m.index > last) parts.push(<MathText key={`t${i++}`} text={src.slice(last, m.index)} />);
+    let spec = null;
+    try {
+      spec = JSON.parse(m[1].trim());
+    } catch {
+      spec = null; // kaputtes JSON: Skizze still weglassen
+    }
+    if (spec) parts.push(<MathFigure key={`f${i++}`} spec={spec} />);
+    last = re.lastIndex;
+  }
+  if (last < src.length) parts.push(<MathText key={`t${i++}`} text={src.slice(last)} />);
+  if (drawing) parts.push(<span key="draw" style={{ display: "block", fontSize: 12.5, color: "#9aa0ab", marginTop: 6 }}>✏️ Skizze wird gezeichnet …</span>);
+  return <>{parts}</>;
 }
 
 // Was diese Tutor-Antwort ist – macht die Hilfe-Stufen im Chat sichtbar.
@@ -421,7 +458,7 @@ export default function Lernen() {
             }
             out.push(
               <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status} hintLevel={m.role === "tutor" ? m.hint_level : null}>
-                <MathText text={m.text} />
+                {m.role === "tutor" ? <TutorContent text={m.text} /> : <MathText text={m.text} />}
               </Bubble>
             );
           }
@@ -429,7 +466,7 @@ export default function Lernen() {
         })()}
         {streaming && (
           <Bubble role="tutor">
-            <MathText text={streaming} />
+            <TutorContent text={streaming} streaming />
           </Bubble>
         )}
         {busy && !streaming && (
