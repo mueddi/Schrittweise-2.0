@@ -32,14 +32,8 @@ export default function Landing() {
           <span style={{ width: 26, height: 26, borderRadius: 8, background: "#6366f1" }} />
           <span style={{ fontWeight: 800, fontSize: 19, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
-          <Link to="/login" style={{ fontSize: 14, fontWeight: 600 }}>Anmelden</Link>
-          <Link
-            to="/login"
-            style={{ fontSize: 14, fontWeight: 600, color: "#fff", background: "#6366f1", borderRadius: 11, padding: "10px 18px", boxShadow: "0 2px 10px rgba(99,102,241,.32)" }}
-          >
-            Kostenlos loslegen
-          </Link>
+        <div style={{ marginLeft: "auto" }}>
+          <Link to="/login" style={{ fontSize: 14, fontWeight: 600, border: "1px solid #d2d4dd", borderRadius: 11, padding: "9px 18px" }}>Anmelden</Link>
         </div>
       </nav>
 
@@ -89,7 +83,7 @@ export default function Landing() {
                 <div style={{ fontSize: 11.5, color: "#9aa0ab" }}>Aufgabe 3 von 8</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 9, background: "#eef0fe", borderRadius: 999, padding: "6px 12px" }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#4f46e5" }}>HINWEIS-LEITER</span>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "#4f46e5" }}>HILFE</span>
                 <span style={{ display: "flex", gap: 4 }}>
                   <Dot filled /><Dot filled /><Dot /><Dot />
                 </span>
@@ -114,7 +108,7 @@ export default function Landing() {
       <div style={{ background: "#1a1c22", color: "#fff", padding: "30px 40px 22px", textAlign: "center" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
           <span style={{ fontSize: 15, color: "#c5c9d2" }}>Bereit? Es kostet zum Start nichts.</span>
-          <Link to="/login" style={{ fontSize: 14, fontWeight: 600, color: "#fff", background: "#6366f1", borderRadius: 11, padding: "10px 18px" }}>zum Login →</Link>
+          <Link to="/login" style={{ fontSize: 14, fontWeight: 600, color: "#fff", background: "#6366f1", borderRadius: 11, padding: "10px 18px" }}>Kostenlos loslegen →</Link>
         </div>
         <div style={{ maxWidth: 1180, margin: "22px auto 0", paddingTop: 16, borderTop: "1px solid #2c2f38", display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center", fontSize: 12.5, color: "#8b909c" }}>
           <span>© {new Date().getFullYear()} Schrittweise</span>

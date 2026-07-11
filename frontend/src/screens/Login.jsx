@@ -109,7 +109,9 @@ export default function Login() {
           <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 6 }}>
             {tab === "an" ? "Willkommen zurück" : "Leg in 10 Sekunden los"}
           </div>
-          <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 26 }}>Melde dich an oder leg in 10 Sekunden los.</div>
+          <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 26 }}>
+            {tab === "an" ? "Schön, dass du wieder da bist." : "Nur E-Mail und Passwort – mehr braucht es nicht."}
+          </div>
 
           <div style={{ display: "flex", background: "#f1f2f6", borderRadius: 11, padding: 4, marginBottom: 22 }}>
             <button type="button" onClick={() => setTab("an")} style={tabStyle(tab === "an")}>Anmelden</button>
@@ -199,15 +201,6 @@ export default function Login() {
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
-            <span style={{ flex: 1, height: 1, background: "#e7e8ee" }} />
-            <span style={{ fontSize: 12, color: "#b6bcc6" }}>oder</span>
-            <span style={{ flex: 1, height: 1, background: "#e7e8ee" }} />
-          </div>
-          <div style={{ border: "1px solid #d2d4dd", borderRadius: 12, padding: 12, textAlign: "center", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, opacity: 0.6, cursor: "not-allowed" }} title="Bald verfügbar">
-            <span style={{ width: 16, height: 16, borderRadius: "50%", background: "conic-gradient(#ea4335,#fbbc05,#34a853,#4285f4)" }} />
-            Weiter mit Google
-          </div>
           <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", marginTop: 22, lineHeight: 1.5 }}>
             Verschlüsselte Übertragung · kein Klarname nötig
             <br />
