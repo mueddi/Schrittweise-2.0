@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db
 from ..deps import require_student
-from ..models import Attempt, AttemptStatus, Exercise, Message, MessageRole, User
+from ..models import Attempt, AttemptStatus, Exercise, Message, MessageRole, UploadedImage, User
 from ..schemas import (
     AttemptOut,
     AttemptStateOut,
@@ -88,6 +88,15 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     attempt_id_local = attempt.id
     user_id_local = user.id
     grade_level = user.grade_level
+
+    # Aufgaben-Figur (Foto) fuer den Tutor laden – bei Geometrie steckt die
+    # halbe Aufgabe im Bild. Fehlt es (alte /tmp-Pfade), laeuft der Chat ohne.
+    image = None
+    if ex.image_path and ex.image_path.startswith("/api/exercises/images/"):
+        token = ex.image_path.rsplit("/", 1)[-1]
+        img = db.scalar(select(UploadedImage).where(UploadedImage.token == token))
+        if img is not None:
+            image = (img.content, img.mime_type)
     # Aggregate nur beim Uebergang zu «geloest» neu rechnen, nicht bei jedem Post-Solved-Chat
     solved_now = step.solved and not already_solved
 
@@ -97,7 +106,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     def generate():
         parts: list[str] = []
         try:
-            for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr, grade_level):
+            for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr, grade_level, image):
                 parts.append(chunk)
                 yield chunk
         finally:

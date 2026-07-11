@@ -43,6 +43,7 @@ STIL:
 - Duze, sei ermutigend, nie belehrend. Schweizer Hochdeutsch: schreib «weiss» statt «weiß» – nie den Buchstaben «ß» verwenden.
 - Kurz halten (1–3 Saetze). Eine Frage oder ein Hinweis pro Antwort, nicht mehr.
 - JEDE Formel, Gleichung oder Rechnung MUSS zwischen Dollarzeichen stehen, auch kurze wie $x = 5$. Ein eigenstaendiger Rechenschritt darf auf eigener Zeile als $$ ... $$ stehen (wird zentriert dargestellt).
+- Hat die Aufgabe ein BILD (Figur, Skizze, Koordinatensystem): schau es genau an und beziehe dich konkret darauf («die Seite $a$ im Bild», «der rechte Winkel unten links»). Lies Masse und Beschriftungen aus der Figur, wenn sie im Text fehlen.
 - FORMAT: schlichter, uebersichtlicher Text. Hoechstens **fett** fuer EIN Schluesselwort pro Antwort. KEIN anderes Markdown: keine Titel (#), keine Tabellen, keine Aufzaehlungen mit * – wenn du aufzaehlst, nutze einen Bindestrich am Zeilenanfang.
 - Wenn der Schueler richtig liegt: freu dich echt und bestaetige knapp, warum es stimmt.
 - Wenn etwas falsch ist: sag nicht einfach «falsch», sondern frag nach oder zeig, wo es harzt.
@@ -213,7 +214,7 @@ def _build_system(step, verification, exercise_text, exercise_expr, grade_level=
 HISTORY_LIMIT = 12
 
 
-def _history_to_messages(history: list[dict]) -> list[dict]:
+def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = None) -> list[dict]:
     if len(history) > HISTORY_LIMIT:
         # Eroeffnungsnachricht (Aufgabenstellung) behalten + juengster Verlauf
         history = [history[0]] + history[-(HISTORY_LIMIT - 1):]
@@ -223,21 +224,41 @@ def _history_to_messages(history: list[dict]) -> list[dict]:
         msgs.append({"role": role, "content": m["text"]})
     if not msgs or msgs[0]["role"] != "user":
         msgs.insert(0, {"role": "user", "content": "(Aufgabe gestartet)"})
+    if image is not None:
+        # Aufgaben-Figur (Foto) in die erste User-Nachricht einbetten – das
+        # Modell sieht sie damit in jedem Turn (wichtig fuer Geometrie).
+        import base64
+
+        data, media_type = image
+        first_text = msgs[0]["content"] if isinstance(msgs[0]["content"], str) else "(Aufgabe gestartet)"
+        msgs[0]["content"] = [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": media_type,
+                    "data": base64.standard_b64encode(data).decode(),
+                },
+            },
+            {"type": "text", "text": first_text},
+        ]
     return msgs
 
 
 def stream_reply(history, step: LadderStep, verification: Verification,
                  exercise_text: str, exercise_expr: str | None,
-                 grade_level: str | None = None):
+                 grade_level: str | None = None,
+                 image: tuple[bytes, str] | None = None):
     """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming)."""
     if not (settings.anthropic_api_key and anthropic):
         yield from _mock_reply(step, verification, exercise_text)
         return
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    model = pick_model(exercise_text, exercise_expr)
+    # Aufgaben mit Figur brauchen das starke Modell (Bild lesen = Kernaufgabe)
+    model = settings.anthropic_model_smart if image else pick_model(exercise_text, exercise_expr)
     system = _build_system(step, verification, exercise_text, exercise_expr, grade_level)
-    messages = _history_to_messages(history)
+    messages = _history_to_messages(history, image)
     produced = False
     try:
         with client.messages.stream(model=model, max_tokens=400, system=system, messages=messages) as stream:

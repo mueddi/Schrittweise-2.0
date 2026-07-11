@@ -25,6 +25,43 @@ def test_ocr_upload_stores_image_in_db(client):
     assert client.get("/api/exercises/images/gibtsnicht").status_code == 404
 
 
+def test_history_builder_embeds_task_image():
+    """Mit Bild wird die erste User-Nachricht zu [image, text]-Bloecken."""
+    from app.services.tutor import _history_to_messages
+
+    history = [
+        {"role": "tutor", "text": "Los geht's! Deine Aufgabe: ..."},
+        {"role": "student", "text": "keine ahnung"},
+    ]
+    plain = _history_to_messages(history)
+    assert isinstance(plain[0]["content"], str)  # ohne Bild: unveraendert
+
+    msgs = _history_to_messages(history, image=(b"PNGBYTES", "image/png"))
+    first = msgs[0]
+    assert first["role"] == "user"
+    assert first["content"][0]["type"] == "image"
+    assert first["content"][0]["source"]["media_type"] == "image/png"
+    assert first["content"][1]["type"] == "text"
+
+
+def test_chat_works_with_and_without_task_image(client):
+    """Aufgabe mit Bild-Referenz: Chat laeuft (Mock-Pfad); kaputter Pfad schadet nicht."""
+    headers = register_pw(client, "mia@test.ch")
+
+    up = client.post("/api/exercises/ocr", headers=headers,
+                     files={"file": ("skizze.png", tiny_png(), "image/png")})
+    image_path = up.json()["image_path"]
+
+    for path in (image_path, "/api/exercises/images/gibtsnicht", "/uploads/alt.png"):
+        ex = client.post("/api/exercises", headers=headers,
+                         json={"text": "Wie gross ist die Fläche?", "image_path": path}).json()
+        aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+        with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                           json={"text": "ich weiss nicht"}) as r:
+            assert r.status_code == 200
+            assert "".join(r.iter_text())
+
+
 def test_large_photo_is_recompressed(client):
     """Grosse Fotos werden verkleinert (JPEG) – bleibt unter dem Antwort-Limit."""
     import io

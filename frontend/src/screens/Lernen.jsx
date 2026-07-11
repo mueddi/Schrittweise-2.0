@@ -385,10 +385,21 @@ export default function Lernen() {
 
       {/* Aufgabe immer sichtbar – Schueler muessen nie hochscrollen */}
       <div style={{ background: "#f6f7fb", padding: "12px 24px 0" }}>
-        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: 120, overflowY: "auto" }}>
+        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: 130, overflowY: "auto" }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", color: "#4f46e5", marginBottom: 3 }}>DEINE AUFGABE</div>
-          <div style={{ fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-            <MathText text={exercise.text} />
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+              <MathText text={exercise.text} />
+            </div>
+            {exercise.image_path && (
+              <img
+                src={`${BASE}${exercise.image_path}`}
+                alt="Aufgaben-Bild"
+                title="Zum Vergrössern klicken"
+                onClick={() => window.open(`${BASE}${exercise.image_path}`, "_blank")}
+                style={{ maxHeight: 88, maxWidth: 160, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in", flex: "0 0 auto" }}
+              />
+            )}
           </div>
         </div>
       </div>
