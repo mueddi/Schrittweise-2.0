@@ -374,7 +374,12 @@ export default function Lernen() {
               ↻ Nochmal üben
             </button>
           )}
-          <Ladder level={attempt.hint_level} solved={attempt.solved} ownAttempts={attempt.own_attempts} />
+          {/* Hilfe-Anzeige gilt PRO Aufgabe: erst zeigen, wenn in dieser
+              Aufgabe Hilfe im Spiel ist (oder sie geloest wurde) – ein
+              permanentes «Stufe 0/4» sagt nichts aus. */}
+          {(attempt.solved || attempt.hint_level >= 1) && (
+            <Ladder level={attempt.hint_level} solved={attempt.solved} ownAttempts={attempt.own_attempts} />
+          )}
         </div>
       </div>
 
