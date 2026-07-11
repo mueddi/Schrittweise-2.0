@@ -34,6 +34,27 @@ def test_full_solution_locked_until_two_attempts():
     assert step.permit_solution
 
 
+def test_correct_step_does_not_raise_stage():
+    """Ein RICHTIGER eigener Schritt (partial) darf die Hilfe-Stufe nicht
+    hochtreiben – mehr Hilfe gibt es nur bei Fehlern oder auf Anfrage."""
+    assert detect_intent("3x = 15", Verification("partial", "test", extracted="3x = 15")) == "step"
+    step = advance_ladder(1, 0, "step")
+    assert step.allowed_stage == 1  # Stufe bleibt
+    assert step.own_attempts == 1  # zaehlt aber als echter Versuch
+    assert not step.permit_solution
+
+
+def test_unverifiable_attempt_does_not_raise_stage():
+    assert detect_intent("42", Verification("unknown", "test", extracted="42")) == "step"
+
+
+def test_wrong_attempt_still_raises_stage():
+    assert detect_intent("x = 99", Verification("incorrect", "test", extracted="x = 99")) == "attempt"
+    step = advance_ladder(1, 0, "attempt")
+    assert step.allowed_stage == 2  # Fehler -> mehr Hilfe erlaubt
+    assert step.own_attempts == 1
+
+
 def test_simpler_keeps_stage():
     """«Verstehe es nicht» / «erklaer einfacher» = gleiche Stufe, einfacher erklaert
     – die Leiter darf dadurch NICHT hochklettern."""

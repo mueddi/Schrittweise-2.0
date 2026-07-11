@@ -86,16 +86,23 @@ HILFE_PATTERNS = [
 
 
 def detect_intent(message: str, verification: Verification) -> str:
-    """'plea' | 'correct' | 'attempt' | 'simpler' | 'stuck'."""
+    """'plea' | 'correct' | 'attempt' | 'step' | 'simpler' | 'stuck'.
+
+    'step' = eigener Schritt, der NICHT falsch ist (richtige Umformung oder
+    nicht pruefbar): zaehlt als Versuch, treibt die Hilfe-Stufe aber nicht
+    hoch – mehr Hilfe gibt es nur bei Fehlern ('attempt') oder auf Anfrage.
+    """
     low = message.lower()
     if verification.status == "correct":
         return "correct"
     if any(re.search(p, low) for p in BETTEL_PATTERNS):
         return "plea"
-    if verification.status in ("partial", "incorrect"):
+    if verification.status == "partial":
+        return "step"
+    if verification.status == "incorrect":
         return "attempt"
-    if verification.extracted:  # eine Zahl/Antwort war drin, auch wenn 'unknown'
-        return "attempt"
+    if verification.extracted:  # eine Zahl/Antwort war drin, aber nicht pruefbar
+        return "step"
     # Fragt nach Loesung/Antwort/Ergebnis OHNE eigenen Rechenversuch -> Betteln,
     # damit «zeig mir die antwort» die Leiter nicht hochtreibt.
     if re.search(_ZIEL, low):
@@ -137,10 +144,16 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
         # einfacheren Worten – Nachfragen kostet keine Sprosse und keinen Versuch.
         return LadderStep(intent, max(current_stage, 1), own_attempts, False, False)
 
+    if intent == "step":
+        # Richtiger (oder nicht pruefbarer) eigener Schritt: zaehlt als Versuch,
+        # aber die Hilfe-Stufe bleibt – wer gut unterwegs ist, braucht nicht
+        # MEHR Hilfe, sondern nur Bestaetigung und den naechsten Anstoss.
+        return LadderStep(intent, max(current_stage, 1), own_attempts + 1, False, False)
+
     if intent == "attempt":
         own_attempts += 1
 
-    # eine Sprosse hoeher, gedeckelt bei 4
+    # Mehr Hilfe noetig (Fehler oder Hilfe-Anfrage): eine Sprosse hoeher, Deckel bei 4
     stage = min(max(current_stage, 0) + 1, 4)
     permit = stage >= 4 and own_attempts >= min_attempts
     if stage == 4 and not permit:
@@ -175,6 +188,8 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "simpler":
         lines.append("- Der Schueler versteht die aktuelle Erklaerung NICHT. Erklaere DENSELBEN Punkt nochmal EINFACHER: kleinerer Schritt, Alltagsbeispiel mit konkreten Zahlen, andere Worte. Nichts Neues verraten, Stufe nicht erhoehen.")
+    if step.intent == "step":
+        lines.append("- Der Schueler hat einen EIGENEN Schritt gemacht (siehe Pruefung). Ist er richtig: konkret bestaetigen und zum naechsten Schritt ermutigen – KEINE zusaetzliche Hilfe geben, er schafft es gerade selbst.")
     if step.intent == "correct":
         lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")
     if step.intent == "post_solved":
