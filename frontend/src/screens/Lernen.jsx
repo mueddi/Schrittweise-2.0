@@ -46,6 +46,23 @@ function Ladder({ level, solved, ownAttempts = 0 }) {
 // werden zu praezisen MathFigure-Vorlagen, der Rest bleibt MathText.
 const FIG_RE = /\[\[FIGUR\]\]([\s\S]*?)\[\[\/FIGUR\]\]/g;
 
+// Tolerant parsen: falls das Modell Fuellsel vor das JSON setzt (z.B. ein
+// woertlich kopiertes «{json}»), das echte Objekt herausfischen.
+function parseSpec(raw) {
+  const t = (raw || "").trim();
+  try {
+    return JSON.parse(t);
+  } catch { /* weiter unten retten */ }
+  const start = t.indexOf('{"');
+  const end = t.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(t.slice(start, end + 1));
+    } catch { /* nicht rettbar */ }
+  }
+  return null;
+}
+
 function TutorContent({ text, streaming = false }) {
   let src = text || "";
   let drawing = false;
@@ -64,12 +81,7 @@ function TutorContent({ text, streaming = false }) {
   let m;
   while ((m = re.exec(src)) !== null) {
     if (m.index > last) parts.push(<MathText key={`t${i++}`} text={src.slice(last, m.index)} />);
-    let spec = null;
-    try {
-      spec = JSON.parse(m[1].trim());
-    } catch {
-      spec = null; // kaputtes JSON: Skizze still weglassen
-    }
+    const spec = parseSpec(m[1]); // kaputtes JSON: Skizze still weglassen
     if (spec) parts.push(<MathFigure key={`f${i++}`} spec={spec} />);
     last = re.lastIndex;
   }
