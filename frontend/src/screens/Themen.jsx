@@ -4,34 +4,23 @@ import { api } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
 import { useAuth } from "../lib/auth.jsx";
 
-const FILTERS = [
-  { key: "alle", label: "Alle" },
-  { key: "algebra", label: "Algebra" },
-  { key: "geometrie", label: "Geometrie" },
-  { key: "zahlen", label: "Zahlen" },
-];
-const CAT_COLORS = {
-  algebra: ["#eef0fe", "#4f46e5"],
-  geometrie: ["#fdf0e6", "#c26a1f"],
-  zahlen: ["#e8f6ec", "#1a7f3c"],
-  andere: ["#f1f2f6", "#6b7280"],
-};
+// Themen sind persoenliche Container: Name + Farbe (keine fixen Kategorien).
+const TOPIC_COLORS = ["#6366f1", "#1a7f3c", "#c26a1f", "#d6558e", "#0e8f83", "#6b7280"];
 const LABEL_COLOR = { Sitzt: "#1a7f3c", "Wird besser": "#4f46e5", "Noch üben": "#c0392b", Neu: "#6b7280" };
 
 function TopicGrid() {
   const shell = useShell();
   const { user } = useAuth();
   const nav = useNavigate();
-  const [filter, setFilter] = useState("alle");
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
-  const [cat, setCat] = useState("algebra");
+  const [color, setColor] = useState(TOPIC_COLORS[0]);
 
-  const topics = (shell.topics || []).filter((t) => filter === "alle" || t.category === filter);
+  const topics = shell.topics || [];
 
   async function createTopic() {
     if (!name.trim()) return;
-    await api.post("/api/topics", { name: name.trim(), category: cat });
+    await api.post("/api/topics", { name: name.trim(), color });
     setName("");
     setAdding(false);
     shell.reloadTopics?.();
@@ -48,32 +37,32 @@ function TopicGrid() {
           <button onClick={() => setAdding((v) => !v)} className="btn-primary" style={{ padding: "10px 16px", borderRadius: 11, fontSize: 13, border: "none" }}>+ Neues Thema</button>
         </div>
         {adding && (
-          <div className="popin" style={{ display: "flex", gap: 8, marginBottom: 16, background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 12 }}>
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createTopic()} placeholder="Themen-Name, z.B. Bruchrechnen" style={{ flex: 1, border: "1px solid #d2d4dd", borderRadius: 10, padding: "9px 12px", fontSize: 14, outline: "none" }} />
-            <select value={cat} onChange={(e) => setCat(e.target.value)} style={{ border: "1px solid #d2d4dd", borderRadius: 10, padding: "9px 12px", fontSize: 14, background: "#fff" }}>
-              <option value="algebra">Algebra</option>
-              <option value="geometrie">Geometrie</option>
-              <option value="zahlen">Zahlen</option>
-              <option value="andere">Andere</option>
-            </select>
+          <div className="popin" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 12, flexWrap: "wrap" }}>
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createTopic()} placeholder="Themen-Name, z.B. Bruchrechnen" style={{ flex: "1 1 200px", border: "1px solid #d2d4dd", borderRadius: 10, padding: "9px 12px", fontSize: 14, outline: "none" }} />
+            <div style={{ display: "flex", gap: 7 }}>
+              {TOPIC_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  aria-label={`Farbe ${c}`}
+                  style={{ width: 24, height: 24, borderRadius: "50%", background: c, border: "none", cursor: "pointer", outline: color === c ? `3px solid ${c}55` : "none", transform: color === c ? "scale(1.15)" : "none", transition: "transform .12s" }}
+                />
+              ))}
+            </div>
             <button onClick={createTopic} className="btn-primary" style={{ padding: "9px 16px", borderRadius: 10, fontSize: 13, border: "none" }}>Anlegen</button>
           </div>
         )}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {FILTERS.map((f) => (
-            <span key={f.key} onClick={() => setFilter(f.key)} style={{ cursor: "pointer", fontSize: 13, fontWeight: 600, color: filter === f.key ? "#4f46e5" : "#6b7280", background: filter === f.key ? "#eef0fe" : "#fff", border: filter === f.key ? "none" : "1px solid #e7e8ee", borderRadius: 999, padding: "7px 14px" }}>{f.label}</span>
-          ))}
-        </div>
       </div>
       <div style={{ padding: "14px 28px 28px", display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }} className="themen-grid">
         {topics.length === 0 && (
           <div style={{ gridColumn: "1 / -1", background: "#fff", border: "1px dashed #d2d4dd", borderRadius: 16, padding: 30, textAlign: "center", color: "#6b7280" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "#1a1c22" }}>Noch keine Themen{filter !== "alle" ? " in dieser Kategorie" : ""}</div>
-            <div style={{ fontSize: 13 }}>Themen sind deine eigenen Container – leg oben eins an und ordne Aufgaben zu.</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "#1a1c22" }}>Noch keine Themen</div>
+            <div style={{ fontSize: 13 }}>Themen sind deine eigenen Ordner – leg oben eins an und ordne Aufgaben zu.</div>
           </div>
         )}
         {topics.map((k) => {
-          const [bg, fg] = CAT_COLORS[k.category] || CAT_COLORS.andere;
+          const fg = k.color || "#6366f1";
+          const bg = `${fg}1f`; // Themen-Farbe mit leichter Deckkraft als Hintergrund
           return (
             <div key={k.id} onClick={() => nav(`/app/themen/${k.id}`)} style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 18, boxShadow: "0 1px 2px rgba(40,40,90,.04)", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>

@@ -109,7 +109,7 @@ export default function AppShell() {
               const active = loc.pathname === `/app/themen/${t.id}` || loc.search.includes(`topic=${t.id}`);
               return (
                 <div key={t.id} onClick={() => nav(`/app/themen/${t.id}`)} style={{ ...navItem(active), margin: "0 8px" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: CATEGORY_DOT[t.category] || "#9aa0ab" }} />
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: t.color || CATEGORY_DOT[t.category] || "#9aa0ab" }} />
                   {t.name}
                 </div>
               );
