@@ -155,16 +155,20 @@ export function Agb() {
 
       <H>1. Leistung</H>
       <P>
-        Schrittweise ist ein KI-gestützter Mathe-Lern-Tutor für die Oberstufe. Das
-        Gratis-Kontingent umfasst 5 Aufgaben pro Monat. Zusätzlich können einmalige
-        Token-Pakete gekauft werden: 1 Token = 1 gestartete Aufgabe. Tokens sind kein
-        Abo, verlängern sich nicht automatisch und laufen nicht ab.
+        Schrittweise ist ein KI-gestützter Mathe-Lern-Tutor für die Oberstufe. Jedes
+        Konto erhält 50 Gratis-Tokens pro Kalendermonat. Zusätzlich können einmalige
+        Token-Pakete gekauft werden. 1 Token entspricht 1 Rappen KI-Leistung: Jede
+        Tutor-Antwort bucht Tokens entsprechend ihrem Rechenaufwand ab – eine normale
+        Antwort kostet in der Regel 1 Token, eine Antwort mit Foto-Auswertung oder
+        aufwändiger Geometrie ca. 3–5 Tokens. Auch die Handschrift-/Foto-Erkennung
+        beim Erfassen einer Aufgabe wird so abgerechnet. Tokens sind kein Abo,
+        verlängern sich nicht automatisch und laufen nicht ab.
       </P>
 
       <H>2. Preise</H>
       <P>
-        Schnupper-Paket: CHF 2.– (20 Aufgaben) · Starter-Paket: CHF 9.– (100 Aufgaben) ·
-        Power-Paket: CHF 19.– (300 Aufgaben). Alle Preise in Schweizer Franken, einmalig.
+        Schnupper-Paket: CHF 2.– (200 Tokens) · Starter-Paket: CHF 9.– (900 Tokens) ·
+        Power-Paket: CHF 19.– (1900 Tokens). Alle Preise in Schweizer Franken, einmalig.
       </P>
 
       <H>3. Zahlung</H>

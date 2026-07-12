@@ -62,6 +62,9 @@ def init_db() -> None:
         ("users", "password_hash", "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"),
         ("users", "is_admin", "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE NOT NULL"),
         ("messages", "hint_level", "ALTER TABLE messages ADD COLUMN hint_level INTEGER"),
+        ("users", "free_used_tokens", "ALTER TABLE users ADD COLUMN free_used_tokens INTEGER DEFAULT 0 NOT NULL"),
+        ("users", "free_month", "ALTER TABLE users ADD COLUMN free_month VARCHAR(7)"),
+        ("api_usage", "charged_tokens", "ALTER TABLE api_usage ADD COLUMN charged_tokens INTEGER DEFAULT 0 NOT NULL"),
     ]
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

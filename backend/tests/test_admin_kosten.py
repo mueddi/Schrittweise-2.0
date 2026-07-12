@@ -110,7 +110,7 @@ def test_admin_hat_unbegrenzte_aufgaben(client):
     admin = register_pw(client, "chef@test.ch")
     make_admin("chef@test.ch")
 
-    # deutlich mehr Aufgaben als das Gratis-Kontingent (5) – alle gehen durch
+    # viele Aufgaben anlegen – alle gehen durch, nichts wird abgebucht
     for i in range(8):
         r = client.post("/api/exercises", headers=admin, json={"text": f"{i}x + 1 = {i + 2}"})
         assert r.status_code == 201, r.text
@@ -120,11 +120,16 @@ def test_admin_hat_unbegrenzte_aufgaben(client):
     assert q["token_balance"] == 0  # nichts abgebucht, nichts noetig
     assert q["percent_used"] == 0
 
-    # Schueler laufen weiterhin ins Limit
+    # Schueler mit leerem Guthaben laufen ins 402
     student = register_pw(client, "mia@test.ch")
-    for i in range(5):
-        assert client.post("/api/exercises", headers=student,
-                           json={"text": f"{i}y = {i}"}).status_code == 201
+    from app.services.quota import current_month
+    with SessionLocal() as db:
+        from app.models import User
+        u = db.query(User).filter(User.email == "mia@test.ch").one()
+        u.free_used_tokens = 50
+        u.free_month = current_month()
+        u.token_balance = 0
+        db.commit()
     assert client.post("/api/exercises", headers=student,
                        json={"text": "z = 1"}).status_code == 402
     assert client.get("/api/quota", headers=student).json()["unlimited"] is False

@@ -166,8 +166,8 @@ function AboTab({ onBuy }) {
     );
   }
 
-  const freeUsed = Math.min(quota.used_this_month, quota.monthly_free_quota);
-  const freePct = quota.monthly_free_quota ? Math.min(100, Math.round((freeUsed / quota.monthly_free_quota) * 100)) : 0;
+  const freeUsed = Math.min(quota.free_used_tokens, quota.monthly_free_tokens);
+  const freePct = quota.monthly_free_tokens ? Math.min(100, Math.round((freeUsed / quota.monthly_free_tokens) * 100)) : 0;
 
   return (
     <>
@@ -178,8 +178,8 @@ function AboTab({ onBuy }) {
           <div style={{ fontSize: 20, fontWeight: 800 }}>{quota.plan === "free" ? "Gratis" : "Token"}</div>
         </div>
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Gratis-Aufgaben (Monat)</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{freeUsed} <span style={{ fontSize: 13, color: "#9aa0ab" }}>von {quota.monthly_free_quota}</span></div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Gratis-Tokens (Monat)</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{freeUsed} <span style={{ fontSize: 13, color: "#9aa0ab" }}>von {quota.monthly_free_tokens}</span></div>
           <div style={{ height: 5, borderRadius: 999, background: "#eef0f3", overflow: "hidden", marginTop: 8 }}>
             <div style={{ width: `${freePct}%`, height: "100%", background: freePct >= 90 ? "#d9573a" : "#6366f1" }} />
           </div>
@@ -190,7 +190,8 @@ function AboTab({ onBuy }) {
         </div>
       </div>
       <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 18, lineHeight: 1.55 }}>
-        Tokens laufen nie ab · 1 Token = 1 gestartete Aufgabe · kein Abo, keine automatische Verlängerung
+        1 Token = 1 Rappen KI-Hilfe · eine normale Tutor-Antwort kostet ≈ 1 Token, eine Antwort mit
+        Foto-Auswertung ≈ 3–5 · Tokens laufen nie ab · kein Abo, keine automatische Verlängerung
       </div>
       <button onClick={onBuy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>
         Tokens kaufen →

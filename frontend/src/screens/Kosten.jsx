@@ -73,7 +73,7 @@ export default function Kosten() {
               <Tile label="Ø Kosten pro Aufgabe" value={rp(pa.durchschnitt_rappen)} unit=" Rp." sub={`${pa.anzahl_aufgaben} Aufgaben ausgewertet`} color="#4f46e5" />
               <Tile label="Günstigste Aufgabe" value={rp(pa.min_rappen)} unit=" Rp." sub="Summe aller Chat-Aufrufe" color="#1a7f3c" />
               <Tile label="Teuerste Aufgabe" value={rp(pa.max_rappen)} unit=" Rp." sub="Summe aller Chat-Aufrufe" color="#d9573a" />
-              <Tile label={`Gesamt (${data.zeitraum_tage} Tage)`} value={chf(data.gesamt.kosten_chf)} unit=" CHF" sub={`${data.gesamt.aufrufe} API-Aufrufe`} />
+              <Tile label={`Gesamt (${data.zeitraum_tage} Tage)`} value={chf(data.gesamt.kosten_chf)} unit=" CHF" sub={`${data.gesamt.aufrufe} Aufrufe · ${tok(data.gesamt.verrechnet_tokens ?? 0)} Rp. verrechnet`} />
             </div>
 
             {data.gesamt.aufrufe === 0 && (
@@ -94,6 +94,7 @@ export default function Kosten() {
                       <Th>Output-Tokens</Th>
                       <Th>Cache (gelesen)</Th>
                       <Th>Kosten CHF</Th>
+                      <Th>Verrechnet</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -105,6 +106,7 @@ export default function Kosten() {
                         <Td>{tok(r.output_tokens)}</Td>
                         <Td>{tok(r.cache_read_tokens)}</Td>
                         <Td strong>{chf(r.kosten_chf)}</Td>
+                        <Td>{r.verrechnet_tokens != null ? `${tok(r.verrechnet_tokens)} Rp.` : "–"}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -136,9 +138,9 @@ export default function Kosten() {
             )}
 
             <div style={{ fontSize: 12, color: "#9aa0ab", marginTop: 16, lineHeight: 1.6 }}>
-              Zum Einordnen: Schnupper zahlt 10 Rp. pro Aufgabe, Starter 9 Rp., Power ≈ 6.3 Rp.
-              Liegt der Ø darüber, lohnt sich ein Blick auf «Nach Modell» – das starke Modell
-              (Sonnet) ist rund 3× teurer als das Standard-Modell (Haiku).
+              Zum Einordnen: Verrechnet wird nutzungsbasiert mit 3× Marge auf die echten Kosten
+              (1 Token = 1 Rp.) – «Verrechnet» sollte langfristig ≈ 3× der Kosten-Spalte sein.
+              Das starke Modell (Sonnet) ist rund 3× teurer als das Standard-Modell (Haiku).
             </div>
           </>
         )}

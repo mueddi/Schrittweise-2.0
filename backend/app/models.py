@@ -71,9 +71,12 @@ class User(Base):
     # Passwort-Login (scrypt-Hash); NULL bei Alt-Konten aus der Magic-Link-Zeit
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Abo / Kontingent
+    # Abo / Kontingent: token_balance in Tokens (1 Token = 1 Rappen verrechnete
+    # KI-Leistung); dazu das monatliche Gratis-Kontingent mit Monats-Marke.
     plan: Mapped[Plan] = mapped_column(Enum(Plan), default=Plan.free, nullable=False)
     token_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    free_used_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    free_month: Mapped[str | None] = mapped_column(String(7), nullable=True)  # "YYYY-MM"
 
     # Privacy-Schalter: gibt der/die Schueler:in Aggregate fuer Eltern frei?
     share_with_parents: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -265,6 +268,7 @@ class ApiUsage(Base):
     cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    charged_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 

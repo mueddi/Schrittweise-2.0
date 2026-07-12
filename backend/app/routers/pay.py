@@ -27,11 +27,12 @@ from ..schemas import CheckoutRequest
 router = APIRouter(prefix="/api/pay", tags=["pay"])
 log = logging.getLogger("schrittweise.pay")
 
-# Die Token-Pakete der Preise-Seite (Sackgeld-Modell: Einmal-Käufe, kein Abo)
+# Die Token-Pakete der Preise-Seite (Sackgeld-Modell: Einmal-Käufe, kein Abo).
+# 1 Token = 1 Rappen verrechnete KI-Leistung – Paketmenge = Preis in Rappen.
 PACKAGES = {
-    "schnupper": {"tokens": 20, "rappen": 200, "name": "Schrittweise Schnupper-Paket – 20 Aufgaben"},
-    "starter": {"tokens": 100, "rappen": 900, "name": "Schrittweise Starter-Paket – 100 Aufgaben"},
-    "power": {"tokens": 300, "rappen": 1900, "name": "Schrittweise Power-Paket – 300 Aufgaben"},
+    "schnupper": {"tokens": 200, "rappen": 200, "name": "Schrittweise Schnupper-Paket – 200 Tokens"},
+    "starter": {"tokens": 900, "rappen": 900, "name": "Schrittweise Starter-Paket – 900 Tokens"},
+    "power": {"tokens": 1900, "rappen": 1900, "name": "Schrittweise Power-Paket – 1900 Tokens"},
 }
 
 

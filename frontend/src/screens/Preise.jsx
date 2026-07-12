@@ -47,11 +47,11 @@ export default function Preise() {
     }
   }
 
-  // Sackgeld-Modell: drei Einmal-Pakete, kein Abo
+  // Sackgeld-Modell: drei Einmal-Pakete, kein Abo. 1 Token = 1 Rappen.
   const PAKETE = [
-    { key: "schnupper", preis: "2.–", aufgaben: 20, hint: "zum Reinschnuppern" },
-    { key: "starter", preis: "9.–", aufgaben: 100, hint: "der Klassiker" },
-    { key: "power", preis: "19.–", aufgaben: 300, hint: "bester Preis pro Aufgabe", beliebt: true },
+    { key: "schnupper", preis: "2.–", tokens: 200, hint: "≈ 100–200 Antworten · zum Reinschnuppern" },
+    { key: "starter", preis: "9.–", tokens: 900, hint: "≈ 500–900 Antworten · der Klassiker" },
+    { key: "power", preis: "19.–", tokens: 1900, hint: "≈ 1000–1900 Antworten", beliebt: true },
   ];
 
   return (
@@ -79,7 +79,7 @@ export default function Preise() {
           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 6 }}>0.–</div>
           <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 20 }}>zum Ausprobieren</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 11, marginBottom: 22 }}>
-            <Feature>5 Aufgaben pro Monat</Feature>
+            <Feature>50 Gratis-Tokens pro Monat</Feature>
             <Feature>Alle Themen</Feature>
             <Feature>Foto-Upload</Feature>
           </div>
@@ -103,7 +103,7 @@ export default function Preise() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
                       <span style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-.02em" }}>{p.preis}</span>
-                      <span style={{ fontSize: 12.5, color: "#c5c9d2" }}>{p.aufgaben} Aufgaben</span>
+                      <span style={{ fontSize: 12.5, color: "#c5c9d2" }}>{p.tokens} Tokens</span>
                     </div>
                     <div style={{ fontSize: 11, color: "#9aa0ab" }}>{p.hint}</div>
                   </div>
@@ -121,6 +121,8 @@ export default function Preise() {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 14 }}>
+            <Feature color="#8be0a4">1 Token = 1 Rappen KI-Hilfe</Feature>
+            <Feature color="#8be0a4">Normale Antwort ≈ 1 Token · mit Foto ≈ 3–5</Feature>
             <Feature color="#8be0a4">Tokens laufen nie ab</Feature>
             <Feature color="#8be0a4">Karte oder TWINT</Feature>
           </div>

@@ -439,9 +439,11 @@ const routes = [
 
   ["GET", /^\/api\/quota$/, async (_, __, u) => {
     if (u?.role !== "student") return ERR("Nur für Schüler-Konten", 403);
-    const used = db.exercises.filter((e) => e.user_id === u.id).length;
-    return J({ plan: "free", used_this_month: used, monthly_free_quota: 5, token_balance: 0,
-      remaining: Math.max(20 - used, 0), percent_used: Math.min(Math.round((used / 20) * 100), 100) });
+    // Demo: pro angelegte Aufgabe grob 2 Tokens «verbraucht»
+    const used = Math.min(db.exercises.filter((e) => e.user_id === u.id).length * 2, 50);
+    return J({ plan: "free", monthly_free_tokens: 50, free_used_tokens: used,
+      free_left: 50 - used, token_balance: 0, remaining: 50 - used,
+      percent_used: Math.min(Math.round((used / 50) * 100), 100), unlimited: false });
   }],
 
   ["GET", /^\/api\/parents\/invite$/, async (_, __, u) => {

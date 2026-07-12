@@ -62,11 +62,13 @@ def kosten(tage: int = Query(30, ge=1, le=365),
             "cache_read_tokens": int(cr or 0),
             "cache_write_tokens": int(cw or 0),
             "kosten_chf": _chf(usd or 0.0),
+            "verrechnet_tokens": int(charged or 0),
         }
-        for kind, calls, in_t, out_t, cr, cw, usd in db.execute(
+        for kind, calls, in_t, out_t, cr, cw, usd, charged in db.execute(
             select(ApiUsage.kind, func.count(), func.sum(ApiUsage.input_tokens),
                    func.sum(ApiUsage.output_tokens), func.sum(ApiUsage.cache_read_tokens),
-                   func.sum(ApiUsage.cache_write_tokens), func.sum(ApiUsage.cost_usd))
+                   func.sum(ApiUsage.cache_write_tokens), func.sum(ApiUsage.cost_usd),
+                   func.sum(ApiUsage.charged_tokens))
             .where(ApiUsage.created_at >= since)
             .group_by(ApiUsage.kind)
             .order_by(func.sum(ApiUsage.cost_usd).desc())
@@ -83,8 +85,8 @@ def kosten(tage: int = Query(30, ge=1, le=365),
         )
     ]
 
-    gesamt_usd, gesamt_aufrufe = db.execute(
-        select(func.sum(ApiUsage.cost_usd), func.count())
+    gesamt_usd, gesamt_aufrufe, gesamt_verrechnet = db.execute(
+        select(func.sum(ApiUsage.cost_usd), func.count(), func.sum(ApiUsage.charged_tokens))
         .where(ApiUsage.created_at >= since)
     ).one()
 
@@ -103,5 +105,7 @@ def kosten(tage: int = Query(30, ge=1, le=365),
             "aufrufe": int(gesamt_aufrufe or 0),
             "kosten_usd": round(gesamt_usd or 0.0, 4),
             "kosten_chf": _chf(gesamt_usd or 0.0),
+            # den Nutzern verrechnete Tokens (1 Token = 1 Rp.) im Zeitraum
+            "verrechnet_tokens": int(gesamt_verrechnet or 0),
         },
     }

@@ -46,8 +46,12 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "Schrittweise <no-reply@schrittweise.ch>"
 
-    # Kontingent
-    free_monthly_quota: int = 5
+    # Kontingent: 1 Token = 1 Rappen verrechnete KI-Leistung.
+    # Jedes Konto bekommt monatlich Gratis-Tokens; danach zahlt das Guthaben.
+    free_monthly_tokens: int = 50
+    # Sicherheitsmarge auf die echten KI-Kosten (3x = Schueler zahlen das
+    # Dreifache der Anthropic-Kosten; deckt Stripe-Gebuehren + Gratis-Nutzer)
+    billing_margin: float = 3.0
 
     # Umrechnungskurs fuer die Kosten-Anzeige im Admin-Bereich (Anthropic
     # rechnet in USD ab, der Betreiber denkt in CHF/Rappen)

@@ -60,6 +60,9 @@ def _shrink_for_storage(data: bytes) -> tuple[bytes, str]:
 async def ocr_upload(request: Request, file: UploadFile = File(...),
                      user: User = Depends(require_student), db: Session = Depends(get_db)):
     """Foto hochladen -> OCR-Preview (erkannter Text + Mathe-Ausdruck)."""
+    if not quota.can_use_ki(user):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
+                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
     if file.content_type not in ALLOWED_IMG:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte ein Bild hochladen (PNG/JPG/WebP).")
     # Groesse VOR dem Einlesen aus dem Header pruefen (kein RAM-DoS durch Riesen-Body).
@@ -95,7 +98,11 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
                          size_bytes=len(stored), content=stored))
     last = getattr(provider, "last_usage", None)
     if last:
-        usage.record(db, "ocr", last["model"], last["usage"], user_id=user.id)
+        charged = 0
+        if not quota.is_unlimited(user):
+            charged = usage.charged_tokens(usage.cost_usd(last["model"], last["usage"]))
+            quota.charge(db, user.id, charged)
+        usage.record(db, "ocr", last["model"], last["usage"], user_id=user.id, charged=charged)
     db.commit()
     result.image_path = f"/api/exercises/images/{token}"
     return result
@@ -114,9 +121,9 @@ def get_image(token: str, db: Session = Depends(get_db)):
 
 @router.post("", response_model=ExerciseOut, status_code=201)
 def create_exercise(payload: ExerciseCreate, user: User = Depends(require_student), db: Session = Depends(get_db)):
-    if not quota.can_start_new(db, user):
+    if not quota.can_use_ki(user):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
-                            "Gratis-Kontingent aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
+                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
     if payload.topic_id is not None:
         topic = db.get(Topic, payload.topic_id)
         if topic is None or topic.user_id != user.id:
@@ -135,7 +142,7 @@ def create_exercise(payload: ExerciseCreate, user: User = Depends(require_studen
     )
     db.add(ex)
     db.flush()
-    quota.consume(db, user)
+    # Anlegen kostet nichts mehr – abgerechnet wird pro KI-Antwort im Chat.
     db.commit()
     db.refresh(ex)
     return ExerciseOut.model_validate(ex)

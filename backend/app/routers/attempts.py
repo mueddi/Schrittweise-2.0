@@ -15,7 +15,7 @@ from ..schemas import (
     MessageOut,
     message_out,
 )
-from ..services import aggregates, tutor, usage
+from ..services import aggregates, quota, tutor, usage
 from ..services.sympy_verifier import verify
 
 router = APIRouter(prefix="/api/attempts", tags=["attempts"])
@@ -47,6 +47,12 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     text = payload.text.strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Leere Nachricht")
+
+    # Guthaben-Gate VOR jeder Zustandsaenderung: sonst staende die Nachricht
+    # ohne Antwort im Verlauf und die Leiter wuerde sich gratis weiterdrehen.
+    if not quota.can_use_ki(user):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
+                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
 
     # 1) deterministische Pruefung
     verification = verify(ex.math_expression, text)
@@ -104,6 +110,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     reply_level = None if already_solved else step.allowed_stage
 
     exercise_id_local = ex.id
+    unlimited_local = quota.is_unlimited(user)
 
     def generate():
         parts: list[str] = []
@@ -121,8 +128,16 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                 s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full,
                               hint_level=reply_level))
                 if usage_out.get("usage") is not None:
+                    # Verrechnung + Erfassung im selben Commit wie die Tutor-Message,
+                    # damit charged_tokens nie vom tatsaechlich Abgebuchten abweicht.
+                    charged = 0
+                    if not unlimited_local:
+                        charged = usage.charged_tokens(
+                            usage.cost_usd(usage_out.get("model", ""), usage_out["usage"]))
+                        quota.charge(s, user_id_local, charged)
                     usage.record(s, "chat", usage_out.get("model", ""), usage_out["usage"],
-                                 user_id=user_id_local, exercise_id=exercise_id_local)
+                                 user_id=user_id_local, exercise_id=exercise_id_local,
+                                 charged=charged)
                 if solved_now:
                     aggregates.recompute_week(s, user_id_local)
                 s.commit()

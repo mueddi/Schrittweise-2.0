@@ -8,6 +8,7 @@ Kosten-Logging darf NIE einen Nutzer-Request killen – record faengt alles ab.
 from __future__ import annotations
 
 import logging
+import math
 
 log = logging.getLogger("schrittweise.usage")
 
@@ -68,12 +69,27 @@ def cost_usd(model: str, usage) -> float:
     return usd
 
 
+def charged_tokens(usd: float) -> int:
+    """Verrechnete Tokens (1 Token = 1 Rappen) fuer einen Aufruf.
+
+    Echte Kosten in CHF-Rappen mal Sicherheitsmarge, aufgerundet, mindestens 1.
+    round(…, 6) vor ceil verhindert Float-Artefakte (6.0000000001 -> 7).
+    """
+    from ..config import settings
+
+    rappen = usd * settings.usd_chf_rate * 100 * settings.billing_margin
+    return max(1, math.ceil(round(rappen, 6)))
+
+
 def record(db, kind: str, model: str, usage,
-           user_id: int | None = None, exercise_id: int | None = None) -> None:
+           user_id: int | None = None, exercise_id: int | None = None,
+           charged: int = 0) -> None:
     """Schreibt eine ApiUsage-Zeile in die uebergebene Session (ohne commit).
 
-    Der Aufrufer committet zusammen mit seinen eigenen Daten. Fehler werden
-    nur geloggt – die Kostenerfassung darf keinen Request scheitern lassen.
+    ``charged``: dem Nutzer verrechnete Tokens (0 = gratis, z.B. KI-Suche
+    oder unbegrenzte Konten). Der Aufrufer committet zusammen mit seinen
+    eigenen Daten. Fehler werden nur geloggt – die Kostenerfassung darf
+    keinen Request scheitern lassen.
     """
     try:
         if usage is None or not model:
@@ -90,6 +106,7 @@ def record(db, kind: str, model: str, usage,
             cache_read_tokens=_tok(usage, "cache_read_input_tokens"),
             cache_write_tokens=_tok(usage, "cache_creation_input_tokens"),
             cost_usd=cost_usd(model, usage),
+            charged_tokens=charged,
         ))
     except Exception:
         log.exception("Kostenerfassung fehlgeschlagen (kind=%s, model=%s)", kind, model)

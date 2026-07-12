@@ -216,11 +216,13 @@ class CheckoutRequest(BaseModel):
 # ---------- Quota ----------
 class QuotaOut(BaseModel):
     plan: str
-    used_this_month: int
-    monthly_free_quota: int
+    # 1 Token = 1 Rappen verrechnete KI-Leistung
+    monthly_free_tokens: int
+    free_used_tokens: int
+    free_left: int
     token_balance: int
-    remaining: int  # verbleibend (free + token)
-    percent_used: int
+    remaining: int  # verbleibend (Gratis-Rest + Guthaben)
+    percent_used: int  # vom Gratis-Kontingent
     # Betreiber-Konto / Schul-Plan: keine Abbuchung, unbegrenzte Aufgaben
     unlimited: bool = False
 

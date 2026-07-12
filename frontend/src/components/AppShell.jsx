@@ -167,7 +167,7 @@ export default function AppShell() {
             ) : (
               <div onClick={() => nav("/app/preise")} style={{ cursor: "pointer" }}>
                 <div style={{ fontSize: 10, color: "#9aa0ab", marginBottom: 4 }}>
-                  Gratis-Kontingent · {quota ? `${quotaPct} %` : "…"}
+                  {quota ? `⚡ ${quota.remaining} Tokens übrig` : "Tokens · …"}
                 </div>
                 <div style={{ height: 5, borderRadius: 999, background: "#e7e8ee", overflow: "hidden" }}>
                   <div style={{ width: `${quotaPct}%`, height: "100%", background: quotaPct >= 90 ? "#d9573a" : "#cdd2db" }} />

@@ -302,6 +302,16 @@ export default function Lernen() {
         }
         return;
       }
+      if (res.status === 402) {
+        // Guthaben leer: Nachricht wurde NICHT gesendet – optimistische Bubble
+        // entfernen, Entwurf zurueckgeben und freundlich zum Laden einladen.
+        if (myToken === reqToken.current) {
+          setState((s) => (s ? { ...s, messages: [...s.messages.filter((m) => !String(m.id).startsWith("tmp-")), { id: `quota-${Date.now()}`, role: "tutor", kind: "quota", text: "" }] } : s));
+          if (typeof overrideText !== "string") setInput(text);
+          shell.reloadQuota?.();
+        }
+        return;
+      }
       if (!res.ok || !res.body) throw new Error("Fehler beim Senden");
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -467,6 +477,21 @@ export default function Lernen() {
                 );
               }
               lastLevel = m.hint_level;
+            }
+            if (m.kind === "quota") {
+              out.push(
+                <div key={m.id} style={{ alignSelf: "flex-start", maxWidth: 420, background: "#fffaf0", border: "1px solid #f0e2c4", borderRadius: 16, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>⚡ Dein Guthaben ist aufgebraucht</div>
+                  <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, marginBottom: 10 }}>
+                    Deine Nachricht wurde nicht gesendet – sie steht noch im Eingabefeld.
+                    Lad Tokens oder warte auf die Gratis-Tokens vom nächsten Monat.
+                  </div>
+                  <button onClick={() => nav("/app/preise")} className="btn-primary" style={{ border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13 }}>
+                    Tokens laden →
+                  </button>
+                </div>
+              );
+              continue;
             }
             out.push(
               <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status} hintLevel={m.role === "tutor" ? m.hint_level : null}>
