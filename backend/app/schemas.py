@@ -43,6 +43,11 @@ class PasswordRegisterRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=80)
     role: str = "student"  # "student" | "parent"
     grade_level: str | None = None
+    # Honeypot: unsichtbares Feld im Formular – Menschen lassen es leer,
+    # simple Bots fuellen es aus und fliegen auf.
+    website: str = Field(default="", max_length=200)
+    # Pflicht-Zustimmung zu AGB + Datenschutzerklaerung (Checkbox im Formular)
+    terms_accepted: bool = False
 
 
 class PasswordLoginRequest(BaseModel):

@@ -84,6 +84,12 @@ class User(Base):
     # Betreiber-Konto: darf die Aufgaben-Bibliothek verwalten
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Zeitpunkt der AGB-/Datenschutz-Zustimmung bei der Registrierung
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Passwort-Aenderung erhoeht die Version -> alle alten Tokens sofort ungueltig
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
     topics: Mapped[list[Topic]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -109,6 +115,16 @@ class LoginAttempt(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class RegisterAttempt(Base):
+    """Erfolgreiche Registrierungen pro IP – Bremse gegen Gratis-Token-Farmen
+    (jedes neue Konto erhaelt Gratis-Tokens, die echtes Geld kosten)."""
+    __tablename__ = "register_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 

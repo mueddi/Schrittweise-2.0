@@ -1,7 +1,8 @@
 """Auth per Magic-Link (passwortlos) + JWT."""
+import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..deps import bearer, get_current_user
-from ..models import LoginAttempt, MagicLink, Role, User
+from ..models import LoginAttempt, MagicLink, RegisterAttempt, Role, User
 from ..schemas import (
     MagicLinkRequest,
     MagicLinkResponse,
@@ -46,6 +47,20 @@ RATE_LIMIT_WINDOW_MINUTES = 15
 # Brute-Force-Schutz Passwort-Login: max. Fehlversuche pro E-Mail im Zeitfenster
 LOGIN_FAIL_MAX = 8
 LOGIN_FAIL_WINDOW_MINUTES = 15
+# Registrierungs-Bremse: max. neue Konten pro IP und Tag. Grosszuegig genug
+# fuer Familien und ein Schulzimmer hinter derselben IP, aber ein Skript kann
+# sich keine hunderten Gratis-Token-Konten farmen.
+REGISTER_IP_MAX_PER_DAY = 15
+
+log = logging.getLogger("schrittweise.auth")
+
+
+def _client_ip(request: Request) -> str:
+    """Client-IP hinter dem Vercel-Proxy (erster Eintrag in X-Forwarded-For)."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        return fwd.split(",")[0].strip()[:64]
+    return (request.client.host if request.client else "unbekannt")[:64]
 
 
 # Dummy-Hash für konstante Antwortzeit bei unbekannter E-Mail (kein User-Enumeration-Timing)
@@ -53,8 +68,34 @@ _DUMMY_HASH = hash_password("nur-fuer-timing-vergleich")
 
 
 @router.post("/register", response_model=TokenResponse)
-def register_password(payload: PasswordRegisterRequest, db: Session = Depends(get_db)):
+def register_password(payload: PasswordRegisterRequest, request: Request, db: Session = Depends(get_db)):
     """Konto mit E-Mail + Passwort anlegen und direkt einloggen."""
+    # Honeypot: das unsichtbare Feld fuellt nur ein Bot aus.
+    if payload.website:
+        log.warning("Registrierung mit gefuelltem Honeypot abgewiesen (IP %s)", _client_ip(request))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Anfrage.")
+
+    if not payload.terms_accepted:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Bitte akzeptiere die AGB und die Datenschutzerklärung.",
+        )
+
+    # Bremse gegen Konto-Farmen: jedes Konto erhaelt Gratis-Tokens (echte Kosten).
+    ip = _client_ip(request)
+    day_start = datetime.now(timezone.utc) - timedelta(hours=24)
+    recent = db.scalar(
+        select(func.count(RegisterAttempt.id)).where(
+            RegisterAttempt.ip == ip, RegisterAttempt.created_at >= day_start
+        )
+    ) or 0
+    if recent >= REGISTER_IP_MAX_PER_DAY:
+        log.warning("Registrierungs-Limit erreicht: %s Konten in 24h von IP %s", recent, ip)
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Von diesem Anschluss wurden heute schon viele Konten erstellt – versuch es morgen nochmal.",
+        )
+
     email = payload.email.lower().strip()
     user = db.scalar(select(User).where(User.email == email))
 
@@ -76,10 +117,14 @@ def register_password(payload: PasswordRegisterRequest, db: Session = Depends(ge
 
     # Passwortloses Alt-Konto (Magic-Link-Zeit, nie eingeloggt): Passwort setzen erlaubt.
     user.password_hash = hash_password(payload.password)
+    user.terms_accepted_at = datetime.now(timezone.utc)
+    # Registrierung fuers IP-Limit zaehlen; alte Eintraege gleich aufraeumen.
+    db.execute(delete(RegisterAttempt).where(RegisterAttempt.created_at < day_start))
+    db.add(RegisterAttempt(ip=ip))
     db.commit()
     db.refresh(user)
 
-    access = create_access_token(user.id, user.role.value)
+    access = create_access_token(user.id, user.role.value, token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 
@@ -118,7 +163,7 @@ def login_password(payload: PasswordLoginRequest, db: Session = Depends(get_db))
         db.execute(delete(LoginAttempt).where(LoginAttempt.email == email))
         db.commit()
 
-    access = create_access_token(user.id, user.role.value)
+    access = create_access_token(user.id, user.role.value, token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 
@@ -143,10 +188,12 @@ def change_password(
             )
 
     user.password_hash = hash_password(payload.new_password)
+    # Alle bestehenden Sitzungen aussperren (gestohlene/alte Tokens werden ungueltig).
+    user.token_version = (user.token_version or 0) + 1
     db.commit()
     db.refresh(user)
     # Frisches Token ausgeben (via=password), damit die Session normal weiterlaeuft.
-    access = create_access_token(user.id, user.role.value)
+    access = create_access_token(user.id, user.role.value, token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 
@@ -267,7 +314,7 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Link ungültig oder bereits benutzt.")
     db.commit()
 
-    access = create_access_token(user.id, user.role.value, via="email")
+    access = create_access_token(user.id, user.role.value, via="email", token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 
@@ -285,7 +332,7 @@ def verify_supabase(payload: SupabaseVerifyRequest, db: Session = Depends(get_db
             status.HTTP_404_NOT_FOUND,
             "Kein Konto mit dieser E-Mail – registriere dich zuerst über «Neu hier».",
         )
-    access = create_access_token(user.id, user.role.value, via="email")
+    access = create_access_token(user.id, user.role.value, via="email", token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
 
 

@@ -107,7 +107,7 @@ jobs:
           code=$(curl -sS -o /tmp/reg.json -w "%{http_code}" -X POST \
             "https://schrittweise-2-0.vercel.app/api/auth/register" \
             -H "Content-Type: application/json" \
-            -d '{"email":"schrittweise.smoketest@example.com","password":"smoke-test-passwort-123","display_name":"Smoke"}')
+            -d '{"email":"schrittweise.smoketest@example.com","password":"smoke-test-passwort-123","display_name":"Smoke","terms_accepted":true}')
           echo "Register: HTTP $code"; cat /tmp/reg.json; echo ""
           [ "$code" = "200" ] || [ "$code" = "409" ] || exit 1
       - name: Login muss funktionieren
@@ -127,3 +127,29 @@ jobs:
             -d '{"email":"schrittweise.smoketest@example.com","password":"absichtlich-falsch"}')
           echo "Falsches Passwort: HTTP $code"
           [ "$code" = "401" ] || exit 1
+      - name: Kontingent liefert das neue Token-Modell
+        run: |
+          token=$(curl -sS -X POST "https://schrittweise-2-0.vercel.app/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"schrittweise.smoketest@example.com","password":"smoke-test-passwort-123"}' \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          curl -sS -o /tmp/quota.json "https://schrittweise-2-0.vercel.app/api/quota" \
+            -H "Authorization: Bearer $token"
+          cat /tmp/quota.json; echo ""
+          python3 -c "
+          import json
+          d = json.load(open('/tmp/quota.json'))
+          assert 'monthly_free_tokens' in d and 'token_balance' in d and 'remaining' in d, d
+          "
+      - name: Zahlung antwortet sauber (503 ohne Keys / 200 mit)
+        run: |
+          token=$(curl -sS -X POST "https://schrittweise-2-0.vercel.app/api/auth/login" \
+            -H "Content-Type: application/json" \
+            -d '{"email":"schrittweise.smoketest@example.com","password":"smoke-test-passwort-123"}' \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          code=$(curl -sS -o /tmp/pay.json -w "%{http_code}" -X POST \
+            "https://schrittweise-2-0.vercel.app/api/pay/checkout" \
+            -H "Content-Type: application/json" -H "Authorization: Bearer $token" \
+            -d '{"package":"schnupper"}')
+          echo "Checkout: HTTP $code"; cat /tmp/pay.json; echo ""
+          [ "$code" = "503" ] || [ "$code" = "200" ] || exit 1

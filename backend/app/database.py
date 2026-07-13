@@ -65,6 +65,8 @@ def init_db() -> None:
         ("users", "free_used_tokens", "ALTER TABLE users ADD COLUMN free_used_tokens INTEGER DEFAULT 0 NOT NULL"),
         ("users", "free_month", "ALTER TABLE users ADD COLUMN free_month VARCHAR(7)"),
         ("api_usage", "charged_tokens", "ALTER TABLE api_usage ADD COLUMN charged_tokens INTEGER DEFAULT 0 NOT NULL"),
+        ("users", "terms_accepted_at", "ALTER TABLE users ADD COLUMN terms_accepted_at TIMESTAMP"),
+        ("users", "token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0 NOT NULL"),
     ]
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

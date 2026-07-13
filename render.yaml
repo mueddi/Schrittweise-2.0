@@ -63,8 +63,9 @@ services:
         sync: false
       - key: SMTP_FROM
         value: Schrittweise <no-reply@schrittweise.ch>
-      - key: FREE_MONTHLY_QUOTA
-        value: "20"
+      # 1 Token = 1 Rappen verrechnete KI-Leistung (nutzungsbasiertes Pricing)
+      - key: FREE_MONTHLY_TOKENS
+        value: "50"
 
   # ---- Frontend (React/Vite, Static Site) ----
   - type: web

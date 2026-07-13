@@ -6,7 +6,7 @@ from app.security import create_access_token
 def test_register_logs_in_directly(client):
     r = client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -20,7 +20,7 @@ def test_register_logs_in_directly(client):
 def test_login_with_correct_password(client):
     client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     r = client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "drei-worte-merken"})
     assert r.status_code == 200
@@ -30,7 +30,7 @@ def test_login_with_correct_password(client):
 def test_login_wrong_password_or_unknown_email(client):
     client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     assert client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "falsch-falsch"}).status_code == 401
     assert client.post("/api/auth/login", json={"email": "ghost@test.ch", "password": "drei-worte-merken"}).status_code == 401
@@ -39,11 +39,11 @@ def test_login_wrong_password_or_unknown_email(client):
 def test_register_duplicate_email_conflicts(client):
     client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     r = client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "anderes-passwort1", "display_name": "Mia2"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "anderes-passwort1", "display_name": "Mia2"},
     )
     assert r.status_code == 409
 
@@ -51,7 +51,7 @@ def test_register_duplicate_email_conflicts(client):
 def test_register_short_password_rejected(client):
     r = client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "kurz", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "kurz", "display_name": "Mia"},
     )
     assert r.status_code == 422
 
@@ -59,7 +59,7 @@ def test_register_short_password_rejected(client):
 def test_login_rate_limit_blocks_after_too_many_failures(client):
     client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     for _ in range(LOGIN_FAIL_MAX):
         r = client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "falsch-falsch"})
@@ -70,7 +70,7 @@ def test_login_rate_limit_blocks_after_too_many_failures(client):
     # Andere E-Mail bleibt unbetroffen
     client.post(
         "/api/auth/register",
-        json={"email": "ben@test.ch", "password": "drei-worte-merken", "display_name": "Ben"},
+        json={"terms_accepted": True, "email": "ben@test.ch", "password": "drei-worte-merken", "display_name": "Ben"},
     )
     assert client.post("/api/auth/login", json={"email": "ben@test.ch", "password": "drei-worte-merken"}).status_code == 200
 
@@ -78,7 +78,7 @@ def test_login_rate_limit_blocks_after_too_many_failures(client):
 def test_login_success_resets_failure_counter(client):
     client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     for _ in range(LOGIN_FAIL_MAX - 1):
         client.post("/api/auth/login", json={"email": "mia@test.ch", "password": "falsch-falsch"})
@@ -91,7 +91,7 @@ def test_login_success_resets_failure_counter(client):
 def test_change_password_requires_current_password(client):
     r = client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken", "display_name": "Mia"},
     )
     headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
 
@@ -114,7 +114,7 @@ def test_change_password_via_email_link_needs_no_current(client):
     neues Passwort ohne altes setzbar."""
     r = client.post(
         "/api/auth/register",
-        json={"email": "mia@test.ch", "password": "vergessenes-passwort", "display_name": "Mia"},
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "vergessenes-passwort", "display_name": "Mia"},
     )
     user_id = r.json()["user"]["id"]
     email_token = create_access_token(user_id, "student", via="email")
@@ -134,7 +134,75 @@ def test_passwordless_legacy_account_can_set_password(client):
     )
     r = client.post(
         "/api/auth/register",
-        json={"email": "alt@test.ch", "password": "jetzt-mit-passwort", "display_name": "Alt"},
+        json={"terms_accepted": True, "email": "alt@test.ch", "password": "jetzt-mit-passwort", "display_name": "Alt"},
     )
     assert r.status_code == 200, r.text
     assert client.post("/api/auth/login", json={"email": "alt@test.ch", "password": "jetzt-mit-passwort"}).status_code == 200
+
+
+# ---- Registrierungs-Schutz (Launch-Punkt 2 + 4) ----
+
+def test_register_requires_terms(client):
+    r = client.post(
+        "/api/auth/register",
+        json={"email": "mia@test.ch", "password": "drei-worte-merken"},
+    )
+    assert r.status_code == 400
+    assert "AGB" in r.json()["detail"]
+
+
+def test_register_honeypot_blocks_bots(client):
+    r = client.post(
+        "/api/auth/register",
+        json={"terms_accepted": True, "email": "bot@test.ch", "password": "drei-worte-merken",
+              "website": "https://spam.example"},
+    )
+    assert r.status_code == 400
+
+
+def test_register_ip_rate_limit(client):
+    from app.routers.auth import REGISTER_IP_MAX_PER_DAY
+
+    for i in range(REGISTER_IP_MAX_PER_DAY):
+        r = client.post(
+            "/api/auth/register",
+            json={"terms_accepted": True, "email": f"kind{i}@test.ch", "password": "drei-worte-merken"},
+        )
+        assert r.status_code == 200, r.text
+    # Naechstes Konto von derselben IP -> 429
+    r = client.post(
+        "/api/auth/register",
+        json={"terms_accepted": True, "email": "einer-zuviel@test.ch", "password": "drei-worte-merken"},
+    )
+    assert r.status_code == 429
+
+
+def test_register_stores_terms_timestamp(client):
+    from app.database import SessionLocal
+    from app.models import User
+
+    client.post(
+        "/api/auth/register",
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken"},
+    )
+    with SessionLocal() as db:
+        u = db.query(User).filter(User.email == "mia@test.ch").one()
+        assert u.terms_accepted_at is not None
+
+
+def test_password_change_invalidates_old_tokens(client):
+    r = client.post(
+        "/api/auth/register",
+        json={"terms_accepted": True, "email": "mia@test.ch", "password": "drei-worte-merken"},
+    )
+    old_headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert client.get("/api/auth/me", headers=old_headers).status_code == 200
+
+    r2 = client.post("/api/auth/change-password", headers=old_headers,
+                     json={"current_password": "drei-worte-merken", "new_password": "ganz-neues-passwort"})
+    assert r2.status_code == 200
+    new_headers = {"Authorization": f"Bearer {r2.json()['access_token']}"}
+
+    # Altes Token (z.B. gestohlenes Tablet) ist sofort draussen, neues funktioniert
+    assert client.get("/api/auth/me", headers=old_headers).status_code == 401
+    assert client.get("/api/auth/me", headers=new_headers).status_code == 200

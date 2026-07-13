@@ -16,7 +16,7 @@ def make_admin(email: str) -> None:
 def register_pw(client, email: str, password: str = "test-passwort-123") -> dict:
     r = client.post(
         "/api/auth/register",
-        json={"email": email, "password": password, "display_name": email.split("@")[0]},
+        json={"terms_accepted": True, "email": email, "password": password, "display_name": email.split("@")[0]},
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

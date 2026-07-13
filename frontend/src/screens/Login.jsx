@@ -12,6 +12,8 @@ export default function Login() {
   const [name, setName] = useState("");
   const [grade, setGrade] = useState(""); // bewusst leer: Klasse aktiv wählen
   const [role, setRole] = useState("student");
+  const [terms, setTerms] = useState(false);
+  const [website, setWebsite] = useState(""); // Honeypot – bleibt bei Menschen leer
   const [status, setStatus] = useState(null); // {type, text}
   const [busy, setBusy] = useState(false);
 
@@ -46,12 +48,16 @@ export default function Login() {
       setStatus({ type: "error", text: "Bitte wähle deine Klasse aus." });
       return;
     }
+    if (tab === "neu" && !terms) {
+      setStatus({ type: "error", text: "Bitte akzeptiere zuerst die AGB und die Datenschutzerklärung." });
+      return;
+    }
     setBusy(true);
     setStatus(null);
     try {
       let res;
       if (tab === "neu") {
-        const body = { email: email.trim(), password, role };
+        const body = { email: email.trim(), password, role, terms_accepted: terms, website };
         if (name.trim()) body.display_name = name.trim();
         if (role === "student") body.grade_level = grade;
         res = await api.post("/api/auth/register", body);
@@ -171,7 +177,27 @@ export default function Login() {
             />
           </div>
           {tab === "neu" && (
-            <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 16, lineHeight: 1.5 }}>Merk dir dein Passwort gut – Tipp: drei Wörter, die du dir vorstellen kannst.</div>
+            <>
+              <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12, lineHeight: 1.5 }}>Merk dir dein Passwort gut – Tipp: drei Wörter, die du dir vorstellen kannst.</div>
+              {/* Honeypot: fuer Menschen unsichtbar, simple Bots fuellen es aus */}
+              <input
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+              />
+              <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12, color: "#6b7280", marginBottom: 8, cursor: "pointer", lineHeight: 1.5 }}>
+                <input type="checkbox" checked={terms} onChange={(e) => setTerms(e.target.checked)} style={{ marginTop: 2 }} />
+                <span>
+                  Ich akzeptiere die <Link to="/agb" target="_blank" style={{ color: "#4f46e5", textDecoration: "underline" }}>AGB</Link> und
+                  die <Link to="/datenschutz" target="_blank" style={{ color: "#4f46e5", textDecoration: "underline" }}>Datenschutzerklärung</Link>.
+                </span>
+              </label>
+              <div style={{ fontSize: 11, color: "#9aa0ab", marginBottom: 16 }}>Unter 16? Frag zuerst deine Eltern, ob das okay ist.</div>
+            </>
           )}
           {tab === "an" && (
             <div style={{ textAlign: "right", marginBottom: 16 }}>

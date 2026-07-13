@@ -22,6 +22,9 @@ def get_current_user(
     user = db.get(User, int(payload["sub"]))
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Konto nicht gefunden")
+    # Tokens von vor einer Passwort-Aenderung sind ungueltig (Logout ueberall).
+    if int(payload.get("tv", 0)) != (user.token_version or 0):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sitzung abgelaufen – bitte neu anmelden")
     return user
 
 
