@@ -206,3 +206,52 @@ def test_password_change_invalidates_old_tokens(client):
     # Altes Token (z.B. gestohlenes Tablet) ist sofort draussen, neues funktioniert
     assert client.get("/api/auth/me", headers=old_headers).status_code == 401
     assert client.get("/api/auth/me", headers=new_headers).status_code == 200
+
+
+# ---- E-Mail-Bestätigung (Launch-Punkt 3) ----
+
+def _register(client, email="mia@test.ch"):
+    r = client.post(
+        "/api/auth/register",
+        json={"terms_accepted": True, "email": email, "password": "drei-worte-merken"},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_register_starts_unverified_link_click_verifies(client):
+    body = _register(client)
+    assert body["user"]["email_verified"] is False
+
+    # Link anfordern (Dev-Modus gibt den Token zurueck) und klicken
+    r = client.post("/api/auth/request-link", json={"email": "mia@test.ch"})
+    token = r.json()["dev_token"]
+    v = client.post("/api/auth/verify", json={"token": token})
+    assert v.status_code == 200
+    assert v.json()["user"]["email_verified"] is True
+
+
+def test_unverified_blocked_when_enforced(client, monkeypatch):
+    from app.config import settings as cfg
+    from app.database import SessionLocal
+    from app.models import User
+
+    body = _register(client)
+    headers = {"Authorization": f"Bearer {body['access_token']}"}
+
+    # Ohne Erzwingung: alles offen (sicherer Default, solange Mail nicht steht)
+    assert client.post("/api/exercises", headers=headers, json={"text": "x=1"}).status_code == 201
+
+    monkeypatch.setattr(cfg, "require_email_verification", True)
+    r = client.post("/api/exercises", headers=headers, json={"text": "x=2"})
+    assert r.status_code == 403
+    assert "bestätige" in r.json()["detail"].lower()
+    # Kauf ebenfalls gesperrt (403 kommt VOR dem 503 wegen fehlender Stripe-Keys)
+    assert client.post("/api/pay/checkout", headers=headers, json={"package": "schnupper"}).status_code == 403
+
+    # Nach Bestaetigung wieder offen
+    with SessionLocal() as db:
+        u = db.query(User).filter(User.email == "mia@test.ch").one()
+        u.email_verified = True
+        db.commit()
+    assert client.post("/api/exercises", headers=headers, json={"text": "x=3"}).status_code == 201

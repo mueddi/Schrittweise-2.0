@@ -90,6 +90,9 @@ class User(Base):
     # Passwort-Aenderung erhoeht die Version -> alle alten Tokens sofort ungueltig
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # E-Mail-Besitz per Link-Klick bewiesen (Bestandskonten per Migration TRUE)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
     topics: Mapped[list[Topic]] = relationship(back_populates="user", cascade="all, delete-orphan")

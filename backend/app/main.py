@@ -83,7 +83,13 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, check_dir=False), name="
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "app": "schrittweise"}
+    # "mail": kann die App E-Mails verschicken (Passwort-vergessen /
+    # E-Mail-Bestaetigung)? Nur ein Boolean – keine Konfigurationsdetails.
+    return {
+        "status": "ok",
+        "app": "schrittweise",
+        "mail": bool(settings.supabase_auth_enabled or settings.smtp_enabled),
+    }
 
 
 app.include_router(auth.router)

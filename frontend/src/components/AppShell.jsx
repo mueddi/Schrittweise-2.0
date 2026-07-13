@@ -27,6 +27,22 @@ export default function AppShell() {
   const [fbOpen, setFbOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
+  const [mailOk, setMailOk] = useState(false);
+  const [verifyNote, setVerifyNote] = useState(null); // null | "ok" | "fehler"
+
+  // Kann der Server Mails verschicken? Nur dann macht der Bestätigungs-Banner Sinn.
+  useEffect(() => {
+    api.get("/api/health").then((h) => setMailOk(!!h?.mail)).catch(() => setMailOk(false));
+  }, []);
+
+  const sendVerifyMail = async () => {
+    try {
+      await api.post("/api/auth/request-link", { email: user.email });
+      setVerifyNote("ok");
+    } catch {
+      setVerifyNote("fehler");
+    }
+  };
 
   // Update-Erkennung: alte, lange offene Tabs zeigten sonst ein veraltetes
   // Bundle (kaputte Skizzen/Formatierung). Beim Zurueckkehren in den Tab und
@@ -186,6 +202,18 @@ export default function AppShell() {
             <span style={{ fontWeight: 800, fontSize: 15, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
             <button onClick={() => setModal({})} className="btn-primary" style={{ marginLeft: "auto", fontSize: 12, borderRadius: 9, padding: "8px 12px", border: "none" }}>+ Aufgabe</button>
           </div>
+          {user?.email_verified === false && mailOk && (
+            <div style={{ background: "#fdf3e6", borderBottom: "1px solid #f2ddb8", padding: "8px 16px", fontSize: 12.5, color: "#a05c12", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <span>📧 Bestätige deine E-Mail – klick auf den Link, den wir dir geschickt haben. So kannst du dein Passwort jederzeit wiederherstellen.</span>
+              <button
+                onClick={sendVerifyMail}
+                disabled={verifyNote === "ok"}
+                style={{ border: "1px solid #e3c795", background: "#fff", color: "#a05c12", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+              >
+                {verifyNote === "ok" ? "Link geschickt ✓" : verifyNote === "fehler" ? "Nochmal versuchen" : "Link nochmal senden"}
+              </button>
+            </div>
+          )}
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Outlet />
           </div>

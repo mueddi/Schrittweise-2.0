@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "Schrittweise <no-reply@schrittweise.ch>"
 
+    # E-Mail-Bestaetigung erzwingen: unbestaetigte Konten koennen weder KI
+    # nutzen noch kaufen. Erst aktivieren, wenn der Mailversand (Supabase/SMTP)
+    # nachweislich funktioniert – sonst sperrt es alle Neuregistrierungen aus.
+    require_email_verification: bool = False
+
     # Kontingent: 1 Token = 1 Rappen verrechnete KI-Leistung.
     # Jedes Konto bekommt monatlich Gratis-Tokens; danach zahlt das Guthaben.
     free_monthly_tokens: int = 50

@@ -67,6 +67,9 @@ def init_db() -> None:
         ("api_usage", "charged_tokens", "ALTER TABLE api_usage ADD COLUMN charged_tokens INTEGER DEFAULT 0 NOT NULL"),
         ("users", "terms_accepted_at", "ALTER TABLE users ADD COLUMN terms_accepted_at TIMESTAMP"),
         ("users", "token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0 NOT NULL"),
+        # DEFAULT TRUE: Bestandskonten (vor der Bestaetigungs-Pflicht registriert)
+        # gelten als bestaetigt; NEUE Konten setzt die App explizit auf FALSE.
+        ("users", "email_verified", "ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT TRUE NOT NULL"),
     ]
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

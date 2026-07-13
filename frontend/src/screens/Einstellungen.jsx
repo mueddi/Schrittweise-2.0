@@ -81,7 +81,11 @@ export default function Einstellungen() {
               <Field label="E-Mail">
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280" }}>
                   <span>{user?.email}</span>
-                  <span style={{ fontSize: 11, color: "#1a7f3c", fontWeight: 700 }}>✓ bestätigt</span>
+                  {user?.email_verified ? (
+                    <span style={{ fontSize: 11, color: "#1a7f3c", fontWeight: 700 }}>✓ bestätigt</span>
+                  ) : (
+                    <span style={{ fontSize: 11, color: "#a05c12", fontWeight: 700 }}>noch nicht bestätigt</span>
+                  )}
                 </div>
               </Field>
               <Field label="Klassenstufe">
@@ -134,6 +138,7 @@ export default function Einstellungen() {
               <div style={{ background: "#f6f7fb", border: "1px solid #eef0f3", borderRadius: 14, padding: 16, fontSize: 13, color: "#6b7280", lineHeight: 1.55, marginTop: 12 }}>
                 🔒 Deine Chats bleiben privat. Eltern sehen nur Aggregate wie Selbständigkeit, gelöste Aufgaben und Themen-Trends – technisch gibt es aus der Eltern-Ansicht keinen Zugriff auf deine Nachrichten.
               </div>
+              <DeleteAccount />
             </div>
           </>
         )}
@@ -289,6 +294,61 @@ function Toggle({ on, onClick }) {
   return (
     <div onClick={onClick} style={{ width: 42, height: 24, borderRadius: 999, position: "relative", cursor: "pointer", background: on ? "#6366f1" : "#d2d4dd", transition: "background .15s" }}>
       <span style={{ position: "absolute", top: 2, left: on ? 20 : 2, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+    </div>
+  );
+}
+
+// Roter Bereich: Konto endgültig löschen (Datenschutz-Selbstbedienung)
+function DeleteAccount() {
+  const { logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function doDelete() {
+    if (!window.confirm("Wirklich alles löschen? Aufgaben, Chats und Guthaben sind danach unwiderruflich weg.")) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await api.post("/api/auth/delete-account", { password: pw });
+      logout();
+      window.location.href = "/";
+    } catch (e) {
+      setErr(e.message || "Löschen fehlgeschlagen.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ border: "1px solid #f2c9c0", background: "#fdf6f4", borderRadius: 14, padding: 16, marginTop: 24 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#b3492f", marginBottom: 4 }}>Konto löschen</div>
+      <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.55, marginBottom: 12 }}>
+        Löscht dein Konto mit allen Aufgaben, Chats, Bildern und deinem Token-Guthaben – endgültig.
+        Zahlungsbelege bleiben beim Zahlungsanbieter (gesetzliche Aufbewahrung).
+      </div>
+      {!open ? (
+        <button onClick={() => setOpen(true)} style={{ border: "1px solid #e5b0a4", background: "#fff", color: "#b3492f", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          Konto löschen …
+        </button>
+      ) : (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <input
+            type="password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            placeholder="Passwort zur Bestätigung"
+            style={{ border: "1px solid #e5b0a4", borderRadius: 10, padding: "9px 12px", fontSize: 13, flex: "1 1 200px" }}
+          />
+          <button onClick={doDelete} disabled={busy} style={{ border: "none", background: "#b3492f", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.7 : 1 }}>
+            {busy ? "lösche …" : "Endgültig löschen"}
+          </button>
+          <button onClick={() => { setOpen(false); setPw(""); setErr(""); }} style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 13, cursor: "pointer" }}>
+            Abbrechen
+          </button>
+        </div>
+      )}
+      {err && <div style={{ fontSize: 12.5, color: "#b3492f", marginTop: 8 }}>{err}</div>}
     </div>
   );
 }

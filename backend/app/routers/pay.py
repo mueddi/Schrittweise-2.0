@@ -23,6 +23,7 @@ from ..database import get_db
 from ..deps import require_student
 from ..models import Payment, Plan, User
 from ..schemas import CheckoutRequest
+from ..services import quota
 
 router = APIRouter(prefix="/api/pay", tags=["pay"])
 log = logging.getLogger("schrittweise.pay")
@@ -39,6 +40,9 @@ PACKAGES = {
 @router.post("/checkout")
 def create_checkout(payload: CheckoutRequest | None = None, user: User = Depends(require_student)):
     """Erstellt eine Stripe-Checkout-Session und gibt deren Bezahl-URL zurück."""
+    if quota.blocked_unverified(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Bitte bestätige zuerst deine E-Mail-Adresse, bevor du kaufst – schau in dein Postfach.")
     if not settings.payments_enabled:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,

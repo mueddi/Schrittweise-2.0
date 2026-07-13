@@ -12,6 +12,7 @@ from ..database import get_db
 from ..deps import bearer, get_current_user
 from ..models import LoginAttempt, MagicLink, RegisterAttempt, Role, User
 from ..schemas import (
+    AccountDeleteRequest,
     MagicLinkRequest,
     MagicLinkResponse,
     PasswordChangeRequest,
@@ -67,6 +68,21 @@ def _client_ip(request: Request) -> str:
 _DUMMY_HASH = hash_password("nur-fuer-timing-vergleich")
 
 
+def _deliver_login_mail(db: Session, email: str) -> None:
+    """Erstellt einen Login-/Bestaetigungslink und verschickt ihn (wirft bei Fehler)."""
+    token = new_magic_token()
+    db.add(MagicLink(
+        email=email,
+        token=hash_token(token),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=LINK_TTL_MINUTES),
+    ))
+    db.commit()
+    if settings.supabase_auth_enabled:
+        send_magic_link_via_supabase(email, f"{settings.frontend_base_url}/login/verify")
+    elif settings.smtp_enabled:
+        send_magic_link(email, f"{settings.frontend_base_url}/login/verify?token={token}")
+
+
 @router.post("/register", response_model=TokenResponse)
 def register_password(payload: PasswordRegisterRequest, request: Request, db: Session = Depends(get_db)):
     """Konto mit E-Mail + Passwort anlegen und direkt einloggen."""
@@ -118,11 +134,20 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
     # Passwortloses Alt-Konto (Magic-Link-Zeit, nie eingeloggt): Passwort setzen erlaubt.
     user.password_hash = hash_password(payload.password)
     user.terms_accepted_at = datetime.now(timezone.utc)
+    user.email_verified = False  # Besitz-Nachweis erst per Link-Klick
     # Registrierung fuers IP-Limit zaehlen; alte Eintraege gleich aufraeumen.
     db.execute(delete(RegisterAttempt).where(RegisterAttempt.created_at < day_start))
     db.add(RegisterAttempt(ip=ip))
     db.commit()
     db.refresh(user)
+
+    # Bestaetigungs-Mail direkt mitschicken (best effort – Registrierung
+    # scheitert NIE am Mailversand; der Banner in der App kann neu senden).
+    if settings.supabase_auth_enabled or settings.smtp_enabled:
+        try:
+            _deliver_login_mail(db, email)
+        except Exception:
+            log.warning("Bestätigungs-Mail bei Registrierung fehlgeschlagen (%s)", email)
 
     access = create_access_token(user.id, user.role.value, token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
@@ -312,6 +337,8 @@ def verify(payload: VerifyRequest, db: Session = Depends(get_db)):
     if marked.rowcount != 1:
         db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Link ungültig oder bereits benutzt.")
+    # Link-Klick beweist den Besitz der Mailbox
+    user.email_verified = True
     db.commit()
 
     access = create_access_token(user.id, user.role.value, via="email", token_version=user.token_version or 0)
@@ -332,8 +359,62 @@ def verify_supabase(payload: SupabaseVerifyRequest, db: Session = Depends(get_db
             status.HTTP_404_NOT_FOUND,
             "Kein Konto mit dieser E-Mail – registriere dich zuerst über «Neu hier».",
         )
+    # Supabase hat die E-Mail verifiziert -> Besitz bewiesen
+    if not user.email_verified:
+        user.email_verified = True
+        db.commit()
     access = create_access_token(user.id, user.role.value, via="email", token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
+
+
+@router.post("/delete-account", status_code=204)
+def delete_account(
+    payload: AccountDeleteRequest,
+    user: User = Depends(get_current_user),
+    creds: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+):
+    """Konto samt Daten endgültig löschen (Datenschutz-Selbstbedienung).
+
+    Bestätigung per Passwort; kam der Login über einen Mail-Link (via=email),
+    ist der Besitz der Mailbox bereits bewiesen. Zahlungsbelege bleiben bei
+    Stripe erhalten (Buchhaltung) – lokal wird alles entfernt."""
+    token_payload = decode_access_token(creds.credentials) if creds else None
+    via_email = bool(token_payload) and token_payload.get("via") == "email"
+    if user.password_hash and not via_email:
+        if not payload.password or not verify_password(payload.password, user.password_hash):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Das Passwort stimmt nicht.")
+    if user.is_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Betreiber-Konten können sich nicht selbst löschen.")
+
+    from ..models import (
+        ApiUsage, Attempt, Exercise, Feedback, Message, ParentLink, Payment,
+        ProgressAggregate, Topic, UploadedImage,
+    )
+
+    uid = user.id
+    email = user.email
+    attempt_ids = select(Attempt.id).where(Attempt.user_id == uid)
+    exercise_ids = select(Exercise.id).where(Exercise.user_id == uid)
+    db.execute(delete(Message).where(Message.attempt_id.in_(attempt_ids)))
+    db.execute(delete(Attempt).where(Attempt.user_id == uid))
+    # Kosten-Statistik bleibt (anonymisiert) – Personenbezug wird entfernt
+    db.execute(update(ApiUsage).where(ApiUsage.user_id == uid).values(user_id=None))
+    db.execute(update(ApiUsage).where(ApiUsage.exercise_id.in_(exercise_ids)).values(exercise_id=None))
+    db.execute(delete(Exercise).where(Exercise.user_id == uid))
+    db.execute(delete(Topic).where(Topic.user_id == uid))
+    db.execute(delete(ProgressAggregate).where(ProgressAggregate.user_id == uid))
+    db.execute(delete(ParentLink).where(ParentLink.student_id == uid))
+    db.execute(update(ParentLink).where(ParentLink.parent_id == uid).values(parent_id=None))
+    db.execute(delete(Feedback).where(Feedback.user_id == uid))
+    db.execute(delete(UploadedImage).where(UploadedImage.user_id == uid))
+    db.execute(delete(Payment).where(Payment.user_id == uid))
+    db.execute(delete(MagicLink).where(MagicLink.email == email))
+    db.execute(delete(LoginAttempt).where(LoginAttempt.email == email))
+    db.delete(user)
+    db.commit()
+    log.info("Konto geloescht (User-ID %s)", uid)
 
 
 @router.get("/me", response_model=UserOut)

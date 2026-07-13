@@ -55,6 +55,10 @@ class PasswordLoginRequest(BaseModel):
     password: str = Field(max_length=128)
 
 
+class AccountDeleteRequest(BaseModel):
+    password: str = Field(default="", max_length=128)
+
+
 class PasswordChangeRequest(BaseModel):
     # Ohne current_password nur erlaubt, wenn der Login per Mail-Link kam
     # (Passwort-vergessen-Flow) oder das Konto noch kein Passwort hat.
@@ -80,6 +84,7 @@ class UserOut(BaseModel):
     token_balance: int
     share_with_parents: bool
     is_admin: bool = False
+    email_verified: bool = False
 
 
 class UserUpdate(BaseModel):

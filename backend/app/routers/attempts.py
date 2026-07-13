@@ -50,6 +50,9 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
 
     # Guthaben-Gate VOR jeder Zustandsaenderung: sonst staende die Nachricht
     # ohne Antwort im Verlauf und die Leiter wuerde sich gratis weiterdrehen.
+    if quota.blocked_unverified(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.")
     if not quota.can_use_ki(user):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
                             "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")

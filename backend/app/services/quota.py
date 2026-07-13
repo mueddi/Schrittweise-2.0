@@ -56,6 +56,16 @@ def quota_state(db: Session, user: User) -> dict:
     }
 
 
+def blocked_unverified(user: User) -> bool:
+    """E-Mail-Bestaetigung noetig, bevor KI/Kauf moeglich sind (falls erzwungen).
+
+    Nur aktiv, wenn REQUIRE_EMAIL_VERIFICATION gesetzt ist – das darf erst
+    passieren, wenn der Mailversand nachweislich funktioniert."""
+    return (settings.require_email_verification
+            and not is_unlimited(user)
+            and not user.email_verified)
+
+
 def can_use_ki(user: User) -> bool:
     """Darf dieses Konto gerade eine KI-Leistung ausloesen? (rein lesend)"""
     if is_unlimited(user):

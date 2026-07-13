@@ -121,10 +121,12 @@ export function Datenschutz() {
 
       <H>8. Aufbewahrung &amp; Löschung</H>
       <P>
-        Konto- und Lerndaten bleiben gespeichert, solange das Konto besteht. Auf Anfrage
-        an die oben genannte Adresse löschen wir ein Konto samt aller zugehörigen Daten
-        vollständig. E-Mail-Login-Links (Passwort vergessen) sind 30 Minuten gültig und
-        einmalig verwendbar.
+        Konto- und Lerndaten bleiben gespeichert, solange das Konto besteht. Du kannst
+        dein Konto samt aller zugehörigen Daten jederzeit selbst löschen (Einstellungen
+        → Privatsphäre → «Konto löschen») – oder per Anfrage an die oben genannte
+        Adresse. Zahlungsbelege verbleiben aus buchhalterischen Gründen beim
+        Zahlungsanbieter Stripe. E-Mail-Login-Links (Passwort vergessen) sind 30
+        Minuten gültig und einmalig verwendbar.
       </P>
 
       <H>9. Deine Rechte</H>
