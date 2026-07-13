@@ -18,8 +18,13 @@ def _normalize_url(url: str) -> str:
 
 DATABASE_URL = _normalize_url(settings.database_url)
 
-# check_same_thread nur fuer SQLite noetig; bei Postgres wird das Argument ignoriert.
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+# check_same_thread nur fuer SQLite noetig. Bei Postgres die Session-Zeitzone
+# hart auf UTC pinnen: alle Timestamp-Spalten sind naive UTC-Wandzeit – ein
+# abweichendes Server-Default-TZ wuerde Link-Ablauf und Rate-Limits verschieben.
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+else:
+    connect_args = {"options": "-c timezone=utc"}
 
 _engine_kwargs: dict = {"connect_args": connect_args, "pool_pre_ping": True}
 if os.environ.get("VERCEL") and not DATABASE_URL.startswith("sqlite"):

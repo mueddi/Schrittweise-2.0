@@ -73,8 +73,8 @@ npm install
 npm run dev
 ```
 
-Ohne SMTP läuft der Login im Dev-Modus: Der Magic-Link wird nach dem Absenden
-direkt geöffnet — kein Mailserver nötig.
+Login ist E-Mail + Passwort. Lokal darf die E-Mail erfunden sein; «Passwort
+vergessen» gibt den Link im Dev-Modus direkt zurück — kein Mailserver nötig.
 
 ## Projektstruktur
 
@@ -88,7 +88,7 @@ frontend/         React + Vite
   src/screens/    Landing, Login, Lernen, Themen, Eltern, Preise, Einstellungen
 design/referenz.html   Visueller Massstab
 api/index.py      Vercel-Serverless-Einstieg
-render.yaml       Render-Blueprint (Frontend Static + Backend Docker inkl. Tesseract)
+render.yaml       Render-Blueprint (Alternative; Produktion läuft auf Vercel)
 vercel.json       Vercel Build & Routing
 ```
 

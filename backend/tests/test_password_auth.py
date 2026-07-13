@@ -127,11 +127,14 @@ def test_change_password_via_email_link_needs_no_current(client):
 
 
 def test_passwordless_legacy_account_can_set_password(client):
-    # Alt-Konto aus der Magic-Link-Zeit (ohne Passwort, nie eingeloggt)
-    client.post(
-        "/api/auth/request-link",
-        json={"email": "alt@test.ch", "register": True, "display_name": "Alt"},
-    )
+    # Alt-Konto aus der Magic-Link-Zeit (ohne Passwort, nie eingeloggt) –
+    # direkt in der DB anlegen, den Anlage-Weg gibt es nicht mehr
+    from app.database import SessionLocal
+    from app.models import User
+
+    with SessionLocal() as db:
+        db.add(User(email="alt@test.ch", display_name="Alt"))
+        db.commit()
     r = client.post(
         "/api/auth/register",
         json={"terms_accepted": True, "email": "alt@test.ch", "password": "jetzt-mit-passwort", "display_name": "Alt"},

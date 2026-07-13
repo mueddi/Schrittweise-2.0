@@ -8,10 +8,8 @@ from .conftest import register
 
 
 def test_magic_token_stored_hashed(client):
-    r = client.post(
-        "/api/auth/request-link",
-        json={"email": "hash@test.ch", "register": True, "display_name": "H"},
-    )
+    register(client, "hash@test.ch", name="H")
+    r = client.post("/api/auth/request-link", json={"email": "hash@test.ch"})
     raw = r.json()["dev_token"]
     with SessionLocal() as s:
         stored = s.scalars(select(MagicLink.token).where(MagicLink.email == "hash@test.ch")).all()
@@ -22,7 +20,8 @@ def test_magic_token_stored_hashed(client):
 
 
 def test_request_link_rate_limited(client):
-    body = {"email": "spam@test.ch", "register": True, "display_name": "S"}
+    register(client, "spam@test.ch", name="S")
+    body = {"email": "spam@test.ch"}
     for _ in range(5):
         assert client.post("/api/auth/request-link", json=body).status_code == 200
     r = client.post("/api/auth/request-link", json=body)

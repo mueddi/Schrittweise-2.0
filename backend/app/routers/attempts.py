@@ -1,7 +1,9 @@
 """Hinweis-Leiter-Chat: Schuelerantwort -> SymPy -> Leiter-Zustand -> Tutor (Streaming)."""
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db
@@ -19,6 +21,11 @@ from ..services import aggregates, quota, tutor, usage
 from ..services.sympy_verifier import verify
 
 router = APIRouter(prefix="/api/attempts", tags=["attempts"])
+
+# Frequenz-Bremse: mehr Nachrichten pro Minute schafft kein Mensch beim Lernen.
+# Verhindert, dass viele PARALLELE Anfragen das Guthaben-Gate ueberholen
+# (Abbuchung erfolgt erst nach der Antwort, Boden bei 0).
+CHAT_MAX_PER_MINUTE = 8
 
 
 def _load_owned(db: Session, attempt_id: int, user: User) -> Attempt:
@@ -47,6 +54,19 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     text = payload.text.strip()
     if not text:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Leere Nachricht")
+
+    # Frequenz-Bremse (siehe CHAT_MAX_PER_MINUTE)
+    minute_ago = datetime.now(timezone.utc) - timedelta(seconds=60)
+    recent_msgs = db.scalar(
+        select(func.count(Message.id))
+        .join(Attempt, Message.attempt_id == Attempt.id)
+        .where(Attempt.user_id == user.id,
+               Message.role == MessageRole.student,
+               Message.created_at >= minute_ago)
+    ) or 0
+    if recent_msgs >= CHAT_MAX_PER_MINUTE:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            "Langsam 🙂 – eine Nachricht nach der anderen. Versuch es gleich nochmal.")
 
     # Guthaben-Gate VOR jeder Zustandsaenderung: sonst staende die Nachricht
     # ohne Antwort im Verlauf und die Leiter wuerde sich gratis weiterdrehen.
@@ -142,7 +162,14 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                                  user_id=user_id_local, exercise_id=exercise_id_local,
                                  charged=charged)
                 if solved_now:
-                    aggregates.recompute_week(s, user_id_local)
+                    try:
+                        aggregates.recompute_week(s, user_id_local)
+                    except Exception:
+                        # Aggregat-Fehler darf Tutor-Message + Abbuchung nicht wegrollen
+                        import logging
+
+                        logging.getLogger("schrittweise.attempts").exception(
+                            "recompute_week fehlgeschlagen (User %s)", user_id_local)
                 s.commit()
 
     return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")

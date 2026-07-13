@@ -143,7 +143,12 @@ export default function Preise() {
             <Feature>Lehrpersonen-Dashboard</Feature>
             <Feature>Rechnung an die Schule</Feature>
           </div>
-          <div style={{ border: "1px solid #d2d4dd", borderRadius: 11, padding: 11, textAlign: "center", fontSize: 14, fontWeight: 600 }}>Kontakt aufnehmen</div>
+          <a
+            href="mailto:mahmmouds62@gmail.com?subject=Schul-Abo%20Schrittweise"
+            style={{ display: "block", border: "1px solid #d2d4dd", borderRadius: 11, padding: 11, textAlign: "center", fontSize: 14, fontWeight: 600, color: "#1a1c22" }}
+          >
+            Kontakt aufnehmen
+          </a>
         </div>
       </div>
     </div>

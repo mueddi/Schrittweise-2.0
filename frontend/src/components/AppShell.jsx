@@ -89,9 +89,10 @@ export default function AppShell() {
   }, []);
 
   useEffect(() => {
+    if (user?.role === "parent") return; // Eltern-Rolle hat weder Themen noch Kontingent
     loadTopics();
     loadQuota();
-  }, [loadTopics, loadQuota]);
+  }, [loadTopics, loadQuota, user?.role]);
 
   // Mobile-Navigation bei Seitenwechsel schliessen
   useEffect(() => {

@@ -146,6 +146,7 @@ def nutzer(q: str = Query("", max_length=100),
             "email_verified": u.email_verified,
             "token_balance": u.token_balance,
             "free_used_tokens": u.free_used_tokens or 0,
+            "monthly_free_tokens": settings.free_monthly_tokens,
             "verbraucht_tokens": int(verbrauch.get(u.id) or 0),
             "erstellt": u.created_at.isoformat() if u.created_at else None,
         }

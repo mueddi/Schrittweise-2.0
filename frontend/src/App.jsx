@@ -25,6 +25,12 @@ function Loader() {
   );
 }
 
+function RequireAdmin({ children }) {
+  const { user } = useAuth();
+  if (!user?.is_admin) return <Navigate to="/app/lernen" replace />;
+  return children;
+}
+
 function RequireAuth({ children }) {
   const { user, loading } = useAuth();
   const loc = useLocation();
@@ -84,8 +90,8 @@ export default function App() {
         <Route path="eltern" element={<Eltern />} />
         <Route path="preise" element={<Preise />} />
         <Route path="einstellungen" element={<Einstellungen />} />
-        <Route path="kosten" element={<Kosten />} />
-        <Route path="nutzer" element={<Nutzer />} />
+        <Route path="kosten" element={<RequireAdmin><Kosten /></RequireAdmin>} />
+        <Route path="nutzer" element={<RequireAdmin><Nutzer /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

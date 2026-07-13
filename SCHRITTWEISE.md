@@ -4,7 +4,8 @@
 > verrät, sondern über eine **Hinweis-Leiter** (4 Stufen) zum eigenen Denken führt.
 > Für Sek-I-Schüler:innen (12–15 J.), passend zum **Lehrplan 21**.
 
-Der visuelle Massstab ist `design/referenz.html` (im Browser öffnen).
+Live: **https://schrittweise-2-0.vercel.app** · Der visuelle Massstab ist
+`design/referenz.html` (im Browser öffnen).
 
 ## Prinzipien (nicht verhandelbar)
 
@@ -23,41 +24,94 @@ Der visuelle Massstab ist `design/referenz.html` (im Browser öffnen).
 
 | Bereich | Wahl |
 |---|---|
-| Frontend | React + Vite, Formeln via **KaTeX** |
+| Frontend | React + Vite, Formeln via **KaTeX**, deterministische Skizzen (SVG) |
 | Backend | Python + **FastAPI** |
 | Mathe | **SymPy** |
-| KI | Anthropic API – `claude-haiku-4-5` (Standard), `claude-sonnet-4-6` (komplex), Prompt-Caching |
-| DB | SQLite → via **SQLAlchemy** (Postgres/Supabase = Config-Wechsel) |
-| Auth | Magic-Link (passwortlos) + JWT |
-| Deployment | **Vercel** (Serverless-Function + Static Build) oder Render |
+| KI | Anthropic API – `claude-haiku-4-5` (Standard), `claude-sonnet-4-6` (Foto/Geometrie), Prompt-Caching |
+| Handschrift/Foto | **Claude Vision** (liest Stift-Eingabe und Fotos; ohne API-Key: einfacher lokaler Fallback) |
+| DB | **Supabase Postgres** (lokal SQLite) via SQLAlchemy |
+| Auth | **E-Mail + Passwort** (scrypt) + JWT; Mail-Link nur für «Passwort vergessen» |
+| Zahlung | **Stripe Checkout** (Karte/TWINT), signierter Webhook |
+| Deployment | **Vercel** über GitHub Actions (Push auf `main` → Test → Deploy → Smoke-Test) |
 
-## Deployment auf Vercel
+## 💰 Preismodell (nutzungsbasiert)
 
-Das Repo importieren (`vercel.json` regelt Build & Routing). **Pflicht-Umgebungs­variablen**
-im Vercel-Dashboard (Settings → Environment Variables):
+**1 Token = 1 Rappen verrechnete KI-Leistung.** Jede Tutor-Antwort bucht
+`max(1, aufgerundet(echte Kosten × USD_CHF_RATE × BILLING_MARGIN))` Tokens ab –
+eine normale Antwort ≈ 1 Token, eine Foto-/Geometrie-Antwort ≈ 3–5. Auch die
+Handschrift-Erkennung wird so abgerechnet; die KI-Suche der Bibliothek ist
+gratis (gedrosselt).
 
-| Variable | Wert | Zweck |
-|---|---|---|
-| `JWT_SECRET` | langer Zufallswert (`openssl rand -hex 32`) | Token-Signatur – **Platzhalter verweigert den Start** |
-| `DATABASE_URL` | Supabase Session-Pooler-URL (`postgresql://…pooler.supabase.com:5432/postgres`) | dauerhafte DB (sonst flüchtiges SQLite in `/tmp`) |
-| `MAGIC_LINK_DEV_RETURN` | `false` (Produktion) | ohne SMTP `true` **nur** zusammen mit `ALLOW_INSECURE_DEV_LOGIN=true` |
-| `FRONTEND_BASE_URL` | `https://<projekt>.vercel.app` | korrekte Magic-Link-URL (wird sonst von Vercel abgeleitet) |
-| `ANTHROPIC_API_KEY` | `sk-ant-…` | echter Tutor (ohne Key: deterministischer Mock) |
-| `SUPABASE_URL` + `SUPABASE_ANON_KEY` | Projekt-URL + anon-Key (Supabase-Dashboard) | Login-Mails via **Supabase Auth** – kein eigener SMTP-Zugang nötig |
-| `SMTP_*` | Zugang (z. B. Brevo) | Alternative zu Supabase Auth: Magic-Link per eigenem Mailserver |
+- **Gratis:** 50 Tokens pro Konto und Monat (`FREE_MONTHLY_TOKENS`).
+- **Pakete:** Schnupper CHF 2 → 200 Tokens · Starter CHF 9 → 900 · Power
+  CHF 19 → 1900 (definiert in `backend/app/routers/pay.py`).
+- **Marge:** `BILLING_MARGIN=3.0` – Schüler zahlen das Dreifache der echten
+  Anthropic-Kosten; du kannst nie draufzahlen.
+- Admin- und Schul-Konten sind unbegrenzt und gratis.
 
-Für Supabase Auth zusätzlich im Supabase-Dashboard unter **Authentication →
-URL Configuration**: Site URL auf `https://<projekt>.vercel.app` setzen und
-`https://<projekt>.vercel.app/login/verify` als Redirect URL eintragen.
-Hinweis: Der eingebaute Supabase-Mailversand ist gedrosselt (wenige Mails/Stunde,
-für Tests gedacht) – für den echten Betrieb im Supabase-Dashboard unter
-**Authentication → SMTP Settings** einen eigenen SMTP (z. B. Brevo) hinterlegen;
-die App braucht dann trotzdem keine `SMTP_*`-Variablen.
+## 🔧 Admin-Bereich (nur Betreiber-Konto)
 
-Sicherheits-Guard: In Produktion (Env `VERCEL`/`RENDER` gesetzt) bricht der Start hart
-ab, wenn `JWT_SECRET` der Platzhalter ist oder der Dev-Login ohne bewusste Freigabe
-aktiv wäre. Uploads liegen auf Vercel in `/tmp` (flüchtig) – für dauerhaften Foto-Upload
-Objekt-Storage anbinden.
+In der Sidebar sichtbar, sobald `users.is_admin = TRUE`:
+
+- **📊 Kosten** – echte KI-Kosten (Ø/Min/Max pro Aufgabe, nach Typ/Modell),
+  verrechnete Tokens (Einnahmen-Deckung) und «Letzte Störungen»
+  (KI-/OCR-/Webhook-Ausfälle, zusätzlich per Mail bei konfiguriertem SMTP).
+- **👥 Nutzer** – Suche, Guthaben/Verbrauch, manuelle Token-Gutschrift oder
+  -Korrektur mit Pflicht-Grund (jede Buchung protokolliert). Dein Werkzeug für
+  Kulanz, Rückerstattungen und verpasste Webhooks.
+- **💬 Feedback** – eingegangene Nutzer-Rückmeldungen.
+- **📚 Bibliothek** – Arbeitsblätter hochladen/verwalten.
+
+## 🚀 Deployment (Vercel über GitHub Actions)
+
+**Der einzige Deploy-Weg:** Push auf `main` → `.github/workflows/deploy.yml`
+läuft automatisch (Backend-Tests + Frontend-Build → Vercel-Deploy →
+Smoke-Test gegen die Live-App). Es gibt KEIN manuelles Dashboard-Deployment.
+
+**GitHub-Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Zweck |
+|---|---|
+| `VERCEL_TOKEN` | Deploy-Berechtigung |
+| `RUNTIME_ENV_JSON` | JSON mit den Laufzeit-Variablen (siehe unten) – wird als Sidecar-Datei deployt, landet nie im Git |
+| `ANTHROPIC_API_KEY` | überschreibt den Wert im JSON (einzeiliger Klartext, weniger Einfüge-Fehler) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | schalten die Zahlung frei (optional bis zum Stripe-Go-live) |
+| `DATABASE_URL` + `BACKUP_PASSWORD` | fürs wöchentliche DB-Backup (`backup.yml`, siehe `docs/BACKUP.md`) |
+
+**Wichtige Laufzeit-Variablen** (im `RUNTIME_ENV_JSON`; vollständige Liste mit
+Kommentaren in `backend/.env.example`):
+
+| Variable | Zweck |
+|---|---|
+| `JWT_SECRET` | langer Zufallswert – Platzhalter verweigert den Start |
+| `DATABASE_URL` | Supabase **Session pooler**-URL |
+| `ANTHROPIC_API_KEY` | echter Tutor (ohne Key: deterministischer Mock) |
+| `SUPABASE_URL` + `SUPABASE_ANON_KEY` | «Passwort vergessen»-Mails über Supabase Auth |
+| `FRONTEND_BASE_URL` | `https://schrittweise-2-0.vercel.app` |
+| `FREE_MONTHLY_TOKENS`, `BILLING_MARGIN`, `USD_CHF_RATE` | Preismodell (Defaults 50 / 3.0 / 0.90) |
+| `REQUIRE_EMAIL_VERIFICATION` | E-Mail-Bestätigungs-Pflicht – **erst aktivieren, wenn der Mailversand nachweislich läuft** |
+| `SMTP_*` + `ALERT_EMAIL` | eigener Mailversand; schaltet auch Betreiber-Alarm-Mails frei |
+
+Supabase-Hinweise: Unter **Authentication → URL Configuration** die Site-URL
+auf die Vercel-Domain und `…/login/verify` als Redirect eintragen. Der
+eingebaute Supabase-Mailer ist gedrosselt (wenige Mails/Stunde) – für den
+echten Betrieb unter **Authentication → SMTP Settings** einen eigenen Absender
+(z. B. Brevo, gratis bis 300 Mails/Tag) hinterlegen.
+
+Sicherheits-Guards ab Werk: Produktion bricht den Start hart ab bei
+Platzhalter-`JWT_SECRET` oder aktivem Dev-Login; Registrierung mit IP-Limit +
+Honeypot + AGB-Pflicht; Login-/Link-Rate-Limits; Chat-/OCR-Frequenzbremsen;
+Passwort-Änderung invalidiert alle alten Tokens; Magic-Link-Tokens nur gehasht.
+
+## 🗄️ Backup & Störungen
+
+- **Backup:** `backup.yml` sichert die DB jeden Sonntag als (optional
+  verschlüsseltes) GitHub-Artefakt, 90 Tage Aufbewahrung. Einrichtung und
+  Wiederherstellung: **`docs/BACKUP.md`**.
+- **Störungen:** KI-/OCR-/Webhook-Fehler erscheinen unter Admin → Kosten
+  («Letzte Störungen») und gehen per Mail an `ALERT_EMAIL`, sobald SMTP
+  konfiguriert ist. Für Ausfall-Überwachung von aussen: Gratis-Monitor
+  (z. B. UptimeRobot) auf `https://schrittweise-2-0.vercel.app/api/health`.
 
 ## Projektstruktur
 
@@ -65,27 +119,19 @@ Objekt-Storage anbinden.
 backend/          FastAPI-App
   app/
     models.py     Datenmodell (users, topics, exercises, attempts, messages,
-                  progress_aggregates, parent_links, magic_links)
-    routers/      auth, topics, exercises, attempts, parents, quota
-    services/     sympy-Verifikation, OCR-Interface, Tutor (LLM), Aggregate
-  requirements.txt
-  .env.example
+                  api_usage, payments, token_adjustments, alerts, …)
+    routers/      auth, topics, exercises, attempts, parents, quota,
+                  library, pay, feedback, admin
+    services/     sympy-Verifikation, OCR (Claude Vision), Tutor (LLM),
+                  quota (Token-Abrechnung), usage (Kosten), alert, Aggregate
+  tests/          pytest-Suite (läuft als Deploy-Gate in der Pipeline)
 frontend/         React + Vite
-  src/screens/    Landing, Login, Lernen, Themen, Eltern, Preise, Einstellungen
-  src/components/ AppShell (Sidebar), NewTaskModal
-  .env.example
+  src/screens/    Landing, Login, Lernen, Themen, Bibliothek, Eltern, Preise,
+                  Einstellungen, Kosten (Admin), Nutzer (Admin), Rechtliches
+  src/components/ AppShell, NewTaskModal, DrawPad, MathFigure, FeedbackModal
+docs/BACKUP.md    Backup einrichten & wiederherstellen
 design/referenz.html   Visueller Massstab
 ```
-
-## Am einfachsten testen: GitHub Codespaces (ohne Installation)
-
-1. Repo auf GitHub öffnen.
-2. Grüner Button **«Code» → Tab «Codespaces» → «Create codespace on main»**.
-3. 2–3 Minuten warten (Einrichtung läuft automatisch, Server starten von selbst).
-4. Unten im Tab **«Ports»** bei **5173 (Schrittweise App)** auf das
-   Globus-Symbol «Open in Browser» klicken – fertig.
-
-Im Login-Screen den Tab **«Neu hier»** nehmen (Dev-Modus loggt ohne E-Mail ein).
 
 ## Lokal starten mit einem Befehl
 
@@ -96,6 +142,11 @@ Das Skript richtet beim ersten Lauf alles ein (Python-Venv, npm-Pakete,
 `.env`), startet beide Server und öffnet http://localhost:5173.
 Voraussetzungen: [Python 3.11+](https://python.org) und [Node.js 18+](https://nodejs.org).
 
+Registrieren im Tab **«Neu hier»** (E-Mail + Passwort + AGB-Häkchen – lokal
+darf die E-Mail erfunden sein). Ohne `ANTHROPIC_API_KEY` antwortet ein
+deterministischer Übungs-Mock; «Passwort vergessen» gibt lokal den Link direkt
+zurück (`MAGIC_LINK_DEV_RETURN=true` in der `.env`).
+
 ## Lokal starten (manuell)
 
 **Backend** (Terminal 1):
@@ -104,7 +155,7 @@ Voraussetzungen: [Python 3.11+](https://python.org) und [Node.js 18+](https://no
 cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env      # ANTHROPIC_API_KEY eintragen (für den Chat)
+cp .env.example .env      # ANTHROPIC_API_KEY eintragen (für den echten Chat)
 uvicorn app.main:app --reload --port 8000
 # API-Docs: http://localhost:8000/docs
 ```
@@ -118,77 +169,25 @@ npm run dev
 # App: http://localhost:5173  (Vite proxyt /api ans Backend)
 ```
 
-Ohne SMTP läuft der Login im **Dev-Modus**: Der Magic-Link wird nach dem
-Absenden direkt geöffnet – kein Mailserver nötig.
+## 🚀 Launch-Checkliste (Betreiber)
 
-## 🚀 Launch-Checkliste
+Rechtsseiten (Impressum/Datenschutz/AGB) sind ausgefüllt und decken das
+Token-Modell ab; Tests, Backups, Alarme und Härtung sind eingebaut. Offen:
 
-Die App ist technisch launch-fertig (Auth gehärtet, Rate-Limits, Postgres,
-Rechtsseiten, CI). Vor dem offiziellen Start musst du als Betreiber:in nur noch:
+1. **Stripe scharfschalten:** Secret Key + Webhook-Signaturgeheimnis als
+   GitHub-Secrets `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` eintragen
+   (Webhook-URL: `https://schrittweise-2-0.vercel.app/api/pay/webhook`,
+   Event `checkout.session.completed`). Erst Test-Modus mit Karte
+   4242 4242 4242 4242, dann Live-Keys.
+2. **Backup aktivieren:** GitHub-Secrets `DATABASE_URL` + `BACKUP_PASSWORD`
+   setzen, einmal manuell laufen lassen (`docs/BACKUP.md`).
+3. **Uptime-Monitor:** z. B. UptimeRobot auf `/api/health`.
+4. **Eigener Mailversand:** Brevo-SMTP im Supabase-Dashboard hinterlegen
+   (oder `SMTP_*` in `RUNTIME_ENV_JSON`); danach
+   `REQUIRE_EMAIL_VERIFICATION=true` setzen – ab dann brauchen neue Konten
+   die E-Mail-Bestätigung für KI-Nutzung und Käufe.
+5. **Bibliothek füllen** (10–15 Arbeitsblätter) und optional eigene Domain
+   (z. B. schrittweise.ch) in Vercel verbinden.
 
-1. **Rechtsseiten ausfüllen**: In `frontend/src/screens/Rechtliches.jsx` die
-   orange markierten `[BITTE ERGÄNZEN]`-Platzhalter ersetzen (Name/Adresse,
-   Kontakt-E-Mail, Hosting-Region) – und die Datenschutzerklärung idealerweise
-   juristisch gegenlesen lassen (Zielgruppe sind Minderjährige!).
-2. **SMTP-Zugang besorgen** (z.B. Brevo – gratis bis 300 Mails/Tag): Host,
-   User, Passwort im Render-Dashboard als `SMTP_*` eintragen. Ohne SMTP gibt
-   der Login in Produktion bewusst einen klaren Fehler statt unsicherem
-   Dev-Login (`MAGIC_LINK_DEV_RETURN=false` ist im Blueprint gesetzt).
-3. **`ANTHROPIC_API_KEY`** im Render-Dashboard setzen (echter KI-Tutor;
-   ohne Key antwortet der deterministische Übungs-Mock).
-4. **Datenbank bei Supabase anlegen** (dauerhaft gratis, 500 MB):
-   1. [supabase.com](https://supabase.com) → kostenloses Konto → **New project**
-      (Region **Frankfurt (eu-central-1)**, sicheres DB-Passwort merken).
-   2. Im Projekt: **Connect** (oben) → Tab **Session pooler** → Connection-String
-      kopieren (Format
-      `postgresql://postgres.<projekt>:<PASSWORT>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres`).
-      Wichtig: **Session pooler**, nicht «Transaction pooler» und nicht
-      «Direct connection» (die ist IPv6-only und von Render aus nicht erreichbar).
-   3. Diesen String im Render-Dashboard als **`DATABASE_URL`** eintragen –
-      fertig, die Tabellen legt die App beim ersten Start selbst an.
-   *(Alternative: Render-eigenes Postgres – auskommentierter Block im
-   `render.yaml`; der Gratis-Plan dort läuft allerdings nach 30 Tagen ab.)*
-5. **Deployen** (Blueprint unten) und die gegenseitigen URLs eintragen.
-6. Optional: eigene Domain in Render verbinden, Uploads-Persistenz (Disk)
-   buchen. Hinweis Supabase free: Projekte pausieren nach ~1 Woche ohne
-   Zugriff und lassen sich im Dashboard mit einem Klick wecken – bei täglich
-   genutzter App passiert das nicht.
-
-Sicherheit ab Werk: Magic-Link-Tokens nur gehasht gespeichert (einmalig,
-30 Min gültig), Rate-Limit 5 Login-Anfragen/15 Min pro E-Mail,
-Security-Header, Eingabe-Längenlimits, LLM-Verlauf gedeckelt,
-Eltern sehen strukturell nie Transkripte (403 + separate Aggregat-Tabelle).
-
-## Deployment (Render)
-
-`render.yaml` im Repo-Root ist ein fertiger Blueprint (Frontend Static Site +
-Backend Docker-Web-Service inkl. Tesseract fürs OCR):
-
-1. In Render «New → Blueprint» auf dieses Repo zeigen.
-2. Im Backend-Service `ANTHROPIC_API_KEY` setzen (`sync: false` – nie im Repo).
-3. Nach dem ersten Deploy die echten URLs eintragen: Frontend `VITE_API_BASE` →
-   Backend-URL, Backend `CORS_ORIGINS`/`FRONTEND_BASE_URL` → Frontend-URL, dann
-   redeploy.
-
-Hinweise:
-- Ohne SMTP läuft der Magic-Link im Dev-Rückgabe-Modus. Für echten Betrieb
-  `SMTP_*` setzen und `MAGIC_LINK_DEV_RETURN=false`.
-- SQLite auf dem free tier ist **ephemer**. Für dauerhafte Daten Postgres
-  anlegen und `DATABASE_URL` umstellen – dank SQLAlchemy nur ein Config-Wechsel.
-- OCR (`pytesseract`) braucht das Tesseract-Binary; das Docker-Image bringt es
-  mit. Lokal ohne Tesseract degradiert der Foto-Upload sauber (manuelle
-  Korrektur im Preview).
-
-## Stand: alle Phasen umgesetzt
-
-- **Phase 1 – Fundament**: Datenmodell + Auto-Migration, Magic-Link-Auth (JWT,
-  Rollen-Guards), App-Shell + Routing zu allen Screens im Design-Look.
-- **Phase 2 – Kernschleife**: Hinweis-Leiter-Chat (Backend-Zustandsmaschine
-  erzwingt die 4 Stufen), SymPy-Verifikation, LLM-Pädagogik (Haiku/Sonnet +
-  Prompt-Caching), Streaming, KaTeX. Mock-Tutor ohne API-Key.
-- **Phase 3 – Struktur**: Themen-CRUD + Fortschritt, Themen-Detail,
-  Foto-Upload mit OCR-Preview (`OcrProvider`-Interface).
-- **Phase 4 – Eltern & Kontingent**: Aggregate (separat, nie Transkripte),
-  Eltern-Verknüpfung per Code, Eltern-Dashboard, Gratis-Kontingent + Preise.
-- **Phase 5 – Feinschliff**: Responsive (Mobile-Navigation, Grid-Breakpoints),
-  globales 401-Handling (Auto-Logout), Fehlerzustände, Render-Deployment.
+Hinweis Supabase free: Projekte pausieren nach ~1 Woche ohne Zugriff – bei
+täglich genutzter App passiert das nicht.

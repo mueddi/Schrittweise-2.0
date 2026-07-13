@@ -14,8 +14,13 @@ from ..database import get_db
 from ..deps import get_current_user, require_admin
 from ..models import LibraryDocument, LibraryTopic, User
 from ..schemas import LibraryDocOut, LibraryDocUpdate, LibraryTopicCreate, LibraryTopicOut
-from ..services import usage
+from ..services import quota, usage
 from ..services.library_search import rank_documents
+
+# Drossel fuer die KI-Suche: mehr als so viele echte KI-Aufrufe pro Nutzer
+# und Stunde -> stiller ILIKE-Fallback (Suche bleibt benutzbar, kostet aber
+# den Betreiber nichts mehr).
+SEARCH_AI_MAX_PER_HOUR = 30
 
 router = APIRouter(prefix="/api/library", tags=["library"])
 
@@ -145,25 +150,42 @@ def list_documents(
     if not q:
         return docs
 
-    usage_out: dict = {}
-    ranked = rank_documents(
-        q,
-        [
-            {
-                "id": d.id,
-                "title": d.title,
-                "description": d.description,
-                "category": d.category,
-                "grade_levels": d.grade_levels,
-                "difficulty": d.difficulty,
-            }
-            for d in docs
-        ],
-        usage_out,
-    )
-    if usage_out.get("usage") is not None:
-        usage.record(db, "suche", usage_out.get("model", ""), usage_out["usage"], user_id=user.id)
-        db.commit()
+    # KI-Ranking nur fuer Konten, die auch sonst KI nutzen duerften – sonst
+    # waere die Suche ein unbegrenztes Gratis-Kosten-Loch. Zusaetzlich eine
+    # Stunden-Drossel pro Nutzer. Beides faellt still auf die Textsuche zurueck.
+    ranked = None
+    if quota.can_use_ki(user) and not quota.blocked_unverified(user):
+        from datetime import datetime, timedelta, timezone
+
+        from ..models import ApiUsage
+
+        hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        recent_ai = db.scalar(
+            select(func.count(ApiUsage.id)).where(
+                ApiUsage.user_id == user.id, ApiUsage.kind == "suche",
+                ApiUsage.created_at >= hour_ago,
+            )
+        ) or 0
+        if recent_ai < SEARCH_AI_MAX_PER_HOUR:
+            usage_out: dict = {}
+            ranked = rank_documents(
+                q,
+                [
+                    {
+                        "id": d.id,
+                        "title": d.title,
+                        "description": d.description,
+                        "category": d.category,
+                        "grade_levels": d.grade_levels,
+                        "difficulty": d.difficulty,
+                    }
+                    for d in docs
+                ],
+                usage_out,
+            )
+            if usage_out.get("usage") is not None:
+                usage.record(db, "suche", usage_out.get("model", ""), usage_out["usage"], user_id=user.id)
+                db.commit()
     if ranked is not None:
         by_id = {d.id: d for d in docs}
         return [by_id[i] for i in ranked if i in by_id]

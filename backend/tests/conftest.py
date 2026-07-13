@@ -24,13 +24,11 @@ def client():
 
 
 def register(client: TestClient, email: str, role: str = "student", name: str = "Test") -> dict:
-    """Registriert ein Konto und liefert Auth-Header."""
+    """Registriert ein Konto (Passwort-Weg, wie das echte Formular) und liefert Auth-Header."""
     r = client.post(
-        "/api/auth/request-link",
-        json={"email": email, "register": True, "display_name": name, "role": role},
+        "/api/auth/register",
+        json={"email": email, "password": "test-passwort-123", "display_name": name,
+              "role": role, "terms_accepted": True},
     )
     assert r.status_code == 200, r.text
-    token = r.json()["dev_token"]
-    v = client.post("/api/auth/verify", json={"token": token})
-    assert v.status_code == 200, v.text
-    return {"Authorization": f"Bearer {v.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}

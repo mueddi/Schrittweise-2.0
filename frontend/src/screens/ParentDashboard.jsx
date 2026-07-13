@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { ChildDashboard } from "./Eltern.jsx";
+import { DeleteAccount, PasswordTab } from "./Einstellungen.jsx";
 
 // Eigenständige Eltern-Ansicht (Rolle parent). Kein Schüler-Sidebar.
 export default function ParentDashboard() {
@@ -11,6 +13,7 @@ export default function ParentDashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [active, setActive] = useState(0);
+  const [kontoOpen, setKontoOpen] = useState(false);
 
   const load = () => api.get("/api/parents/children").then(setChildren).catch(() => setChildren([]));
   useEffect(() => { load(); }, []);
@@ -43,6 +46,7 @@ export default function ParentDashboard() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontSize: 13, color: "#6b7280" }}>{user?.display_name}</span>
+          <span onClick={() => setKontoOpen(!kontoOpen)} style={{ fontSize: 12, fontWeight: 600, color: kontoOpen ? "#1a1c22" : "#4f46e5", cursor: "pointer" }}>⚙ Konto</span>
           <span onClick={logout} style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>Abmelden</span>
         </div>
       </div>
@@ -82,6 +86,21 @@ export default function ParentDashboard() {
           <button type="submit" disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>{busy ? "…" : "Verknüpfen"}</button>
         </form>
         {error && <div style={{ fontSize: 13, color: "#c0392b", marginTop: 10 }}>{error}</div>}
+
+        {kontoOpen && (
+          <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 24, marginTop: 28, maxWidth: 620 }}>
+            <PasswordTab />
+            <DeleteAccount />
+          </div>
+        )}
+
+        <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", margin: "48px 0 24px" }}>
+          <Link to="/impressum" style={{ color: "#9aa0ab", textDecoration: "underline" }}>Impressum</Link>
+          {" · "}
+          <Link to="/datenschutz" style={{ color: "#9aa0ab", textDecoration: "underline" }}>Datenschutz</Link>
+          {" · "}
+          <Link to="/agb" style={{ color: "#9aa0ab", textDecoration: "underline" }}>AGB</Link>
+        </div>
       </div>
     </div>
   );

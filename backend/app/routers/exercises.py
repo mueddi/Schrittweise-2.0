@@ -86,6 +86,25 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
         Image.open(io.BytesIO(data)).verify()
     except Exception:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist kein gueltiges Bild.")
+    # Frequenz-Bremse: jede Erkennung ist ein bezahlter KI-Aufruf; mehr als
+    # 10 in 10 Minuten schafft kein Mensch beim Aufgaben-Erfassen.
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func
+
+    from ..models import ApiUsage
+
+    window = datetime.now(timezone.utc) - timedelta(minutes=10)
+    recent_ocr = db.scalar(
+        select(func.count(ApiUsage.id)).where(
+            ApiUsage.user_id == user.id, ApiUsage.kind == "ocr",
+            ApiUsage.created_at >= window,
+        )
+    ) or 0
+    if recent_ocr >= 10:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            "Viele Fotos auf einmal 🙂 – warte ein paar Minuten und versuch es dann nochmal.")
+
     provider = get_ocr_provider()
     try:
         result = provider.recognize(data)

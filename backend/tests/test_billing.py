@@ -144,3 +144,18 @@ def test_quota_endpoint_neue_felder(client):
     assert q["free_left"] == 50
     assert q["remaining"] == 50
     assert q["unlimited"] is False
+
+
+def test_chat_frequenz_bremse(client):
+    """Mehr als 8 Nachrichten pro Minute -> 429 (stoppt Parallel-Tricks)."""
+    from app.routers.attempts import CHAT_MAX_PER_MINUTE
+
+    headers = register_pw(client, "mia@test.ch")
+    aid = _make_task(client, headers)
+    for i in range(CHAT_MAX_PER_MINUTE):
+        with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                           json={"text": f"versuch {i}"}) as r:
+            assert r.status_code == 200, f"Nachricht {i}"
+            "".join(r.iter_text())
+    r = client.post(f"/api/attempts/{aid}/chat", headers=headers, json={"text": "eine zu viel"})
+    assert r.status_code == 429

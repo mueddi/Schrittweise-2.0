@@ -4,6 +4,8 @@ import pytest
 from app.config import settings
 from app.routers import auth as auth_router
 
+from .conftest import register
+
 
 @pytest.fixture()
 def supabase_on(monkeypatch):
@@ -18,11 +20,9 @@ def test_request_link_sends_via_supabase(client, supabase_on, monkeypatch):
         sent.update(email=email, redirect_to=redirect_to)
         return True
 
+    register(client, "mia@test.ch", name="Mia")
     monkeypatch.setattr(auth_router, "send_magic_link_via_supabase", fake_send)
-    r = client.post(
-        "/api/auth/request-link",
-        json={"email": "mia@test.ch", "register": True, "display_name": "Mia"},
-    )
+    r = client.post("/api/auth/request-link", json={"email": "mia@test.ch"})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["sent"] is True
@@ -33,11 +33,9 @@ def test_request_link_sends_via_supabase(client, supabase_on, monkeypatch):
 
 
 def test_verify_supabase_exchanges_token(client, supabase_on, monkeypatch):
+    register(client, "mia@test.ch", name="Mia")
     monkeypatch.setattr(auth_router, "send_magic_link_via_supabase", lambda *a, **k: True)
-    client.post(
-        "/api/auth/request-link",
-        json={"email": "mia@test.ch", "register": True, "display_name": "Mia"},
-    )
+    client.post("/api/auth/request-link", json={"email": "mia@test.ch"})
 
     monkeypatch.setattr(
         auth_router, "get_verified_email", lambda tok: "mia@test.ch" if tok == "sb-ok" else None
@@ -62,9 +60,7 @@ def test_supabase_rate_limit_maps_to_429(client, supabase_on, monkeypatch):
     def fake_send(email, redirect_to):
         raise auth_router.SupabaseRateLimited()
 
+    register(client, "mia@test.ch", name="Mia")
     monkeypatch.setattr(auth_router, "send_magic_link_via_supabase", fake_send)
-    r = client.post(
-        "/api/auth/request-link",
-        json={"email": "mia@test.ch", "register": True, "display_name": "Mia"},
-    )
+    r = client.post("/api/auth/request-link", json={"email": "mia@test.ch"})
     assert r.status_code == 429

@@ -240,24 +240,14 @@ def request_link(payload: MagicLinkRequest, db: Session = Depends(get_db)):
 
     user = db.scalar(select(User).where(User.email == email))
 
-    # Erst-Registrierung nur mit explizitem register-Flag («Neu hier»-Tab),
-    # sonst legt ein Tippfehler im Anmelden-Tab stillschweigend ein Geisterkonto an.
+    # KEINE Konto-Anlage ueber diesen Pfad: Registrieren geht nur ueber
+    # /register (dort greifen AGB-Zustimmung, Honeypot und IP-Limit).
+    # Dieser Endpoint ist nur noch «Passwort vergessen» fuer BESTEHENDE Konten.
     if user is None:
-        if not payload.register_:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                "Kein Konto mit dieser E-Mail – wechsle zu «Neu hier».",
-            )
-        role = Role.parent if payload.role == "parent" else Role.student
-        display = (payload.display_name or email.split("@")[0]).strip()[:80]
-        user = User(
-            email=email,
-            display_name=display,
-            role=role,
-            grade_level=payload.grade_level,
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Kein Konto mit dieser E-Mail – registriere dich über «Neu hier».",
         )
-        db.add(user)
-        db.flush()
 
     token = new_magic_token()
     # Nur der Hash landet in der DB – ein DB-Leak erlaubt keinen Login.
@@ -390,7 +380,7 @@ def delete_account(
 
     from ..models import (
         ApiUsage, Attempt, Exercise, Feedback, Message, ParentLink, Payment,
-        ProgressAggregate, Topic, UploadedImage,
+        ProgressAggregate, TokenAdjustment, Topic, UploadedImage,
     )
 
     uid = user.id
@@ -410,6 +400,11 @@ def delete_account(
     db.execute(delete(Feedback).where(Feedback.user_id == uid))
     db.execute(delete(UploadedImage).where(UploadedImage.user_id == uid))
     db.execute(delete(Payment).where(Payment.user_id == uid))
+    # Guthaben-Korrekturen: Zeilen des Nutzers loeschen; wo er (frueher) als
+    # Admin gebucht hat, nur den Personenbezug entfernen – sonst blockiert der
+    # Fremdschluessel die Loeschung auf Postgres.
+    db.execute(delete(TokenAdjustment).where(TokenAdjustment.user_id == uid))
+    db.execute(update(TokenAdjustment).where(TokenAdjustment.admin_id == uid).values(admin_id=None))
     db.execute(delete(MagicLink).where(MagicLink.email == email))
     db.execute(delete(LoginAttempt).where(LoginAttempt.email == email))
     db.delete(user)

@@ -196,3 +196,40 @@ def test_topic_management(client):
     # Themenliste mit Zählern für alle Eingeloggten sichtbar
     names = [t["name"] for t in client.get("/api/library/topics", headers=student).json()]
     assert "Prozente & Zins" not in names
+
+
+def test_ai_search_gated_by_credit(client, monkeypatch):
+    """KI-Suche ist kein Gratis-Kosten-Loch: ohne Guthaben nur Textsuche."""
+    from app.database import SessionLocal
+    from app.models import User
+    from app.routers import library as library_router
+    from app.services.quota import current_month
+
+    admin = register_pw(client, "chef@test.ch")
+    make_admin("chef@test.ch")
+    upload(client, admin, title="Brueche Basics", desc="Brueche kuerzen ueben")
+
+    calls = []
+    monkeypatch.setattr(library_router, "rank_documents",
+                        lambda q, docs, usage_out=None: calls.append(q) or None)
+
+    student = register_pw(client, "mia@test.ch")
+    # Guthaben leeren -> KI-Ranking darf nicht aufgerufen werden
+    with SessionLocal() as db:
+        u = db.query(User).filter(User.email == "mia@test.ch").one()
+        u.free_used_tokens = 50
+        u.free_month = current_month()
+        u.token_balance = 0
+        db.commit()
+    r = client.get("/api/library?q=brueche", headers=student)
+    assert r.status_code == 200
+    assert calls == []  # kein bezahlter KI-Aufruf
+    assert len(r.json()) == 1  # Textsuche findet das Dokument trotzdem
+
+    # Mit Guthaben laeuft das Ranking wieder
+    with SessionLocal() as db:
+        u = db.query(User).filter(User.email == "mia@test.ch").one()
+        u.token_balance = 10
+        db.commit()
+    client.get("/api/library?q=brueche", headers=student)
+    assert calls == ["brueche"]

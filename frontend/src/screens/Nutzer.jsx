@@ -110,7 +110,7 @@ function UserCard({ u, onChanged }) {
         </div>
         <div style={{ display: "flex", gap: 18, fontSize: 12.5, color: "#6b7280" }}>
           <div><b style={{ color: "#1a1c22" }}>{u.token_balance}</b> Guthaben</div>
-          <div><b style={{ color: "#1a1c22" }}>{u.free_used_tokens}</b>/50 gratis</div>
+          <div><b style={{ color: "#1a1c22" }}>{u.free_used_tokens}</b>/{u.monthly_free_tokens ?? 50} gratis</div>
           <div><b style={{ color: "#1a1c22" }}>{u.verbraucht_tokens}</b> verbraucht</div>
         </div>
         <button

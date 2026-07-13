@@ -66,3 +66,23 @@ def test_admin_cannot_self_delete(client):
     r = client.post("/api/auth/delete-account", headers=headers,
                     json={"password": "test-passwort-123"})
     assert r.status_code == 403
+
+
+def test_delete_works_after_manual_token_credit(client):
+    """Der Postgres-Killer: Gutschrift-Protokoll darf die Loeschung nicht blockieren."""
+    from .test_library import make_admin
+
+    headers = _setup_student_with_data(client)
+    admin = register_pw(client, "chef@test.ch")
+    make_admin("chef@test.ch")
+    with SessionLocal() as db:
+        uid = db.query(User).filter(User.email == "mia@test.ch").one().id
+    r = client.post(f"/api/admin/nutzer/{uid}/tokens", headers=admin,
+                    json={"tokens": 100, "grund": "Kulanz"})
+    assert r.status_code == 200
+
+    assert client.post("/api/auth/delete-account", headers=headers,
+                       json={"password": "test-passwort-123"}).status_code == 204
+    from app.models import TokenAdjustment
+    with SessionLocal() as db:
+        assert db.query(TokenAdjustment).count() == 0

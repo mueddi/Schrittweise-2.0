@@ -205,7 +205,7 @@ function AboTab({ onBuy }) {
   );
 }
 
-function PasswordTab() {
+export function PasswordTab() {
   const { login } = useAuth();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -299,7 +299,7 @@ function Toggle({ on, onClick }) {
 }
 
 // Roter Bereich: Konto endgültig löschen (Datenschutz-Selbstbedienung)
-function DeleteAccount() {
+export function DeleteAccount() {
   const { logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
