@@ -13,6 +13,7 @@ import Eltern from "./screens/Eltern.jsx";
 import Preise from "./screens/Preise.jsx";
 import Einstellungen from "./screens/Einstellungen.jsx";
 import Kosten from "./screens/Kosten.jsx";
+import Nutzer from "./screens/Nutzer.jsx";
 import ParentDashboard from "./screens/ParentDashboard.jsx";
 import { Impressum, Datenschutz, Agb } from "./screens/Rechtliches.jsx";
 
@@ -84,6 +85,7 @@ export default function App() {
         <Route path="preise" element={<Preise />} />
         <Route path="einstellungen" element={<Einstellungen />} />
         <Route path="kosten" element={<Kosten />} />
+        <Route path="nutzer" element={<Nutzer />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

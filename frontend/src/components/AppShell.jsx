@@ -166,7 +166,10 @@ export default function AppShell() {
           <div onClick={() => nav("/app/eltern")} style={{ ...navItem(isActive("eltern")), margin: "0 8px" }}>👪 Eltern verbinden</div>
           <div onClick={() => setFbOpen(true)} style={{ ...navItem(false), margin: "0 8px" }}>💬 Feedback</div>
           {user?.is_admin && (
-            <div onClick={() => nav("/app/kosten")} style={{ ...navItem(isActive("kosten")), margin: "0 8px" }}>📊 Kosten</div>
+            <>
+              <div onClick={() => nav("/app/kosten")} style={{ ...navItem(isActive("kosten")), margin: "0 8px" }}>📊 Kosten</div>
+              <div onClick={() => nav("/app/nutzer")} style={{ ...navItem(isActive("nutzer")), margin: "0 8px" }}>👥 Nutzer</div>
+            </>
           )}
 
           <div style={{ marginTop: "auto", borderTop: "1px solid #eef0f3", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>

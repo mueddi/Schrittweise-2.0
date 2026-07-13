@@ -23,7 +23,7 @@ from ..database import get_db
 from ..deps import require_student
 from ..models import Payment, Plan, User
 from ..schemas import CheckoutRequest
-from ..services import quota
+from ..services import alert, quota
 
 router = APIRouter(prefix="/api/pay", tags=["pay"])
 log = logging.getLogger("schrittweise.pay")
@@ -106,6 +106,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
     if not verify_stripe_signature(payload, sig, settings.stripe_webhook_secret):
+        alert.notify("webhook", "Ungueltige Stripe-Signatur – falsches STRIPE_WEBHOOK_SECRET oder fremder Aufruf.")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Signatur.")
 
     event = json.loads(payload)
@@ -128,16 +129,19 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             "Webhook: Betrag/Waehrung passt nicht zum Paket (%s: %s %s, Session %s) – KEINE Gutschrift",
             pkg_key, amount, currency, session.get("id"),
         )
+        alert.notify("webhook", f"Betrag/Waehrung passt nicht zum Paket ({pkg_key}: {amount} {currency}, Session {session.get('id')}) – keine Gutschrift.")
         return {"received": True}
 
     try:
         user_id = int(session.get("client_reference_id") or session["metadata"]["user_id"])
     except (TypeError, ValueError, KeyError):
         log.error("Webhook: Nutzer-ID fehlt oder ungueltig (Session %s)", session.get("id"))
+        alert.notify("webhook", f"Nutzer-ID fehlt/ungueltig (Session {session.get('id')}) – Zahlung ohne Gutschrift!")
         return {"received": True}
     user = db.get(User, user_id)
     if user is None:
         log.error("Webhook: unbekannter Nutzer %s (Session %s)", user_id, session.get("id"))
+        alert.notify("webhook", f"Unbekannter Nutzer {user_id} (Session {session.get('id')}) – Zahlung ohne Gutschrift!")
         return {"received": True}
 
     # Idempotenz: unique session_id – ein Stripe-Retry schreibt nicht doppelt gut.

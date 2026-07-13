@@ -291,10 +291,13 @@ def stream_reply(history, step: LadderStep, verification: Verification,
             if usage_out is not None:
                 usage_out["model"] = model
                 usage_out["usage"] = stream.get_final_message().usage
-    except Exception:
+    except Exception as exc:
         # KEIN stiller Mock mehr: der passte nicht zur Aufgabe und der Betreiber
         # erfuhr nie, dass die KI down ist. Ehrlich melden + Fehler ins Log.
         log.exception("Anthropic-Stream fehlgeschlagen (Antwort begonnen: %s)", produced)
+        from . import alert
+
+        alert.notify("ki", f"{type(exc).__name__}: {exc}")
         if produced:
             yield "\n\n⚠️ (Die Verbindung ist mittendrin abgebrochen – frag einfach nochmal, dann mache ich fertig.)"
         else:

@@ -74,3 +74,23 @@ def test_mock_only_without_api_key(monkeypatch):
     out = "".join(tutor.stream_reply([], _STEP, _VER, "3x = 9", "3*x = 9"))
     assert out  # Mock antwortet weiterhin (lokale Entwicklung ohne Key)
     assert "technische Probleme" not in out
+
+
+def test_ki_failure_writes_alert(client, monkeypatch):
+    """KI-Ausfall landet als Stoerung im Admin-Protokoll (gedrosselt 1/h)."""
+    from app.database import SessionLocal
+    from app.models import Alert
+    from app.services import alert as alert_svc
+
+    alert_svc._last_sent.clear()
+    _run(monkeypatch, _FailingCtx())
+    with SessionLocal() as db:
+        rows = db.query(Alert).all()
+        assert len(rows) == 1
+        assert rows[0].kind == "ki"
+        assert "api down" in rows[0].detail
+
+    # Drossel: zweiter Fehler in derselben Stunde erzeugt keine zweite Zeile
+    _run(monkeypatch, _FailingCtx())
+    with SessionLocal() as db:
+        assert db.query(Alert).count() == 1

@@ -59,6 +59,19 @@ class AccountDeleteRequest(BaseModel):
     password: str = Field(default="", max_length=128)
 
 
+class TokenAdjustRequest(BaseModel):
+    """Manuelle Guthaben-Korrektur durch den Betreiber (+Gutschrift / -Abzug)."""
+    tokens: int = Field(ge=-100000, le=100000)
+    grund: str = Field(min_length=3, max_length=200)
+
+    @field_validator("tokens")
+    @classmethod
+    def _not_zero(cls, v: int) -> int:
+        if v == 0:
+            raise ValueError("0 Tokens ergeben keine Buchung")
+        return v
+
+
 class PasswordChangeRequest(BaseModel):
     # Ohne current_password nur erlaubt, wenn der Login per Mail-Link kam
     # (Passwort-vergessen-Flow) oder das Konto noch kein Passwort hat.

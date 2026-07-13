@@ -27,3 +27,20 @@ def send_magic_link(to_email: str, link: str) -> bool:
             s.login(settings.smtp_user, settings.smtp_password)
         s.send_message(msg)
     return True
+
+
+def send_alert_mail(subject: str, body: str) -> bool:
+    """Betreiber-Alarm per Mail (nur mit SMTP-Konfiguration + Zieladresse)."""
+    if not (settings.smtp_enabled and settings.alert_email):
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = f"[Schrittweise-Alarm] {subject}"
+    msg["From"] = settings.smtp_from
+    msg["To"] = settings.alert_email
+    msg.set_content(body)
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as s:
+        s.starttls()
+        if settings.smtp_user:
+            s.login(settings.smtp_user, settings.smtp_password)
+        s.send_message(msg)
+    return True

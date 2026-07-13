@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "Schrittweise <no-reply@schrittweise.ch>"
 
+    # Zieladresse fuer Betreiber-Alarme (KI-Ausfall, Webhook-Fehler);
+    # Mails gehen nur raus, wenn zusaetzlich SMTP konfiguriert ist.
+    alert_email: str = "mahmmouds62@gmail.com"
+
     # E-Mail-Bestaetigung erzwingen: unbestaetigte Konten koennen weder KI
     # nutzen noch kaufen. Erst aktivieren, wenn der Mailversand (Supabase/SMTP)
     # nachweislich funktioniert – sonst sperrt es alle Neuregistrierungen aus.

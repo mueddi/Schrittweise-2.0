@@ -291,6 +291,31 @@ class ApiUsage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 
+class Alert(Base):
+    """Betreiber-Alarm: protokollierte Stoerung (KI/OCR/Webhook) fuer den Admin-Bereich."""
+
+    __tablename__ = "alerts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    detail: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class TokenAdjustment(Base):
+    """Manuelle Guthaben-Korrektur durch den Betreiber (Kulanz, Rueckerstattung,
+    verpasster Webhook) – jede Buchung mit Grund und Urheber protokolliert."""
+
+    __tablename__ = "token_adjustments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    admin_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    tokens: Mapped[int] = mapped_column(Integer, nullable=False)  # +Gutschrift / -Abzug
+    reason: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
 class LibraryDocument(Base):
     """Vom Betreiber hochgeladenes Aufgaben-Dokument (Arbeitsblatt, meist PDF).
 

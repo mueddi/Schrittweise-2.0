@@ -1,22 +1,28 @@
-"""Admin-Auswertung: KI-Kosten im Ueberblick (nur Betreiber-Konto).
+"""Admin-Bereich: KI-Kosten-Auswertung + Nutzer-/Guthaben-Verwaltung
+(nur Betreiber-Konto).
 
-Aggregiert die ApiUsage-Zeilen zu den Zahlen, die der Betreiber zum
+Kosten: aggregiert die ApiUsage-Zeilen zu den Zahlen, die der Betreiber zum
 Optimieren braucht: Ø/Min/Max-Kosten pro Aufgabe, Aufschluesselung nach
 Aufruf-Typ und Modell, Gesamtkosten im Zeitfenster. Anthropic rechnet in
 USD ab; die Anzeige rechnet mit ``usd_chf_rate`` in CHF/Rappen um.
+Nutzer: Suche + manuelle Token-Gutschrift/-Korrektur (Support-Werkzeug),
+jede Buchung protokolliert (TokenAdjustment).
 """
+import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
 from ..deps import require_admin
-from ..models import ApiUsage, User
+from ..models import ApiUsage, TokenAdjustment, User
+from ..schemas import TokenAdjustRequest
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+log = logging.getLogger("schrittweise.admin")
 
 KIND_LABEL = {
     "chat": "Tutor-Chat",
@@ -109,3 +115,86 @@ def kosten(tage: int = Query(30, ge=1, le=365),
             "verrechnet_tokens": int(gesamt_verrechnet or 0),
         },
     }
+
+
+@router.get("/nutzer")
+def nutzer(q: str = Query("", max_length=100),
+           user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Nutzerliste mit Guthaben und Verbrauch – Support-Ansicht."""
+    stmt = select(User).order_by(User.created_at.desc()).limit(200)
+    if q.strip():
+        needle = f"%{q.strip()}%"
+        stmt = stmt.where(or_(User.email.ilike(needle), User.display_name.ilike(needle)))
+    users = list(db.scalars(stmt))
+
+    # Verbrauch (verrechnete Tokens) je Nutzer in einem Rutsch
+    ids = [u.id for u in users]
+    verbrauch = dict(db.execute(
+        select(ApiUsage.user_id, func.sum(ApiUsage.charged_tokens))
+        .where(ApiUsage.user_id.in_(ids))
+        .group_by(ApiUsage.user_id)
+    ).all()) if ids else {}
+
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "display_name": u.display_name,
+            "role": u.role.value,
+            "plan": u.plan.value,
+            "is_admin": u.is_admin,
+            "email_verified": u.email_verified,
+            "token_balance": u.token_balance,
+            "free_used_tokens": u.free_used_tokens or 0,
+            "verbraucht_tokens": int(verbrauch.get(u.id) or 0),
+            "erstellt": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]
+
+
+@router.post("/nutzer/{user_id}/tokens")
+def tokens_anpassen(user_id: int, payload: TokenAdjustRequest,
+                    admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Guthaben manuell korrigieren (Kulanz, Rueckerstattung, verpasster Webhook).
+
+    Positive Werte schreiben gut, negative ziehen ab (Boden bei 0).
+    Jede Buchung wird mit Grund + Admin protokolliert."""
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Nutzer nicht gefunden")
+
+    n = payload.tokens
+    db.execute(
+        update(User).where(User.id == user_id).values(
+            token_balance=case(
+                (User.token_balance + n > 0, User.token_balance + n),
+                else_=0,
+            )
+        )
+    )
+    db.add(TokenAdjustment(user_id=user_id, admin_id=admin.id,
+                           tokens=n, reason=payload.grund.strip()))
+    db.commit()
+    db.refresh(target)
+    log.info("Token-Korrektur: %+d fuer User %s durch Admin %s (%s)",
+             n, user_id, admin.id, payload.grund.strip())
+    return {"token_balance": target.token_balance}
+
+
+@router.get("/alarme")
+def alarme(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Letzte protokollierte Stoerungen (KI/OCR/Webhook) fuer den Admin-Bereich."""
+    from ..models import Alert
+    from ..services.alert import KIND_LABEL as ALERT_LABEL
+
+    rows = list(db.scalars(select(Alert).order_by(Alert.id.desc()).limit(30)))
+    return [
+        {
+            "kind": a.kind,
+            "label": ALERT_LABEL.get(a.kind, a.kind),
+            "detail": a.detail,
+            "zeit": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in rows
+    ]

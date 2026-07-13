@@ -124,11 +124,14 @@ class ClaudeVisionOcr:
                 text = ""
             expr = _guess_math_expression(text)
             return OcrResult(text=text, math_expression=expr, confidence=0.9 if text else 0.0)
-        except Exception:
+        except Exception as exc:
             # KEIN stiller pytesseract-Fallback mehr: der kann Handschrift nicht
             # und ist auf dem Server gar nicht installiert – das ergab "Konnte
             # nichts erkennen" ohne echten Grund. Ehrlich melden statt raten.
             log.exception("Claude-Vision-Erkennung fehlgeschlagen")
+            from . import alert
+
+            alert.notify("ocr", f"{type(exc).__name__}: {exc}")
             raise OcrUnavailable()
 
 
