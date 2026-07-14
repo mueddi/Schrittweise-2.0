@@ -157,7 +157,7 @@ export function Agb() {
 
       <H>1. Leistung</H>
       <P>
-        Schrittweise ist ein KI-gestützter Mathe-Lern-Tutor für die Oberstufe. Jedes
+        Schrittweise ist ein KI-gestützter Mathe-Lern-Tutor für Oberstufe und Gymnasium. Jedes
         Konto erhält 50 Gratis-Tokens pro Kalendermonat. Zusätzlich können einmalige
         Token-Pakete gekauft werden. 1 Token entspricht 1 Rappen KI-Leistung: Jede
         Tutor-Antwort bucht Tokens entsprechend ihrem Rechenaufwand ab – eine normale

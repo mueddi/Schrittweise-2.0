@@ -49,7 +49,7 @@ def rank_documents(q: str, docs: list[dict], usage_out: dict | None = None) -> l
                     "role": "user",
                     "content": (
                         "Du bist die Suchfunktion einer Mathematik-Aufgabenbibliothek "
-                        "(Oberstufe, Schweiz, Lehrplan 21).\n"
+                        "(Oberstufe & Gymnasium, Schweiz).\n"
                         f"Suchanfrage: «{q}»\n"
                         f"Dokumente: {json.dumps(candidates, ensure_ascii=False)}\n\n"
                         "Gib NUR ein JSON-Array der IDs der inhaltlich passenden Dokumente "

@@ -160,9 +160,10 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
 }
 
 // Schnell-Antworten: ein Tipp genuegt – junge Schueler muessen nicht tippen.
-function QuickReplies({ solved, unlocked, onSend, onNew }) {
+function QuickReplies({ solved, unlocked, onSend, onNew, onVariant }) {
   const items = solved
     ? [
+        ...(onVariant ? [{ label: "🔁 Nochmal so eine", act: onVariant, accent: true }] : []),
         { label: "🎯 Erklär mir den Weg nochmal", act: () => onSend("Erklär mir den Lösungsweg nochmal Schritt für Schritt.") },
         { label: "➕ Neue Aufgabe", act: onNew },
       ]
@@ -172,6 +173,10 @@ function QuickReplies({ solved, unlocked, onSend, onNew }) {
         { label: "🤔 Ich verstehe es nicht", act: () => onSend("Ich verstehe es nicht.") },
         { label: "💡 Gib mir einen Tipp", act: () => onSend("Gib mir bitte einen Tipp.") },
         { label: "👣 Zeig mir den ersten Schritt", act: () => onSend("Zeig mir bitte den ersten Schritt.") },
+        // andere DARSTELLUNG derselben Stufe – Hilfe-Stufe steigt dabei nicht
+        { label: "🎨 Mit Skizze", act: () => onSend("Kannst du es mir mit einer Skizze zeigen?") },
+        { label: "🍕 Mit Alltagsbeispiel", act: () => onSend("Erklär es mir mit einem Beispiel aus dem Alltag.") },
+        { label: "🔢 Mit Zahlen statt x", act: () => onSend("Erklär es mir mit konkreten Zahlen statt mit x.") },
         { label: "🐢 Erklär es einfacher", act: () => onSend("Kannst du es mir einfacher erklären?") },
       ];
   return (
@@ -223,6 +228,10 @@ export default function Lernen() {
   const [celebrate, setCelebrate] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
+  const [variantBusy, setVariantBusy] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(() => !localStorage.getItem("sw_tipps_gesehen"));
+  const [stats, setStats] = useState(null); // {serie_tage, geloest_woche}
+  const inputRef = useRef(null);
   const chatRef = useRef(null);
   // Jeder Attempt-Wechsel/Send bekommt eine Token-Nummer; abgelaufene Antworten
   // (Race beim Aufgabenwechsel waehrend des Streamens) werden verworfen.
@@ -271,6 +280,11 @@ export default function Lernen() {
   useEffect(() => {
     if (nearBottom()) scrollDown();
   }, [streaming, state]);
+
+  // Motivations-Zahlen (Serie/Woche) – einmal laden, nach jedem Lösen frisch
+  useEffect(() => {
+    api.get("/api/stats/mini").then(setStats).catch(() => setStats(null));
+  }, [attemptId, state?.attempt?.solved]);
 
   async function send(overrideText) {
     // onClick={send} liefert ein Event-Objekt als erstes Argument – nur echte
@@ -389,6 +403,16 @@ export default function Lernen() {
           <div style={{ textAlign: "center", maxWidth: 420 }}>
             <div style={{ width: 64, height: 64, borderRadius: 18, background: "#eef0fe", color: "#4f46e5", fontSize: 28, display: "grid", placeItems: "center", margin: "0 auto 16px" }}>✎</div>
             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Bereit zum Üben?</div>
+            {(stats?.serie_tage >= 2 || stats?.geloest_woche >= 1) && (
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                {stats?.serie_tage >= 2 && (
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#d97706", background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 999, padding: "5px 13px" }}>🔥 {stats.serie_tage} Tage in Folge</span>
+                )}
+                {stats?.geloest_woche >= 1 && (
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#1a7f3c", background: "#e8f6ec", border: "1px solid #cde7d6", borderRadius: 999, padding: "5px 13px" }}>✅ {stats.geloest_woche} diese Woche gelöst</span>
+                )}
+              </div>
+            )}
             <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 20, lineHeight: 1.55 }}>
               Leg eine neue Aufgabe an – tippe sie ab oder fotografiere sie. Ich verrate dir die Lösung nie direkt, sondern helfe dir Stufe für Stufe.
             </div>
@@ -417,6 +441,43 @@ export default function Lernen() {
     }
   }
 
+  // «Nochmal so eine»: KI erzeugt eine Variante (gleicher Typ, andere Zahlen)
+  async function makeVariant() {
+    if (busy || variantBusy) return;
+    setVariantBusy(true);
+    try {
+      const st = await api.post(`/api/exercises/${exercise.id}/variante`, {});
+      shell.reloadQuota?.();
+      shell.reloadTopics?.();
+      nav(`/app/lernen/${st.attempt.id}`);
+    } catch (e) {
+      if (e.status === 402) {
+        setState((s) => (s ? { ...s, messages: [...s.messages, { id: `quota-${Date.now()}`, role: "tutor", kind: "quota", text: "" }] } : s));
+      } else {
+        setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: e.message }] } : s));
+      }
+    } finally {
+      setVariantBusy(false);
+    }
+  }
+
+  // Mathe-Tastatur: Symbol an der Cursor-Position einfuegen
+  function insertSymbol(snippet, cursorOffset) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? input.length;
+    const end = el?.selectionEnd ?? input.length;
+    const next = input.slice(0, start) + snippet + input.slice(end);
+    setInput(next);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      const pos = start + (cursorOffset ?? snippet.length);
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  const inputLooksMathy = /\d/.test(input) && /[+\-*/^=()]|sqrt|pi/.test(input);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       {celebrate && <Confetti />}
@@ -425,6 +486,8 @@ export default function Lernen() {
           <div style={{ fontSize: 15, fontWeight: 700 }}>{topicName}</div>
           <div style={{ fontSize: 12, color: "#9aa0ab" }}>
             {attempt.solved ? "gelöst · gut gemacht" : "Schritt für Schritt"} · {attempt.own_attempts} eigene Versuche
+            {stats?.serie_tage >= 2 && <span style={{ color: "#d97706", fontWeight: 700 }}> · 🔥 {stats.serie_tage} Tage in Folge</span>}
+            {stats?.geloest_woche >= 1 && <span style={{ color: "#1a7f3c", fontWeight: 700 }}> · ✅ {stats.geloest_woche} diese Woche</span>}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -512,8 +575,11 @@ export default function Lernen() {
           </Bubble>
         )}
         {attempt.solved && !busy && !streaming && (
-          <div className="solved-banner" style={{ alignSelf: "center", display: "flex", alignItems: "center", gap: 8, background: "#e8f6ec", border: "1px solid #cde7d6", color: "#1a7f3c", borderRadius: 999, padding: "8px 18px", fontSize: 13, fontWeight: 700 }}>
+          <div className="solved-banner" style={{ alignSelf: "center", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center", background: "#e8f6ec", border: "1px solid #cde7d6", color: "#1a7f3c", borderRadius: 999, padding: "8px 18px", fontSize: 13, fontWeight: 700 }}>
             🎉 Aufgabe gelöst – stark!
+            <button onClick={makeVariant} disabled={variantBusy} style={{ border: "none", background: "transparent", color: "#1a7f3c", fontWeight: 700, fontSize: 13, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
+              {variantBusy ? "erstelle Variante …" : "🔁 nochmal so eine"}
+            </button>
             <button onClick={retry} style={{ border: "none", background: "transparent", color: "#1a7f3c", fontWeight: 700, fontSize: 13, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
               nochmal üben
             </button>
@@ -525,18 +591,65 @@ export default function Lernen() {
       </div>
 
       <div style={{ padding: "12px 18px 14px", background: "#fff", borderTop: "1px solid #eef0f3" }}>
+        {tipsOpen && (
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "12px 16px", marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, color: "#4b4f5c", lineHeight: 1.7, flex: 1 }}>
+              <b style={{ color: "#4f46e5" }}>So klappt's am besten:</b><br />
+              ✏️ Schreib deinen Versuch – auch halbe Versuche zählen.<br />
+              💡 Die Knöpfe unten helfen dir, wenn du feststeckst.<br />
+              ✍️ Mit dem Stift-Symbol schreibst du wie auf Papier.
+            </div>
+            <button
+              onClick={() => { setTipsOpen(false); localStorage.setItem("sw_tipps_gesehen", "1"); }}
+              aria-label="Tipps schliessen"
+              style={{ border: "none", background: "transparent", color: "#9aa0ab", fontSize: 16, cursor: "pointer", padding: 0 }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {!busy && (
           <QuickReplies
             solved={attempt.solved}
             unlocked={attempt.hint_level >= 3 && attempt.own_attempts >= 2}
             onSend={(t) => send(t)}
             onNew={() => shell.openNewTask(exercise.topic_id ?? undefined)}
+            onVariant={makeVariant}
           />
         )}
+        {inputLooksMathy && (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 12, padding: "7px 14px", marginBottom: 8, fontSize: 14, overflowX: "auto" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", color: "#9aa0ab", flex: "0 0 auto" }}>SO SIEHT'S AUS</span>
+            <MathText text={input} />
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>
+          {[
+            ["½", "/", 1],
+            ["x²", "^2"],
+            ["√", "sqrt()", 5],
+            ["×", "*"],
+            ["÷", "/"],
+            ["( )", "()", 1],
+            ["=", "="],
+            ["π", "pi"],
+          ].map(([label, snippet, offset]) => (
+            <button
+              key={label}
+              type="button"
+              onMouseDown={(e) => e.preventDefault() /* Fokus bleibt im Eingabefeld */}
+              onClick={() => insertSymbol(snippet, offset)}
+              style={{ flex: "0 0 auto", minWidth: 40, borderRadius: 10, padding: "7px 10px", fontSize: 14, fontWeight: 600, border: "1px solid #e7e8ee", background: "#fbfbfd", color: "#1a1c22", cursor: "pointer" }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #d2d4dd", borderRadius: 24, padding: "7px 8px 7px 14px" }}>
           <span onClick={() => shell.openNewTask()} title="Foto-Aufgabe" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>📷</span>
           <span onClick={() => setDrawOpen(true)} title="Mit dem Stift schreiben" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
           <input
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}

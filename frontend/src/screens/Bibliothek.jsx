@@ -4,7 +4,7 @@ import { useAuth } from "../lib/auth.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
-const GRADES = [["", "Alle"], ["1. Oberstufe", "1. OS"], ["2. Oberstufe", "2. OS"], ["3. Oberstufe", "3. OS"]];
+const GRADES = [["", "Alle"], ["1. Oberstufe", "1. OS"], ["2. Oberstufe", "2. OS"], ["3. Oberstufe", "3. OS"], ["Gymnasium 1./2.", "Gymi 1/2"], ["Gymnasium 3./4.", "Gymi 3/4"]];
 const DIFFICULTIES = [["", "Alle"], ["leicht", "Leicht"], ["mittel", "Mittel"], ["schwer", "Schwer"]];
 
 // Stabile Farbe pro Themen-Name (Themen sind frei benennbar)
@@ -303,8 +303,8 @@ function AdminUpload({ topics, onDone }) {
         </div>
         <div>
           <label style={label}>Klassenstufen</label>
-          <div style={{ display: "flex", gap: 6 }}>
-            {["1. Oberstufe", "2. Oberstufe", "3. Oberstufe"].map((g) => (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {["1. Oberstufe", "2. Oberstufe", "3. Oberstufe", "Gymnasium 1./2.", "Gymnasium 3./4."].map((g) => (
               <button type="button" key={g} onClick={() => toggleGrade(g)} style={{ fontSize: 12, fontWeight: 600, borderRadius: 999, padding: "7px 12px", cursor: "pointer", background: grades.includes(g) ? "#eef0fe" : "#fff", color: grades.includes(g) ? "#4f46e5" : "#6b7280", border: `1px solid ${grades.includes(g) ? "#c9ccf6" : "#e7e8ee"}` }}>
                 {g}
               </button>

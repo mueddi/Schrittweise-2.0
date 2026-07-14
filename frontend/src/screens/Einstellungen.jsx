@@ -10,7 +10,7 @@ const TABS = [
   { key: "privat", icon: "🔒", label: "Privatsphäre" },
   { key: "abo", icon: "💳", label: "Abo & Tokens" },
 ];
-const GRADES = ["1. Oberstufe", "2. Oberstufe", "3. Oberstufe"];
+const GRADES = ["1. Oberstufe", "2. Oberstufe", "3. Oberstufe", "Gymnasium 1./2.", "Gymnasium 3./4."];
 
 export default function Einstellungen() {
   const nav = useNavigate();

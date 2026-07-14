@@ -140,13 +140,13 @@ export default function Login() {
               {role === "student" && (
                 <>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>In welcher Klasse bist du?</label>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                    {["1. Oberstufe", "2. Oberstufe", "3. Oberstufe"].map((g) => (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                    {["1. Oberstufe", "2. Oberstufe", "3. Oberstufe", "Gymnasium 1./2.", "Gymnasium 3./4."].map((g) => (
                       <button
                         type="button"
                         key={g}
                         onClick={() => setGrade(g)}
-                        style={{ flex: 1, fontSize: 12, fontWeight: 600, borderRadius: 10, padding: "9px 2px", cursor: "pointer", background: grade === g ? "#eef0fe" : "#fff", color: grade === g ? "#4f46e5" : "#6b7280", border: `1px solid ${grade === g ? "#c9ccf6" : "#e7e8ee"}` }}
+                        style={{ flex: "1 1 30%", fontSize: 12, fontWeight: 600, borderRadius: 10, padding: "9px 2px", cursor: "pointer", whiteSpace: "nowrap", background: grade === g ? "#eef0fe" : "#fff", color: grade === g ? "#4f46e5" : "#6b7280", border: `1px solid ${grade === g ? "#c9ccf6" : "#e7e8ee"}` }}
                       >
                         {g}
                       </button>

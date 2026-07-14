@@ -28,6 +28,7 @@ KIND_LABEL = {
     "chat": "Tutor-Chat",
     "ocr": "Erkennung (Foto/Stift)",
     "suche": "KI-Suche Bibliothek",
+    "variante": "Übungs-Variante",
 }
 
 

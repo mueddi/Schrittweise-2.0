@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/library", tags=["library"])
 MAX_LIB_UPLOAD = 4 * 1024 * 1024  # Vercel-Function: ~4.5 MB Body-Limit
 ALLOWED_LIB = {"application/pdf", "image/png", "image/jpeg", "image/webp"}
 DIFFICULTIES = {"leicht", "mittel", "schwer"}
-GRADES = {"1. Oberstufe", "2. Oberstufe", "3. Oberstufe"}
+GRADES = {"1. Oberstufe", "2. Oberstufe", "3. Oberstufe", "Gymnasium 1./2.", "Gymnasium 3./4."}
 
 
 def _validate_meta(db: Session, title: str, description: str, category: str,

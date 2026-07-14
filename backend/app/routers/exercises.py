@@ -1,5 +1,6 @@
 """Aufgaben anlegen und Attempts (Hinweis-Leiter-Sessions) starten + Foto-OCR."""
 import io
+import logging
 import secrets
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
@@ -173,12 +174,8 @@ def create_exercise(payload: ExerciseCreate, user: User = Depends(require_studen
     return ExerciseOut.model_validate(ex)
 
 
-@router.post("/{exercise_id}/attempts", response_model=AttemptStateOut, status_code=201)
-def start_attempt(exercise_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
-    ex = db.get(Exercise, exercise_id)
-    if ex is None or ex.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden")
-
+def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateOut:
+    """Neuen Attempt mit Eroeffnungsnachricht anlegen (fuer Start, Retry, Variante)."""
     attempt = Attempt(exercise_id=ex.id, user_id=user.id, hint_level=0, own_attempts=0)
     db.add(attempt)
     db.flush()
@@ -199,6 +196,76 @@ def start_attempt(exercise_id: int, user: User = Depends(require_student), db: S
         messages=[message_out(m) for m in msgs],
         exercise=ExerciseOut.model_validate(ex),
     )
+
+
+@router.post("/{exercise_id}/attempts", response_model=AttemptStateOut, status_code=201)
+def start_attempt(exercise_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
+    ex = db.get(Exercise, exercise_id)
+    if ex is None or ex.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden")
+    return _start_attempt_state(db, ex, user)
+
+
+@router.post("/{exercise_id}/variante", response_model=AttemptStateOut, status_code=201)
+def create_variant(exercise_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
+    """«Nochmal so eine»: KI erzeugt eine Uebungs-Variante (gleicher Typ, andere
+    Zahlen) und startet sie direkt – der staerkste Lerneffekt nach dem Loesen."""
+    ex = db.get(Exercise, exercise_id)
+    if ex is None or ex.user_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden")
+    if quota.blocked_unverified(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.")
+    if not quota.can_use_ki(user):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
+                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
+    if not settings.anthropic_api_key:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "Varianten brauchen die KI – sie ist gerade nicht konfiguriert.")
+
+    import anthropic
+
+    grade = f" (Klassenstufe: {user.grade_level})" if user.grade_level else ""
+    try:
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        resp = client.messages.create(
+            model=settings.anthropic_model_default,
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Erzeuge GENAU EINE Variante dieser Mathe-Uebungsaufgabe: gleicher "
+                    "Aufgabentyp und Schwierigkeitsgrad, aber andere Zahlen/Werte. "
+                    f"Gleiche Sprache wie das Original{grade}. Gib NUR den neuen "
+                    f"Aufgabentext zurueck, ohne Einleitung.\n\nOriginal:\n{ex.text}"
+                ),
+            }],
+        )
+        new_text = "".join(b.text for b in resp.content if b.type == "text").strip()
+    except Exception:
+        logging.getLogger("schrittweise.exercises").exception("Varianten-Erzeugung fehlgeschlagen")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "Konnte gerade keine Variante erzeugen – versuch es gleich nochmal.")
+    if not new_text or len(new_text) > 1000:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            "Konnte gerade keine Variante erzeugen – versuch es gleich nochmal.")
+
+    new_ex = Exercise(
+        user_id=user.id,
+        text=new_text,
+        math_expression=extract_expression(new_text),
+        topic_id=ex.topic_id,
+    )
+    db.add(new_ex)
+    db.flush()
+    # Verrechnung wie jede KI-Leistung (nach echten Kosten, min. 1 Token)
+    charged = 0
+    if not quota.is_unlimited(user):
+        charged = usage.charged_tokens(usage.cost_usd(settings.anthropic_model_default, resp.usage))
+        quota.charge(db, user.id, charged)
+    usage.record(db, "variante", settings.anthropic_model_default, resp.usage,
+                 user_id=user.id, exercise_id=new_ex.id, charged=charged)
+    return _start_attempt_state(db, new_ex, user)
 
 
 @router.get("/{exercise_id}", response_model=ExerciseOut)

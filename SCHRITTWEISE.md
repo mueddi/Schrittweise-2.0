@@ -1,8 +1,8 @@
-# Schrittweise – KI-Mathe-Tutor für die Schweizer Oberstufe
+# Schrittweise – KI-Mathe-Tutor für die Schweizer Oberstufe & das Gymnasium
 
 > **Mathe verstehen. Nicht abschreiben.** Ein Tutor, der die Lösung nie direkt
 > verrät, sondern über eine **Hinweis-Leiter** (4 Stufen) zum eigenen Denken führt.
-> Für Sek-I-Schüler:innen (12–15 J.), passend zum **Lehrplan 21**.
+> Für Sek-I-Schüler:innen (Lehrplan 21) und Gymnasiast:innen bis zur Matura.
 
 Live: **https://schrittweise-2-0.vercel.app** · Der visuelle Massstab ist
 `design/referenz.html` (im Browser öffnen).

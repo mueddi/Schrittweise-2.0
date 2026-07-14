@@ -1,8 +1,9 @@
 # Schrittweise
 
-**KI-Mathe-Tutor für die Schweizer Sekundarstufe I** — Mathe verstehen, nicht abschreiben.
+**KI-Mathe-Tutor für die Schweizer Oberstufe & das Gymnasium** — Mathe verstehen, nicht abschreiben.
 
-Schrittweise ist ein Lern-Tutor für Sek-I-Schüler:innen (12–15 Jahre, Lehrplan 21),
+Schrittweise ist ein Lern-Tutor für Sek-I-Schüler:innen (Lehrplan 21) und
+Gymnasiast:innen bis zur Matura,
 der die Lösung nie direkt verrät. Stattdessen führt eine **Hinweis-Leiter** in vier
 Stufen zum eigenen Denken:
 

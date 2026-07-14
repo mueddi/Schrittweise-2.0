@@ -54,13 +54,13 @@ export default function Landing() {
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "#4f46e5", background: "#eef0fe", borderRadius: 999, padding: "7px 14px", marginBottom: 22 }}>
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#6366f1" }} />
-            Mathe-Tutor · Schweizer Oberstufe
+            Mathe-Tutor · Oberstufe & Gymnasium
           </div>
           <h1 style={{ margin: "0 0 18px", fontSize: 54, lineHeight: 1.03, fontWeight: 900, letterSpacing: "-.035em", textWrap: "balance" }}>
             Mathe verstehen. Nicht abschreiben.
           </h1>
           <p style={{ margin: "0 0 28px", fontSize: 18, lineHeight: 1.55, color: "#4b5563", maxWidth: "46ch" }}>
-            Dein Mathe-Tutor für die Oberstufe, der dir die Lösung nie einfach verrät – sondern dich Schritt für Schritt selber draufkommen lässt.
+            Dein Mathe-Tutor für Oberstufe und Gymnasium, der dir die Lösung nie einfach verrät – sondern dich Schritt für Schritt selber draufkommen lässt.
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
             <button onClick={() => nav("/login")} className="btn-primary" style={{ fontSize: 16, padding: "15px 26px", borderRadius: 13 }}>
@@ -68,7 +68,7 @@ export default function Landing() {
             </button>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>
-            <Badge>Passt zum Lehrplan 21</Badge>
+            <Badge>Lehrplan 21 & Matura-Stoff</Badge>
             <Badge>Verrät die Lösung nie direkt</Badge>
             <Badge>Kein Klarname nötig</Badge>
           </div>

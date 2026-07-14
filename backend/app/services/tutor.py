@@ -29,7 +29,7 @@ STUFEN = {
     4: "Volle Loesung – jetzt darfst du den Loesungsweg Schritt fuer Schritt zeigen.",
 }
 
-SYSTEM_PROMPT = """Du bist «Schrittweise», ein geduldiger Mathe-Tutor fuer Schweizer Oberstufen-Schueler:innen (12–15 Jahre, Lehrplan 21).
+SYSTEM_PROMPT = """Du bist «Schrittweise», ein geduldiger Mathe-Tutor fuer Schweizer Schueler:innen der Oberstufe (Sek I, Lehrplan 21) UND des Gymnasiums (bis zur Matura). Die Regie-Anweisung nennt dir die Klassenstufe: Bei Sek I erklaerst du einfach, kleinschrittig und mit Alltagsbildern. Bei Gymnasium nutzt du praezise Fachsprache und zuegigere Schritte auf Matura-Niveau (Funktionen, Analysis, Vektoren, Stochastik) – aber auch dort gilt die Hinweis-Leiter.
 
 DEINE EISERNE REGEL: Du verraetst die Loesung NIEMALS direkt, ausser die Regie-Anweisung erlaubt ausdruecklich Stufe 4. Du fuehrst ueber eine HINWEIS-LEITER mit vier Stufen zum eigenen Denken:
   Stufe 1 – Aktivierende Frage («Was muesstest du tun, damit die +5 verschwindet?»)
@@ -95,6 +95,8 @@ BETTEL_PATTERNS = [
 SIMPLER_PATTERNS = [
     r"einfacher", r"versteh(e)? ?(es |das |ich )?nicht", r"kapier", r"check(e)? (es |das )?nicht",
     r"nochmal erkl[aä]r", r"erkl[aä]r.{0,20}nochmal", r"zu schwierig", r"zu kompliziert",
+    # «Erklaer's anders»-Chips: andere DARSTELLUNG derselben Stufe, kein Stufen-Anstieg
+    r"skizze", r"zeichn", r"alltag", r"beispiel aus", r"konkreten zahlen", r"zahlen statt",
 ]
 HILFE_PATTERNS = [
     r"weiss (es )?nicht", r"keine ahnung", r"komm(e)? nicht weiter", r"h[aä]nge", r"h[iä]lfe",
@@ -184,7 +186,11 @@ def pick_model(exercise_text: str, exercise_expr: str | None) -> str:
     """Standard = Haiku; Sonnet nur fuer komplexe Faelle (Textaufgaben/Geometrie)."""
     text = (exercise_text or "").lower()
     complex_markers = ["beweis", "geometrie", "dreieck", "kreis", "winkel", "flaeche", "fläche",
-                       "volumen", "textaufgabe", "wenn", "insgesamt", "zusammen", "prozent"]
+                       "volumen", "textaufgabe", "wenn", "insgesamt", "zusammen", "prozent",
+                       # Gymnasial-Stoff gehoert ans starke Modell
+                       "funktion", "ableitung", "integral", "vektor", "logarithm",
+                       "trigonometrie", "sinus", "cosinus", "tangens", "gleichungssystem",
+                       "wahrscheinlichkeit", "grenzwert", "folge"]
     long_wordy = len(text.split()) > 40 and not exercise_expr
     if long_wordy or any(m in text for m in complex_markers):
         return settings.anthropic_model_smart
@@ -201,11 +207,14 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         f"- Bisherige eigene Versuche: {step.own_attempts}",
     ]
     if grade_level:
-        lines.append(f"- Klassenstufe: {grade_level} – passe Sprache und Beispiele an dieses Niveau an.")
+        if "gymnasium" in grade_level.lower():
+            lines.append(f"- Klassenstufe: {grade_level} (Gymnasium/Matura-Niveau) – praezise Fachsprache ist erwuenscht, zuegigere Schritte, keine Baby-Schritte.")
+        else:
+            lines.append(f"- Klassenstufe: {grade_level} (Sek I) – einfach erklaeren, kleine Schritte, Alltagsbilder.")
     if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "simpler":
-        lines.append("- Der Schueler versteht die aktuelle Erklaerung NICHT. Erklaere DENSELBEN Punkt nochmal EINFACHER: kleinerer Schritt, Alltagsbeispiel mit konkreten Zahlen, andere Worte. Nichts Neues verraten, Stufe nicht erhoehen.")
+        lines.append("- Der Schueler versteht die aktuelle Erklaerung NICHT oder wuenscht eine ANDERE DARSTELLUNG. Erklaere DENSELBEN Punkt nochmal anders: kleinerer Schritt, Alltagsbeispiel mit konkreten Zahlen, andere Worte. Wuenscht er eine SKIZZE, baue einen passenden [[FIGUR]]-Block ein. Nichts Neues verraten, Stufe nicht erhoehen.")
     if step.intent == "step":
         lines.append("- Der Schueler hat einen EIGENEN Schritt gemacht (siehe Pruefung). Ist er richtig: konkret bestaetigen und zum naechsten Schritt ermutigen – KEINE zusaetzliche Hilfe geben, er schafft es gerade selbst.")
     if step.intent == "correct":

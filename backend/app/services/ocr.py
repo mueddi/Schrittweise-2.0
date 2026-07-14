@@ -100,7 +100,7 @@ class ClaudeVisionOcr:
                                 "type": "text",
                                 "text": (
                                     "Auf dem Bild steht eine handgeschriebene Mathe-Notiz einer "
-                                    "Schuelerin/eines Schuelers (12-15 Jahre, Stift auf Tablet oder "
+                                    "Schuelerin/eines Schuelers (12-19 Jahre, Stift auf Tablet oder "
                                     "Papier). Die Schrift kann krakelig, schraeg oder mehrzeilig sein. "
                                     "Transkribiere ALLES, was geschrieben steht, vollstaendig und in "
                                     "der Original-Reihenfolge (jede Zeile der Rechnung als eigene "
