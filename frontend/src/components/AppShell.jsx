@@ -29,6 +29,7 @@ export default function AppShell() {
   const [updateReady, setUpdateReady] = useState(false);
   const [mailOk, setMailOk] = useState(false);
   const [verifyNote, setVerifyNote] = useState(null); // null | "ok" | "fehler"
+  const [verifyErr, setVerifyErr] = useState(""); // Grund, warum der Versand scheiterte
 
   // Kann der Server Mails verschicken? Nur dann macht der Bestätigungs-Banner Sinn.
   useEffect(() => {
@@ -39,8 +40,10 @@ export default function AppShell() {
     try {
       await api.post("/api/auth/request-link", { email: user.email });
       setVerifyNote("ok");
-    } catch {
+      setVerifyErr("");
+    } catch (e) {
       setVerifyNote("fehler");
+      setVerifyErr(e.message || "Versand fehlgeschlagen – versuch es später nochmal.");
     }
   };
 
@@ -216,6 +219,9 @@ export default function AppShell() {
               >
                 {verifyNote === "ok" ? "Link geschickt ✓" : verifyNote === "fehler" ? "Nochmal versuchen" : "Link nochmal senden"}
               </button>
+              {verifyNote === "fehler" && verifyErr && (
+                <span style={{ flexBasis: "100%", fontSize: 11.5, color: "#b3492f" }}>{verifyErr}</span>
+              )}
             </div>
           )}
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
