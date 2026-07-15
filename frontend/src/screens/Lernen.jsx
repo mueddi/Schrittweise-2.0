@@ -229,7 +229,6 @@ export default function Lernen() {
   const [loadError, setLoadError] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
-  const [tipsOpen, setTipsOpen] = useState(() => !localStorage.getItem("sw_tipps_gesehen"));
   const [stats, setStats] = useState(null); // {serie_tage, geloest_woche}
   const inputRef = useRef(null);
   const chatRef = useRef(null);
@@ -591,23 +590,6 @@ export default function Lernen() {
       </div>
 
       <div style={{ padding: "12px 18px 14px", background: "#fff", borderTop: "1px solid #eef0f3" }}>
-        {tipsOpen && (
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "12px 16px", marginBottom: 10 }}>
-            <div style={{ fontSize: 12.5, color: "#4b4f5c", lineHeight: 1.7, flex: 1 }}>
-              <b style={{ color: "#4f46e5" }}>So klappt's am besten:</b><br />
-              ✏️ Schreib deinen Versuch – auch halbe Versuche zählen.<br />
-              💡 Die Knöpfe unten helfen dir, wenn du feststeckst.<br />
-              ✍️ Mit dem Stift-Symbol schreibst du wie auf Papier.
-            </div>
-            <button
-              onClick={() => { setTipsOpen(false); localStorage.setItem("sw_tipps_gesehen", "1"); }}
-              aria-label="Tipps schliessen"
-              style={{ border: "none", background: "transparent", color: "#9aa0ab", fontSize: 16, cursor: "pointer", padding: 0 }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
         {!busy && (
           <QuickReplies
             solved={attempt.solved}
