@@ -402,14 +402,9 @@ export default function Lernen() {
           <div style={{ textAlign: "center", maxWidth: 420 }}>
             <div style={{ width: 64, height: 64, borderRadius: 18, background: "#eef0fe", color: "#4f46e5", fontSize: 28, display: "grid", placeItems: "center", margin: "0 auto 16px" }}>✎</div>
             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Bereit zum Üben?</div>
-            {(stats?.serie_tage >= 2 || stats?.geloest_woche >= 1) && (
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 12, flexWrap: "wrap" }}>
-                {stats?.serie_tage >= 2 && (
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#d97706", background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 999, padding: "5px 13px" }}>🔥 {stats.serie_tage} Tage in Folge</span>
-                )}
-                {stats?.geloest_woche >= 1 && (
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "#1a7f3c", background: "#e8f6ec", border: "1px solid #cde7d6", borderRadius: 999, padding: "5px 13px" }}>✅ {stats.geloest_woche} diese Woche gelöst</span>
-                )}
+            {stats?.serie_tage >= 2 && (
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#d97706", background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 999, padding: "5px 13px" }}>🔥 {stats.serie_tage} Tage in Folge</span>
               </div>
             )}
             <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 20, lineHeight: 1.55 }}>
@@ -484,9 +479,8 @@ export default function Lernen() {
         <div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{topicName}</div>
           <div style={{ fontSize: 12, color: "#9aa0ab" }}>
-            {attempt.solved ? "gelöst · gut gemacht" : "Schritt für Schritt"} · {attempt.own_attempts} eigene Versuche
+            {attempt.solved ? "gelöst · gut gemacht" : "Schritt für Schritt"}
             {stats?.serie_tage >= 2 && <span style={{ color: "#d97706", fontWeight: 700 }}> · 🔥 {stats.serie_tage} Tage in Folge</span>}
-            {stats?.geloest_woche >= 1 && <span style={{ color: "#1a7f3c", fontWeight: 700 }}> · ✅ {stats.geloest_woche} diese Woche</span>}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
