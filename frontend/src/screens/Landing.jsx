@@ -105,6 +105,72 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* Für Eltern: Fortschritt ja, Chats nein */}
+      <div style={{ background: "#fbfbfd", borderTop: "1px solid #eef0f3" }}>
+        <div
+          style={{
+            maxWidth: 1180,
+            margin: "0 auto",
+            padding: "56px 40px 64px",
+            display: "grid",
+            gridTemplateColumns: ".95fr 1.05fr",
+            gap: 52,
+            alignItems: "center",
+          }}
+          className="landing-hero"
+        >
+          {/* Mini-Vorschau der Eltern-Ansicht */}
+          <div>
+            <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 22, boxShadow: "0 2px 6px rgba(40,40,90,.06),0 26px 54px rgba(40,40,90,.13)", overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderBottom: "1px solid #eef0f3" }}>
+                <span style={{ fontSize: 16 }}>👪</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Elternansicht</div>
+                  <div style={{ fontSize: 11.5, color: "#9aa0ab" }}>Mia · 2. Oberstufe · diese Woche</div>
+                </div>
+              </div>
+              <div style={{ padding: 18 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 14 }}>
+                  {[["78 %", "Selbständigkeit"], ["12", "Aufgaben gelöst"], ["4", "Tage aktiv"]].map(([v, l]) => (
+                    <div key={l} style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "#4f46e5", letterSpacing: "-.02em" }}>{v}</div>
+                      <div style={{ fontSize: 10.5, color: "#6b7280" }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 13, color: "#4b5563", background: "#f6f7fb", borderRadius: 10, padding: "10px 13px", marginBottom: 12 }}>
+                  Algebra läuft gut · Brüche braucht noch Übung
+                </div>
+                <div style={{ fontSize: 12, color: "#9aa0ab", display: "flex", alignItems: "center", gap: 7 }}>
+                  <span>🔒</span> Chats sind für Eltern nicht einsehbar
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Erklärtext */}
+          <div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: "#4f46e5", background: "#eef0fe", borderRadius: 999, padding: "7px 14px", marginBottom: 18 }}>
+              👪 Für Eltern
+            </div>
+            <h2 style={{ margin: "0 0 16px", fontSize: 36, lineHeight: 1.12, fontWeight: 900, letterSpacing: "-.03em", textWrap: "balance" }}>
+              Eltern sehen den Fortschritt – nie die Chats.
+            </h2>
+            <p style={{ margin: "0 0 24px", fontSize: 16.5, lineHeight: 1.6, color: "#4b5563", maxWidth: "50ch" }}>
+              Dein Kind gibt dir aus der App einen Einladungscode. Damit erstellst du dein
+              eigenes Eltern-Konto und siehst jede Woche auf einen Blick, wie das Üben läuft –
+              was gut sitzt, wo es noch harzt und wie selbständig gearbeitet wird.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Badge>Eigenes Eltern-Konto</Badge>
+              <Badge>Verknüpfen per Code vom Kind</Badge>
+              <Badge>Nur Wochen-Überblick, keine Nachrichten</Badge>
+              <Badge>Freigabe liegt beim Kind – jederzeit widerrufbar</Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ background: "#1a1c22", color: "#fff", padding: "30px 40px 22px", textAlign: "center" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
           <span style={{ fontSize: 15, color: "#c5c9d2" }}>Bereit? Es kostet zum Start nichts.</span>
