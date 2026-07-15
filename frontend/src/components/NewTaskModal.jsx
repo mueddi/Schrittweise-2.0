@@ -25,6 +25,8 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
   const [drag, setDrag] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
   const [lastFile, setLastFile] = useState(null); // fuer «Nochmal versuchen» nach 503
+  const [ocrText, setOcrText] = useState("");   // erkannter Text – still im Hintergrund
+  const [ocrOpen, setOcrOpen] = useState(false); // Korrektur-Bereich aufgeklappt?
 
   // Waehrend des Anlegens nicht schliessen – sonst navigiert start() ins Leere
   // und verbraucht trotzdem Kontingent.
@@ -41,15 +43,15 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
       fd.append("file", file);
       const res = await api.upload("/api/exercises/ocr", fd);
       setImagePath(res.image_path);
-      if (res.math_expression) {
-        setExpr(res.math_expression);
-        if (!text.trim()) setText(res.text || `Löse: ${res.math_expression}`);
-        setOcrNote(`✓ erkannt: ${res.math_expression}`);
-      } else if (res.text) {
-        if (!text.trim()) setText(res.text);
-        setOcrNote("Text erkannt – schau kurz, ob alles stimmt.");
+      // Das Foto BLEIBT die Aufgabe – der erkannte Text wandert nur still in
+      // den Korrektur-Bereich (fuer die Mathe-Pruefung im Hintergrund).
+      if (res.math_expression) setExpr(res.math_expression);
+      if (res.text) {
+        setOcrText(res.text);
+        setOcrNote("✓ erkannt – ich lese das Foto direkt mit.");
       } else {
-        setOcrNote("Nichts sicher erkannt – du kannst trotzdem starten, ich schaue mir das Foto direkt an. Oder tipp die Aufgabe kurz ein.");
+        setOcrText("");
+        setOcrNote("Nichts sicher erkannt – du kannst trotzdem starten, ich schaue mir das Foto direkt an.");
       }
     } catch (e) {
       setError(e.message);
@@ -64,11 +66,14 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
       setError("Schreib zuerst die Aufgabe auf (oder lad ein Foto hoch).");
       return;
     }
+    const finalText = imagePath
+      ? [text.trim(), ocrText.trim()].filter(Boolean).join("\n") || "(Aufgabe auf dem Foto)"
+      : text.trim();
     setBusy(true);
     setError(null);
     try {
       const ex = await api.post("/api/exercises", {
-        text: text.trim() || "(Aufgabe auf dem Foto)",
+        text: finalText,
         math_expression: expr.trim() || null,
         topic_id: topicId ? Number(topicId) : null,
         image_path: imagePath,
@@ -131,7 +136,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
               </div>
               {imagePath && !ocrBusy && (
                 <button
-                  onClick={() => { setImagePath(null); setFileName(null); setLastFile(null); setOcrNote(null); }}
+                  onClick={() => { setImagePath(null); setFileName(null); setLastFile(null); setOcrNote(null); setOcrText(""); setOcrOpen(false); setExpr(""); }}
                   title="Foto entfernen"
                   style={{ flex: "0 0 auto", width: 28, height: 28, borderRadius: "50%", border: "none", background: "#e7e8ee", color: "#6b7280", fontSize: 13, cursor: "pointer" }}
                 >
@@ -141,12 +146,36 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
             </div>
           )}
 
-          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Deine Aufgabe</label>
-          {/* expr (Erkennungs-Ausdruck vom Foto) bleibt unsichtbar erhalten;
-              tippt der Schueler den Text um, wird er verworfen – sonst wuerde
-              ein veralteter Ausdruck gegen den neuen Text geprueft. Das
-              Backend extrahiert die Gleichung dann selbst aus dem Text. */}
-          <textarea value={text} onChange={(e) => { setText(e.target.value); setExpr(""); }} placeholder="z.B. Löse nach x auf: 3x + 5 = 20" rows={2} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 12 }} />
+          {imagePath && ocrText && (
+            <div style={{ marginBottom: 12 }}>
+              <button onClick={() => setOcrOpen(!ocrOpen)} style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                Erkannter Text (nur falls du korrigieren willst) {ocrOpen ? "▴" : "▾"}
+              </button>
+              {ocrOpen && (
+                <textarea
+                  value={ocrText}
+                  onChange={(e) => { setOcrText(e.target.value); setExpr(""); }}
+                  rows={3}
+                  style={{ width: "100%", marginTop: 6, border: "1px solid #e7e8ee", borderRadius: 10, padding: "9px 11px", fontSize: 12.5, color: "#6b7280", resize: "vertical", outline: "none", background: "#fbfbfd" }}
+                />
+              )}
+            </div>
+          )}
+
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>
+            {imagePath ? "Eigene Anmerkung (optional)" : "Deine Aufgabe"}
+          </label>
+          {/* expr (Erkennungs-Ausdruck vom Foto) bleibt erhalten; nur wenn der
+              TEXT die Aufgabe ist (kein Foto) oder der erkannte Text korrigiert
+              wird, wird er verworfen – sonst wuerde ein veralteter Ausdruck
+              gegen neuen Text geprueft. */}
+          <textarea
+            value={text}
+            onChange={(e) => { setText(e.target.value); if (!imagePath) setExpr(""); }}
+            placeholder={imagePath ? "z.B. nur Teilaufgabe b) lösen" : "z.B. Löse nach x auf: 3x + 5 = 20"}
+            rows={2}
+            style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 12 }}
+          />
 
           <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>Thema (optional)</label>
           <select value={topicId} onChange={(e) => setTopicId(e.target.value)} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 14, background: "#fff" }}>

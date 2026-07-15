@@ -134,7 +134,7 @@ function TopicDetail({ topicId }) {
             <div key={ex.id} onClick={() => open(ex)} style={{ display: "flex", alignItems: "center", gap: 14, background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: "14px 16px", cursor: "pointer" }}>
               <span style={{ width: 34, height: 34, borderRadius: 10, display: "grid", placeItems: "center", background: ex.solved ? "#e8f6ec" : "#eef0fe", color: ex.solved ? "#1a7f3c" : "#4f46e5", fontWeight: 700 }}>{ex.solved ? "✓" : "∑"}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ex.text}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ex.image_path ? "📷 " : ""}{ex.text}</div>
                 <div style={{ fontSize: 12, color: "#9aa0ab" }}>{ex.solved ? "gelöst" : ex.latest_attempt_id ? "weiter üben" : "noch nicht gestartet"}</div>
               </div>
               <span style={{ color: "#b6bcc6", fontSize: 18 }}>›</span>

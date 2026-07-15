@@ -230,6 +230,7 @@ export default function Lernen() {
   const [drawOpen, setDrawOpen] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
   const [lightbox, setLightbox] = useState(false); // Aufgaben-Bild gross anzeigen
+  const [showTaskText, setShowTaskText] = useState(false); // Text unter Foto-Aufgabe
   const [stats, setStats] = useState(null); // {serie_tage, geloest_woche}
   const inputRef = useRef(null);
   const chatRef = useRef(null);
@@ -499,24 +500,41 @@ export default function Lernen() {
         </div>
       </div>
 
-      {/* Aufgabe immer sichtbar – Schueler muessen nie hochscrollen */}
+      {/* Aufgabe immer sichtbar – Schueler muessen nie hochscrollen.
+          Foto-Aufgaben: das BILD ist die Aufgabe (Text nur auf Wunsch). */}
       <div style={{ background: "#f6f7fb", padding: "12px 24px 0" }}>
-        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: 130, overflowY: "auto" }}>
+        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: exercise.image_path ? 270 : 130, overflowY: "auto" }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", color: "#4f46e5", marginBottom: 3 }}>DEINE AUFGABE</div>
-          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            <div style={{ flex: 1, minWidth: 0, fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
-              <MathText text={exercise.text} />
-            </div>
-            {exercise.image_path && (
+          {exercise.image_path ? (
+            <>
               <img
                 src={`${BASE}${exercise.image_path}`}
                 alt="Aufgaben-Bild"
                 title="🔍 vergrössern"
                 onClick={() => setLightbox(true)}
-                style={{ maxHeight: 110, maxWidth: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in", flex: "0 0 auto" }}
+                style={{ display: "block", maxWidth: "100%", maxHeight: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in" }}
               />
-            )}
-          </div>
+              {exercise.text && exercise.text !== "(Aufgabe auf dem Foto)" && (
+                <>
+                  <button
+                    onClick={() => setShowTaskText(!showTaskText)}
+                    style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 0 2px" }}
+                  >
+                    Aufgabentext {showTaskText ? "ausblenden ▴" : "anzeigen ▾"}
+                  </button>
+                  {showTaskText && (
+                    <div style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", color: "#4b4f5c" }}>
+                      <MathText text={exercise.text} />
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+              <MathText text={exercise.text} />
+            </div>
+          )}
         </div>
       </div>
 
