@@ -26,6 +26,14 @@ from ..services.sympy_verifier import extract_expression
 
 router = APIRouter(prefix="/api/exercises", tags=["exercises"])
 
+# iPhone-Fotos (HEIC) lesbar machen – ohne das Paket bleibt alles wie bisher.
+try:
+    from pillow_heif import register_heif_opener
+
+    register_heif_opener()
+except Exception:  # pragma: no cover
+    pass
+
 UPLOAD_DIR = settings.upload_path
 try:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

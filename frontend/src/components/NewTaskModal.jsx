@@ -24,6 +24,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
   const [quotaOut, setQuotaOut] = useState(false); // 402: Kontingent aufgebraucht
   const [drag, setDrag] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
+  const [lastFile, setLastFile] = useState(null); // fuer «Nochmal versuchen» nach 503
 
   // Waehrend des Anlegens nicht schliessen – sonst navigiert start() ins Leere
   // und verbraucht trotzdem Kontingent.
@@ -34,6 +35,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
     setOcrBusy(true);
     setError(null);
     setFileName(file.name);
+    setLastFile(file);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -47,7 +49,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
         if (!text.trim()) setText(res.text);
         setOcrNote("Text erkannt – schau kurz, ob alles stimmt.");
       } else {
-        setOcrNote("Konnte nichts sicher erkennen – tipp die Aufgabe kurz selbst ein.");
+        setOcrNote("Nichts sicher erkannt – du kannst trotzdem starten, ich schaue mir das Foto direkt an. Oder tipp die Aufgabe kurz ein.");
       }
     } catch (e) {
       setError(e.message);
@@ -57,7 +59,8 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
   }
 
   async function start() {
-    if (!text.trim()) {
+    // Mit Foto darf der Text leer bleiben – der Tutor schaut sich das Bild an.
+    if (!text.trim() && !imagePath) {
       setError("Schreib zuerst die Aufgabe auf (oder lad ein Foto hoch).");
       return;
     }
@@ -65,7 +68,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
     setError(null);
     try {
       const ex = await api.post("/api/exercises", {
-        text: text.trim(),
+        text: text.trim() || "(Aufgabe auf dem Foto)",
         math_expression: expr.trim() || null,
         topic_id: topicId ? Number(topicId) : null,
         image_path: imagePath,
@@ -114,13 +117,27 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
           {/* OCR-Preview */}
           {(fileName || ocrBusy) && (
             <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#f6f7fb", border: "1px solid #eef0f3", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
-              <div style={{ flex: "0 0 64px", height: 48, borderRadius: 8, background: "#fff", border: "1px solid #e7e8ee", display: "grid", placeItems: "center", fontFamily: "Georgia,serif", fontStyle: "italic", fontSize: 15, overflow: "hidden" }}>
-                {imagePath ? <img src={`${BASE}${imagePath}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "…"}
+              <div style={{ flex: "0 0 96px", height: 72, borderRadius: 10, background: "#fff", border: "1px solid #e7e8ee", display: "grid", placeItems: "center", fontFamily: "Georgia,serif", fontStyle: "italic", fontSize: 15, overflow: "hidden" }}>
+                {imagePath ? <img src={`${BASE}${imagePath}`} alt="Dein Foto" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "…"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileName || "wird erkannt …"}</div>
-                <div style={{ fontSize: 12, color: ocrNote?.startsWith("✓") ? "#1a7f3c" : "#9aa0ab" }}>{ocrBusy ? "erkenne …" : ocrNote}</div>
+                <div style={{ fontSize: 12, color: ocrNote?.startsWith("✓") ? "#1a7f3c" : "#9aa0ab", lineHeight: 1.45 }}>{ocrBusy ? "erkenne …" : ocrNote}</div>
+                {!ocrBusy && !imagePath && lastFile && (
+                  <button onClick={() => handleFile(lastFile)} style={{ marginTop: 6, border: "1px solid #c9ccf6", background: "#fff", color: "#4f46e5", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    ↻ Nochmal versuchen
+                  </button>
+                )}
               </div>
+              {imagePath && !ocrBusy && (
+                <button
+                  onClick={() => { setImagePath(null); setFileName(null); setLastFile(null); setOcrNote(null); }}
+                  title="Foto entfernen"
+                  style={{ flex: "0 0 auto", width: 28, height: 28, borderRadius: "50%", border: "none", background: "#e7e8ee", color: "#6b7280", fontSize: 13, cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              )}
             </div>
           )}
 

@@ -82,3 +82,40 @@ def test_large_photo_is_recompressed(client):
     assert f.headers["content-type"] == "image/jpeg"
     img = Image.open(io.BytesIO(f.content))
     assert max(img.size) <= 1600  # laengste Kante verkleinert
+
+
+def test_ocr_leer_erlaubt_start_mit_bild(client):
+    """Erkennt die KI nichts, bleibt das Bild gespeichert und die Aufgabe
+    kann mit Platzhalter-Text (Frontend) trotzdem starten."""
+    headers = register_pw(client, "leer@test.ch")
+    r = client.post("/api/exercises/ocr", headers=headers,
+                    files={"file": ("figur.png", tiny_png(), "image/png")})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["image_path"]  # Bild da, auch ohne erkannten Text
+
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "(Aufgabe auf dem Foto)", "image_path": body["image_path"]})
+    assert ex.status_code == 201
+    assert ex.json()["image_path"] == body["image_path"]
+
+
+def test_ocr_upload_accepts_heic(client):
+    """iPhone-Fotos (HEIC) werden akzeptiert und als JPEG gespeichert."""
+    import io
+
+    import pillow_heif
+    from PIL import Image
+
+    pillow_heif.register_heif_opener()
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "white").save(buf, format="HEIF")
+
+    headers = register_pw(client, "iphone@test.ch")
+    r = client.post("/api/exercises/ocr", headers=headers,
+                    files={"file": ("foto.heic", buf.getvalue(), "image/heic")})
+    assert r.status_code == 200, r.text
+    path = r.json()["image_path"]
+    f = client.get(path)
+    assert f.status_code == 200
+    assert f.headers["content-type"] == "image/jpeg"  # konvertiert gespeichert

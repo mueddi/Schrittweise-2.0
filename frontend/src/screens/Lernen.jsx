@@ -229,6 +229,7 @@ export default function Lernen() {
   const [loadError, setLoadError] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
+  const [lightbox, setLightbox] = useState(false); // Aufgaben-Bild gross anzeigen
   const [stats, setStats] = useState(null); // {serie_tage, geloest_woche}
   const inputRef = useRef(null);
   const chatRef = useRef(null);
@@ -510,9 +511,9 @@ export default function Lernen() {
               <img
                 src={`${BASE}${exercise.image_path}`}
                 alt="Aufgaben-Bild"
-                title="Zum Vergrössern klicken"
-                onClick={() => window.open(`${BASE}${exercise.image_path}`, "_blank")}
-                style={{ maxHeight: 88, maxWidth: 160, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in", flex: "0 0 auto" }}
+                title="🔍 vergrössern"
+                onClick={() => setLightbox(true)}
+                style={{ maxHeight: 110, maxWidth: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in", flex: "0 0 auto" }}
               />
             )}
           </div>
@@ -641,6 +642,29 @@ export default function Lernen() {
           onClose={() => setDrawOpen(false)}
           onResult={(text) => setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))}
         />
+      )}
+
+      {lightbox && exercise.image_path && (
+        <div
+          onClick={() => setLightbox(false)}
+          onKeyDown={(e) => e.key === "Escape" && setLightbox(false)}
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
+          style={{ position: "fixed", inset: 0, background: "rgba(15,15,30,.82)", zIndex: 60, display: "grid", placeItems: "center", padding: 20, cursor: "zoom-out" }}
+        >
+          <img
+            src={`${BASE}${exercise.image_path}`}
+            alt="Aufgaben-Bild gross"
+            style={{ maxWidth: "92vw", maxHeight: "88vh", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.5)", background: "#fff" }}
+          />
+          <button
+            onClick={() => setLightbox(false)}
+            aria-label="Schliessen"
+            style={{ position: "fixed", top: 18, right: 18, width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.92)", color: "#1a1c22", fontSize: 17, fontWeight: 700, cursor: "pointer" }}
+          >
+            ✕
+          </button>
+        </div>
       )}
     </div>
   );

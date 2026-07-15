@@ -75,15 +75,21 @@ class ClaudeVisionOcr:
             from ..config import settings
 
             fmt = (Image.open(io.BytesIO(image_bytes)).format or "PNG").lower()
-            media_type = {"jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(
-                fmt, "image/png"
-            )
+            if fmt in ("jpeg", "png", "webp"):
+                media_type = {"jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[fmt]
+            else:
+                # HEIC (iPhone) & Co.: die API kennt das Format nicht – vor dem
+                # Call nach JPEG re-encodieren, damit media_type und Bytes passen.
+                buf = io.BytesIO()
+                Image.open(io.BytesIO(image_bytes)).convert("RGB").save(buf, "JPEG", quality=90)
+                image_bytes = buf.getvalue()
+                media_type = "image/jpeg"
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             # Bewusst das staerkere Modell: Handschrift-Erkennung ist die
             # Kernfunktion der App – Erkennungsqualitaet schlaegt hier Kosten.
             resp = client.messages.create(
                 model=settings.anthropic_model_smart,
-                max_tokens=500,
+                max_tokens=600,
                 messages=[
                     {
                         "role": "user",
@@ -99,18 +105,28 @@ class ClaudeVisionOcr:
                             {
                                 "type": "text",
                                 "text": (
-                                    "Auf dem Bild steht eine handgeschriebene Mathe-Notiz einer "
-                                    "Schuelerin/eines Schuelers (12-19 Jahre, Stift auf Tablet oder "
-                                    "Papier). Die Schrift kann krakelig, schraeg oder mehrzeilig sein. "
-                                    "Transkribiere ALLES, was geschrieben steht, vollstaendig und in "
-                                    "der Original-Reihenfolge (jede Zeile der Rechnung als eigene "
+                                    "Auf dem Bild ist eine Mathe-Aufgabe oder -Notiz einer "
+                                    "Schuelerin/eines Schuelers (12-19 Jahre): GEDRUCKT (Foto aus "
+                                    "Buch/Arbeitsblatt), HANDSCHRIFTLICH (Foto von Papier) oder mit "
+                                    "dem STIFT GEZEICHNET (Tablet). Schrift kann krakelig, schraeg "
+                                    "oder mehrzeilig sein.\n"
+                                    "1) Transkribiere ALLEN Text und alle Formeln vollstaendig und "
+                                    "in der Original-Reihenfolge (jede Zeile der Rechnung als eigene "
                                     "Zeile). Formeln linear schreiben: Brueche als a/b, Potenzen als "
                                     "x^2, Mal als *, Wurzel als sqrt(...). Beispiel: aus zwei "
                                     "handschriftlichen Zeilen wird\n3x + 5 = 20\n3x = 15\n"
                                     "Verwechsle nicht: 1 vs 7, x vs *, 6 vs b, 2 vs z. Wenn ein "
                                     "Zeichen unsicher ist, waehle die in einer Schulrechnung "
-                                    "plausibelste Lesart. Gib NUR die Transkription zurueck, ohne "
-                                    "Kommentar oder Einleitung. Wenn wirklich nichts lesbar ist, "
+                                    "plausibelste Lesart.\n"
+                                    "2) Enthaelt das Bild eine FIGUR, einen GRAPHEN oder ein "
+                                    "KOORDINATENSYSTEM (auch von Hand gezeichnet), haenge danach "
+                                    "GENAU EINE knappe Beschreibungszeile in eckigen Klammern an, "
+                                    "mit allen erkennbaren Massen, Beschriftungen und Achsenwerten. "
+                                    "Beispiele: [Figur: rechtwinkliges Dreieck, Katheten a = 6 cm "
+                                    "und b = 8 cm, Hypotenuse c gesucht] oder [Graph: Gerade durch "
+                                    "(0|-1) mit Steigung 2 im Koordinatensystem].\n"
+                                    "Gib NUR Transkription und ggf. die Figur-Zeile zurueck, ohne "
+                                    "Kommentar oder Einleitung. Wenn wirklich nichts erkennbar ist, "
                                     "gib exakt LEER zurueck."
                                 ),
                             },
