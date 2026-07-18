@@ -121,11 +121,12 @@ export default function DrawPad({ onResult, onClose }) {
       // Vollen erkannten Text nehmen – math_expression ist nur ein per Regex
       // herausgezogenes Fragment (mit «=») und verstuemmelt mehrzeilige Rechnungen.
       const text = (res.text || res.math_expression || "").trim();
-      if (!text) {
+      if (!text && !res.image_path) {
         setError("Konnte nichts erkennen – schreib etwas grösser und deutlicher.");
         return;
       }
-      onResult(text);
+      // Zeichnung haengt als Bild an der Nachricht – auch ohne erkannten Text
+      onResult({ text, imagePath: res.image_path || null });
       onClose();
     } catch (e) {
       setError(e.message);
@@ -150,7 +151,7 @@ export default function DrawPad({ onResult, onClose }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid #eef0f3" }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800 }}>✍️ Mit dem Stift schreiben</div>
-            <div style={{ fontSize: 12, color: "#9aa0ab" }}>Schreib deinen Rechenschritt – ich lese ihn und du kannst ihn vor dem Senden noch anpassen.</div>
+            <div style={{ fontSize: 12, color: "#9aa0ab" }}>Schreib oder zeichne – ich lese es, und deine Zeichnung hängt als Bild an der Nachricht.</div>
           </div>
           <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 18, color: "#9aa0ab", cursor: "pointer" }}>✕</button>
         </div>

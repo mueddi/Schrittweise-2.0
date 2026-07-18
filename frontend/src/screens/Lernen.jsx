@@ -229,7 +229,10 @@ export default function Lernen() {
   const [loadError, setLoadError] = useState(false);
   const [drawOpen, setDrawOpen] = useState(false);
   const [variantBusy, setVariantBusy] = useState(false);
-  const [lightbox, setLightbox] = useState(false); // Aufgaben-Bild gross anzeigen
+  const [lightbox, setLightbox] = useState(null); // Bild-URL fuer die Gross-Ansicht (Aufgabe/Nachricht)
+  const [pendingImage, setPendingImage] = useState(null); // Zeichnung/Foto fuer die naechste Nachricht
+  const [uploadBusy, setUploadBusy] = useState(false); // 📷-Upload im Composer laeuft
+  const fileRef = useRef(null);
   const [showTaskText, setShowTaskText] = useState(false); // Text unter Foto-Aufgabe
   const [stats, setStats] = useState(null); // {serie_tage, geloest_woche}
   const inputRef = useRef(null);
@@ -275,6 +278,7 @@ export default function Lernen() {
     setBusy(false);
     setState(null);
     setLoadError(false);
+    setPendingImage(null); // Anhang gehoert zur alten Aufgabe
     load();
   }, [load]);
 
@@ -291,22 +295,26 @@ export default function Lernen() {
     // onClick={send} liefert ein Event-Objekt als erstes Argument – nur echte
     // Strings (Schnell-Antworten) zaehlen als Override.
     const text = (typeof overrideText === "string" ? overrideText : input).trim();
-    if (!text || busy) return;
+    if ((!text && !pendingImage) || busy) return;
+    // Angehaengtes Bild (Zeichnung/Foto) mitschicken; ohne Text nur mit Platzhalter
+    const img = pendingImage;
+    const sendText = text || "(siehe Bild)";
     const myToken = ++reqToken.current;
     const myAttempt = attemptId;
     const controller = new AbortController();
     abortRef.current = controller;
     if (typeof overrideText !== "string") setInput(""); // getippten Entwurf nicht wegwerfen
+    setPendingImage(null);
     setBusy(true);
     // Schüler-Bubble sofort optimistisch anzeigen
-    setState((s) => (s ? { ...s, messages: [...s.messages, { id: `tmp-${Date.now()}`, role: "student", text }] } : s));
+    setState((s) => (s ? { ...s, messages: [...s.messages, { id: `tmp-${Date.now()}`, role: "student", text: sendText, image_path: img }] } : s));
     setStreaming("");
     scrollDown();
     try {
       const res = await fetch(`${BASE}/api/attempts/${myAttempt}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: sendText, image_path: img || undefined }),
         signal: controller.signal,
       });
       if (res.status === 401) {
@@ -323,6 +331,7 @@ export default function Lernen() {
         if (myToken === reqToken.current) {
           setState((s) => (s ? { ...s, messages: [...s.messages.filter((m) => !String(m.id).startsWith("tmp-")), { id: `quota-${Date.now()}`, role: "tutor", kind: "quota", text: "" }] } : s));
           if (typeof overrideText !== "string") setInput(text);
+          setPendingImage(img); // Anhang zurueckgeben – Nachricht wurde nicht gesendet
           shell.reloadQuota?.();
         }
         return;
@@ -457,6 +466,31 @@ export default function Lernen() {
     }
   }
 
+  // 📷 im Composer: Foto an die NAECHSTE Chat-Nachricht anhaengen.
+  // Upload laeuft ueber die OCR-Route (speichert das Bild, liest den Text mit).
+  async function attachPhoto(e) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // gleiches Foto darf erneut gewaehlt werden
+    if (!file || uploadBusy) return;
+    setUploadBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name || "foto.jpg");
+      const res = await api.upload("/api/exercises/ocr", fd);
+      const text = (res.text || "").trim();
+      if (text) setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      if (res.image_path) setPendingImage(res.image_path);
+    } catch (err) {
+      if (err.status === 402) {
+        setState((s) => (s ? { ...s, messages: [...s.messages, { id: `quota-${Date.now()}`, role: "tutor", kind: "quota", text: "" }] } : s));
+      } else {
+        setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: err.message }] } : s));
+      }
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
   // Mathe-Tastatur: Symbol an der Cursor-Position einfuegen
   function insertSymbol(snippet, cursorOffset) {
     const el = inputRef.current;
@@ -511,7 +545,7 @@ export default function Lernen() {
                 src={`${BASE}${exercise.image_path}`}
                 alt="Aufgaben-Bild"
                 title="🔍 vergrössern"
-                onClick={() => setLightbox(true)}
+                onClick={() => setLightbox(exercise.image_path)}
                 style={{ display: "block", maxWidth: "100%", maxHeight: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in" }}
               />
               {exercise.text && exercise.text !== "(Aufgabe auf dem Foto)" && (
@@ -568,9 +602,19 @@ export default function Lernen() {
               );
               continue;
             }
+            const hideText = m.image_path && m.text === "(siehe Bild)"; // Platzhalter nicht doppelt zeigen
             out.push(
               <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status} hintLevel={m.role === "tutor" ? m.hint_level : null}>
-                {m.role === "tutor" ? <TutorContent text={m.text} /> : <MathText text={m.text} />}
+                {m.image_path && (
+                  <img
+                    src={`${BASE}${m.image_path}`}
+                    alt="Angehängtes Bild"
+                    title="🔍 vergrössern"
+                    onClick={() => setLightbox(m.image_path)}
+                    style={{ display: "block", maxWidth: 220, maxHeight: 180, borderRadius: 10, background: "#fff", border: "1px solid rgba(255,255,255,.4)", cursor: "zoom-in", marginBottom: hideText ? 0 : 8 }}
+                  />
+                )}
+                {!hideText && (m.role === "tutor" ? <TutorContent text={m.text} /> : <MathText text={m.text} />)}
               </Bubble>
             );
           }
@@ -640,9 +684,22 @@ export default function Lernen() {
             </button>
           ))}
         </div>
+        {pendingImage && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 12, padding: "6px 10px" }}>
+            <img
+              src={`${BASE}${pendingImage}`}
+              alt="Bild-Anhang"
+              onClick={() => setLightbox(pendingImage)}
+              style={{ height: 48, maxWidth: 90, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e2fb", cursor: "zoom-in", background: "#fff" }}
+            />
+            <span style={{ fontSize: 12.5, color: "#6b7280", flex: 1 }}>Bild hängt an deiner nächsten Nachricht</span>
+            <button onClick={() => setPendingImage(null)} aria-label="Bild entfernen" style={{ border: "none", background: "transparent", color: "#9aa0ab", fontSize: 15, cursor: "pointer" }}>✕</button>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" onChange={attachPhoto} style={{ display: "none" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #d2d4dd", borderRadius: 24, padding: "7px 8px 7px 14px" }}>
-          <span onClick={() => shell.openNewTask()} title="Foto-Aufgabe" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>📷</span>
-          <span onClick={() => setDrawOpen(true)} title="Mit dem Stift schreiben" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
+          <span onClick={() => !uploadBusy && fileRef.current?.click()} title="Foto anhängen" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer", opacity: uploadBusy ? 0.5 : 1 }}>{uploadBusy ? "⏳" : "📷"}</span>
+          <span onClick={() => setDrawOpen(true)} title="Mit dem Stift schreiben oder zeichnen" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
           <input
             ref={inputRef}
             value={input}
@@ -658,25 +715,28 @@ export default function Lernen() {
       {drawOpen && (
         <DrawPad
           onClose={() => setDrawOpen(false)}
-          onResult={(text) => setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text))}
+          onResult={({ text, imagePath }) => {
+            if (text) setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+            if (imagePath) setPendingImage(imagePath); // Zeichnung haengt als Bild an
+          }}
         />
       )}
 
-      {lightbox && exercise.image_path && (
+      {lightbox && (
         <div
-          onClick={() => setLightbox(false)}
-          onKeyDown={(e) => e.key === "Escape" && setLightbox(false)}
+          onClick={() => setLightbox(null)}
+          onKeyDown={(e) => e.key === "Escape" && setLightbox(null)}
           tabIndex={-1}
           ref={(el) => el?.focus()}
           style={{ position: "fixed", inset: 0, background: "rgba(15,15,30,.82)", zIndex: 60, display: "grid", placeItems: "center", padding: 20, cursor: "zoom-out" }}
         >
           <img
-            src={`${BASE}${exercise.image_path}`}
-            alt="Aufgaben-Bild gross"
+            src={`${BASE}${lightbox}`}
+            alt="Bild gross"
             style={{ maxWidth: "92vw", maxHeight: "88vh", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.5)", background: "#fff" }}
           />
           <button
-            onClick={() => setLightbox(false)}
+            onClick={() => setLightbox(null)}
             aria-label="Schliessen"
             style={{ position: "fixed", top: 18, right: 18, width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.92)", color: "#1a1c22", fontSize: 17, fontWeight: 700, cursor: "pointer" }}
           >

@@ -196,6 +196,8 @@ class Message(Base):
     verification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Hilfe-Stufe, mit der diese Tutor-Antwort erzeugt wurde (Anzeige im Chat)
     hint_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # angehaengtes Bild (Stift-Zeichnung/Foto), Pfad wie bei Exercise.image_path
+    image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
     attempt: Mapped[Attempt] = relationship(back_populates="messages")

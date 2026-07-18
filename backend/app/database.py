@@ -75,6 +75,7 @@ def init_db() -> None:
         # DEFAULT TRUE: Bestandskonten (vor der Bestaetigungs-Pflicht registriert)
         # gelten als bestaetigt; NEUE Konten setzt die App explizit auf FALSE.
         ("users", "email_verified", "ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT TRUE NOT NULL"),
+        ("messages", "image_path", "ALTER TABLE messages ADD COLUMN image_path VARCHAR(255)"),
     ]
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())

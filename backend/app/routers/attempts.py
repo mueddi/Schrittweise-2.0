@@ -77,6 +77,20 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
                             "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
 
+    # Angehaengtes Bild (Stift-Zeichnung/Foto aus /api/exercises/ocr) pruefen:
+    # nur eigene, tatsaechlich gespeicherte Bilder duerfen an Nachrichten haengen.
+    msg_image_path = None
+    msg_image = None  # (bytes, mime) fuer den Tutor
+    if payload.image_path:
+        token = payload.image_path.rsplit("/", 1)[-1]
+        img = None
+        if payload.image_path.startswith("/api/exercises/images/"):
+            img = db.scalar(select(UploadedImage).where(UploadedImage.token == token))
+        if img is None or img.user_id != user.id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bild nicht gefunden")
+        msg_image_path = payload.image_path
+        msg_image = (img.content, img.mime_type)
+
     # 1) deterministische Pruefung
     verification = verify(ex.math_expression, text)
 
@@ -96,7 +110,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     # 3) Schuelernachricht speichern (mit interner Verifikation)
     student_msg = Message(
         attempt_id=attempt.id, role=MessageRole.student, text=text,
-        verification=verification.to_context(),
+        verification=verification.to_context(), image_path=msg_image_path,
     )
     db.add(student_msg)
 
@@ -140,7 +154,8 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         usage_out: dict = {}
         try:
             for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr,
-                                            grade_level, image, usage_out):
+                                            grade_level, image, usage_out,
+                                            last_image=msg_image):
                 parts.append(chunk)
                 yield chunk
         finally:

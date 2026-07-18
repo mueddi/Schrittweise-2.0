@@ -240,7 +240,22 @@ def _build_system(step, verification, exercise_text, exercise_expr, grade_level=
 HISTORY_LIMIT = 12
 
 
-def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = None) -> list[dict]:
+def _image_block(image: tuple[bytes, str]) -> dict:
+    import base64
+
+    data, media_type = image
+    return {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": media_type,
+            "data": base64.standard_b64encode(data).decode(),
+        },
+    }
+
+
+def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = None,
+                         last_image: tuple[bytes, str] | None = None) -> list[dict]:
     if len(history) > HISTORY_LIMIT:
         # Eroeffnungsnachricht (Aufgabenstellung) behalten + juengster Verlauf
         history = [history[0]] + history[-(HISTORY_LIMIT - 1):]
@@ -253,21 +268,19 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
     if image is not None:
         # Aufgaben-Figur (Foto) in die erste User-Nachricht einbetten – das
         # Modell sieht sie damit in jedem Turn (wichtig fuer Geometrie).
-        import base64
-
-        data, media_type = image
         first_text = msgs[0]["content"] if isinstance(msgs[0]["content"], str) else "(Aufgabe gestartet)"
-        msgs[0]["content"] = [
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": base64.standard_b64encode(data).decode(),
-                },
-            },
-            {"type": "text", "text": first_text},
-        ]
+        msgs[0]["content"] = [_image_block(image), {"type": "text", "text": first_text}]
+    if last_image is not None:
+        # Zeichnung/Foto der AKTUELLEN Schueler-Nachricht in die letzte
+        # User-Nachricht einbetten. Nur das juengste Bild geht mit – aeltere
+        # Nachrichten-Bilder stehen als erkannter Text im Verlauf (Kostendeckel).
+        for m in reversed(msgs):
+            if m["role"] == "user":
+                if isinstance(m["content"], str):
+                    m["content"] = [_image_block(last_image), {"type": "text", "text": m["content"]}]
+                else:
+                    m["content"] = [_image_block(last_image)] + list(m["content"])
+                break
     return msgs
 
 
@@ -275,7 +288,8 @@ def stream_reply(history, step: LadderStep, verification: Verification,
                  exercise_text: str, exercise_expr: str | None,
                  grade_level: str | None = None,
                  image: tuple[bytes, str] | None = None,
-                 usage_out: dict | None = None):
+                 usage_out: dict | None = None,
+                 last_image: tuple[bytes, str] | None = None):
     """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming).
 
     ``usage_out``: optionales dict, das nach Stream-Ende mit ``model`` und
@@ -288,9 +302,10 @@ def stream_reply(history, step: LadderStep, verification: Verification,
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     # Aufgaben mit Figur brauchen das starke Modell (Bild lesen = Kernaufgabe)
-    model = settings.anthropic_model_smart if image else pick_model(exercise_text, exercise_expr)
+    model = (settings.anthropic_model_smart if (image or last_image)
+             else pick_model(exercise_text, exercise_expr))
     system = _build_system(step, verification, exercise_text, exercise_expr, grade_level)
-    messages = _history_to_messages(history, image)
+    messages = _history_to_messages(history, image, last_image)
     produced = False
     try:
         with client.messages.stream(model=model, max_tokens=550, system=system, messages=messages) as stream:

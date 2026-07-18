@@ -100,6 +100,75 @@ def test_ocr_leer_erlaubt_start_mit_bild(client):
     assert ex.json()["image_path"] == body["image_path"]
 
 
+def test_chat_message_mit_bild_wird_gespeichert_und_angezeigt(client):
+    """Zeichnung/Foto im Chat: image_path wird an der Schueler-Nachricht
+    gespeichert und im Attempt-Zustand zurueckgegeben (Anzeige in der Bubble)."""
+    headers = register_pw(client, "mia@test.ch")
+
+    up = client.post("/api/exercises/ocr", headers=headers,
+                     files={"file": ("zeichnung.png", tiny_png(), "image/png")})
+    image_path = up.json()["image_path"]
+
+    ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+
+    with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                       json={"text": "(siehe Bild)", "image_path": image_path}) as r:
+        assert r.status_code == 200
+        assert "".join(r.iter_text())
+
+    msgs = client.get(f"/api/attempts/{aid}", headers=headers).json()["messages"]
+    student = [m for m in msgs if m["role"] == "student"]
+    assert student[-1]["image_path"] == image_path
+    # Tutor-Antworten haben keinen Anhang
+    assert all(m["image_path"] is None for m in msgs if m["role"] == "tutor")
+
+
+def test_chat_lehnt_fremde_oder_unbekannte_bilder_ab(client):
+    """Nur eigene, gespeicherte Bilder duerfen an Nachrichten haengen."""
+    headers = register_pw(client, "mia@test.ch")
+    other = register_pw(client, "other@test.ch")
+
+    ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+
+    # Bild eines ANDEREN Nutzers
+    up = client.post("/api/exercises/ocr", headers=other,
+                     files={"file": ("fremd.png", tiny_png(), "image/png")})
+    foreign_path = up.json()["image_path"]
+
+    for bad in (foreign_path, "/api/exercises/images/gibtsnicht", "/uploads/alt.png"):
+        r = client.post(f"/api/attempts/{aid}/chat", headers=headers,
+                        json={"text": "schau mal", "image_path": bad})
+        assert r.status_code == 400, bad
+
+
+def test_history_builder_embeds_last_message_image():
+    """last_image haengt an der LETZTEN User-Nachricht (aktuelle Zeichnung)."""
+    from app.services.tutor import _history_to_messages
+
+    history = [
+        {"role": "tutor", "text": "Los geht's! Deine Aufgabe: ..."},
+        {"role": "student", "text": "erster versuch"},
+        {"role": "tutor", "text": "Guter Ansatz!"},
+        {"role": "student", "text": "hier meine skizze"},
+    ]
+    msgs = _history_to_messages(history, last_image=(b"PNGBYTES", "image/png"))
+    last = msgs[-1]
+    assert last["role"] == "user"
+    assert last["content"][0]["type"] == "image"
+    assert last["content"][1]["type"] == "text"
+    assert last["content"][1]["text"] == "hier meine skizze"
+    # erste User-Nachricht bleibt ohne Bild (kein Aufgaben-Foto uebergeben)
+    assert isinstance(msgs[0]["content"], str)
+
+    # Aufgaben-Bild UND Nachricht-Bild gleichzeitig
+    both = _history_to_messages(history, image=(b"TASK", "image/jpeg"),
+                                last_image=(b"DRAW", "image/png"))
+    assert both[0]["content"][0]["type"] == "image"
+    assert both[-1]["content"][0]["type"] == "image"
+
+
 def test_ocr_upload_accepts_heic(client):
     """iPhone-Fotos (HEIC) werden akzeptiert und als JPEG gespeichert."""
     import io

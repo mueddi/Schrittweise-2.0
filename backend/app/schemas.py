@@ -174,6 +174,8 @@ class MessageOut(BaseModel):
     verification_status: str | None = None
     # Hilfe-Stufe der Tutor-Antwort (1-4) fuer das Stufen-Tag im Chat
     hint_level: int | None = None
+    # angehaengte Zeichnung / angehaengtes Foto der Schueler-Nachricht
+    image_path: str | None = None
 
 
 def message_out(m) -> "MessageOut":
@@ -186,6 +188,8 @@ def message_out(m) -> "MessageOut":
 
 class ChatRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+    # optionales Bild (Stift-Zeichnung/Foto) aus /api/exercises/ocr
+    image_path: str | None = None
 
 
 class AttemptStateOut(BaseModel):
