@@ -217,7 +217,22 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
         <div onClick={(e) => e.stopPropagation()}>
           <DrawPad
             onClose={() => setDrawOpen(false)}
-            onResult={(t) => { setText((prev) => (prev.trim() ? `${prev.trim()}\n${t}` : t)); setExpr(""); }}
+            onResult={({ text: t, imagePath: p }) => {
+              if (p) {
+                // Zeichnung wie ein Foto behandeln: das Bild ist die Aufgabe,
+                // der erkannte Text wandert still in den Korrektur-Bereich.
+                setImagePath(p);
+                setFileName("Zeichnung");
+                setLastFile(null);
+                setOcrText(t || "");
+                setOcrNote(t ? "✓ erkannt – ich lese die Zeichnung direkt mit."
+                             : "Nichts sicher erkannt – du kannst trotzdem starten, ich schaue mir die Zeichnung direkt an.");
+                setExpr("");
+              } else if (t) {
+                setText((prev) => (prev.trim() ? `${prev.trim()}\n${t}` : t));
+                setExpr("");
+              }
+            }}
           />
         </div>
       )}
