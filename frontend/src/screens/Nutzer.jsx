@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { useLang } from "../lib/i18n.jsx";
 
 // Admin-Support-Werkzeug: Nutzer suchen, Guthaben einsehen und korrigieren
 // (Kulanz, Rückerstattung, verpasster Stripe-Webhook).
 export default function Nutzer() {
+  const { t, lang } = useLang();
   const [q, setQ] = useState("");
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
@@ -14,7 +16,7 @@ export default function Nutzer() {
     api
       .get(`/api/admin/nutzer?q=${encodeURIComponent(query)}`)
       .then((d) => { setRows(d); setErr(""); })
-      .catch((e) => setErr(e.message || "Konnte die Nutzerliste nicht laden."))
+      .catch((e) => setErr(e.message || t("Konnte die Nutzerliste nicht laden.", "Could not load the user list.")))
       .finally(() => setLoading(false));
   };
 
@@ -23,9 +25,9 @@ export default function Nutzer() {
   return (
     <div style={{ flex: 1, overflowY: "auto", background: "#fbfbfd" }}>
       <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 20px 60px" }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em", margin: "0 0 6px" }}>👥 Nutzer</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em", margin: "0 0 6px" }}>{t("👥 Nutzer", "👥 Users")}</h1>
         <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 18 }}>
-          Guthaben einsehen und korrigieren – jede Buchung wird mit Grund protokolliert.
+          {t("Guthaben einsehen und korrigieren – jede Buchung wird mit Grund protokolliert.", "View and adjust balances – every entry is logged with a reason.")}
         </div>
 
         <form
@@ -35,11 +37,11 @@ export default function Nutzer() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="E-Mail oder Name suchen …"
+            placeholder={t("E-Mail oder Name suchen …", "Search email or name …")}
             style={{ flex: 1, border: "1px solid #d2d4dd", borderRadius: 11, padding: "10px 14px", fontSize: 13 }}
           />
           <button type="submit" className="btn-primary" style={{ border: "none", borderRadius: 11, padding: "10px 18px", fontSize: 13 }}>
-            Suchen
+            {t("Suchen", "Search")}
           </button>
         </form>
 
@@ -48,9 +50,9 @@ export default function Nutzer() {
             {err}
           </div>
         )}
-        {loading && <div style={{ fontSize: 13, color: "#9aa0ab" }}>lädt …</div>}
+        {loading && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("lädt …", "loading …")}</div>}
         {!loading && rows.length === 0 && !err && (
-          <div style={{ fontSize: 13, color: "#9aa0ab" }}>Keine Nutzer gefunden.</div>
+          <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("Keine Nutzer gefunden.", "No users found.")}</div>
         )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -64,6 +66,7 @@ export default function Nutzer() {
 }
 
 function UserCard({ u, onChanged }) {
+  const { t, lang } = useLang();
   const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState("");
   const [grund, setGrund] = useState("");
@@ -73,18 +76,18 @@ function UserCard({ u, onChanged }) {
   async function book() {
     const n = parseInt(tokens, 10);
     if (!n) {
-      setNote({ type: "error", text: "Anzahl Tokens angeben (z.B. 200 oder -50)." });
+      setNote({ type: "error", text: t("Anzahl Tokens angeben (z.B. 200 oder -50).", "Enter a number of tokens (e.g. 200 or -50).") });
       return;
     }
     if (grund.trim().length < 3) {
-      setNote({ type: "error", text: "Bitte einen kurzen Grund angeben." });
+      setNote({ type: "error", text: t("Bitte einen kurzen Grund angeben.", "Please enter a brief reason.") });
       return;
     }
     setBusy(true);
     setNote(null);
     try {
       const res = await api.post(`/api/admin/nutzer/${u.id}/tokens`, { tokens: n, grund: grund.trim() });
-      setNote({ type: "ok", text: `Gebucht – neues Guthaben: ${res.token_balance} Tokens.` });
+      setNote({ type: "ok", text: t(`Gebucht – neues Guthaben: ${res.token_balance} Tokens.`, `Booked – new balance: ${res.token_balance} tokens.`) });
       setTokens("");
       setGrund("");
       onChanged();
@@ -100,24 +103,24 @@ function UserCard({ u, onChanged }) {
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 220px", minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>
-            {u.display_name} {u.is_admin && <span style={{ fontSize: 11, color: "#4f46e5" }}>· Admin</span>}
+            {u.display_name} {u.is_admin && <span style={{ fontSize: 11, color: "#4f46e5" }}>{t("· Admin", "· Admin")}</span>}
           </div>
           <div style={{ fontSize: 12, color: "#6b7280", overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
           <div style={{ fontSize: 11, color: "#9aa0ab" }}>
-            {u.role === "parent" ? "Elternteil" : "Schüler:in"} · {u.email_verified ? "E-Mail bestätigt" : "unbestätigt"}
-            {u.erstellt ? ` · seit ${new Date(u.erstellt).toLocaleDateString("de-CH")}` : ""}
+            {u.role === "parent" ? t("Elternteil", "Parent") : t("Schüler:in", "Student")} · {u.email_verified ? t("E-Mail bestätigt", "email verified") : t("unbestätigt", "unverified")}
+            {u.erstellt ? ` · ${t("seit", "since")} ${new Date(u.erstellt).toLocaleDateString("de-CH")}` : ""}
           </div>
         </div>
         <div style={{ display: "flex", gap: 18, fontSize: 12.5, color: "#6b7280" }}>
-          <div><b style={{ color: "#1a1c22" }}>{u.token_balance}</b> Guthaben</div>
-          <div><b style={{ color: "#1a1c22" }}>{u.free_used_tokens}</b>/{u.monthly_free_tokens ?? 50} gratis</div>
-          <div><b style={{ color: "#1a1c22" }}>{u.verbraucht_tokens}</b> verbraucht</div>
+          <div><b style={{ color: "#1a1c22" }}>{u.token_balance}</b> {t("Guthaben", "balance")}</div>
+          <div><b style={{ color: "#1a1c22" }}>{u.free_used_tokens}</b>/{u.monthly_free_tokens ?? 50} {t("gratis", "free")}</div>
+          <div><b style={{ color: "#1a1c22" }}>{u.verbraucht_tokens}</b> {t("verbraucht", "used")}</div>
         </div>
         <button
           onClick={() => setOpen(!open)}
           style={{ border: "1px solid #e7e8ee", background: "#fbfbfd", borderRadius: 10, padding: "8px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
         >
-          {open ? "Schliessen" : "± Tokens"}
+          {open ? t("Schliessen", "Close") : t("± Tokens", "± Tokens")}
         </button>
       </div>
 
@@ -133,11 +136,11 @@ function UserCard({ u, onChanged }) {
           <input
             value={grund}
             onChange={(e) => setGrund(e.target.value)}
-            placeholder="Grund (z.B. Webhook verpasst, Kulanz)"
+            placeholder={t("Grund (z.B. Webhook verpasst, Kulanz)", "Reason (e.g. missed webhook, goodwill credit)")}
             style={{ flex: "1 1 220px", border: "1px solid #d2d4dd", borderRadius: 10, padding: "9px 12px", fontSize: 13 }}
           />
           <button onClick={book} disabled={busy} className="btn-primary" style={{ border: "none", borderRadius: 10, padding: "10px 16px", fontSize: 13 }}>
-            {busy ? "bucht …" : "Buchen"}
+            {busy ? t("bucht …", "booking …") : t("Buchen", "Book")}
           </button>
           {note && (
             <div style={{ flexBasis: "100%", fontSize: 12.5, color: note.type === "error" ? "#b3492f" : "#1a7f3c" }}>

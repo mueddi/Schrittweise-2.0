@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
+import { useLang } from "../lib/i18n.jsx";
 
 export default function LoginVerify() {
+  const { t } = useLang();
   const [params] = useSearchParams();
   const nav = useNavigate();
   const { login } = useAuth();
@@ -39,7 +41,7 @@ export default function LoginVerify() {
         .then(finish)
         .catch((err) => setError(err.message));
     } else {
-      setError(sbError || "Kein Token im Link.");
+      setError(sbError || t("Kein Token im Link.", "No token in the link."));
     }
   }, [params, nav, login]);
 
@@ -47,14 +49,14 @@ export default function LoginVerify() {
     <div style={{ display: "grid", placeItems: "center", height: "100vh" }}>
       {error ? (
         <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Login fehlgeschlagen</div>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>{t("Login fehlgeschlagen", "Login failed")}</div>
           <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 16 }}>{error}</div>
           <Link to="/login" className="btn-primary" style={{ padding: "10px 18px", borderRadius: 11, fontSize: 14 }}>
-            Neuen Link anfordern
+            {t("Neuen Link anfordern", "Request a new link")}
           </Link>
         </div>
       ) : (
-        <div style={{ color: "#9aa0ab", fontSize: 14 }}>melde dich an …</div>
+        <div style={{ color: "#9aa0ab", fontSize: 14 }}>{t("melde dich an …", "signing you in …")}</div>
       )}
     </div>
   );

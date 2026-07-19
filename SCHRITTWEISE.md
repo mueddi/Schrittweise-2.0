@@ -1,8 +1,11 @@
-# Schrittweise – KI-Mathe-Tutor für die Schweizer Oberstufe & das Gymnasium
+# Schrittweise – KI-Mathe-Tutor für Mittelstufe, Oberstufe & Gymnasium
 
 > **Mathe verstehen. Nicht abschreiben.** Ein Tutor, der die Lösung nie direkt
 > verrät, sondern über eine **Hinweis-Leiter** (4 Stufen) zum eigenen Denken führt.
-> Für Sek-I-Schüler:innen (Lehrplan 21) und Gymnasiast:innen bis zur Matura.
+> Für Mittelstufe (4.–6. Klasse), Oberstufe (Lehrplan 21) und Gymnasium bis zur
+> Matura. Die App ist zweisprachig (Deutsch/Englisch): Browser-Sprache wird beim
+> ersten Besuch erkannt, manuell umstellbar (Landing/Login/Einstellungen); der
+> Tutor antwortet in der gewählten Sprache.
 
 Live: **https://schrittweise-2-0.vercel.app** · Der visuelle Massstab ist
 `design/referenz.html` (im Browser öffnen).

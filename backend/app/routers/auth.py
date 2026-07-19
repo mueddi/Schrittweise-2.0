@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
+from .. import i18n
 from ..config import settings
 from ..database import get_db
 from ..deps import bearer, get_current_user
@@ -89,12 +90,12 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
     # Honeypot: das unsichtbare Feld fuellt nur ein Bot aus.
     if payload.website:
         log.warning("Registrierung mit gefuelltem Honeypot abgewiesen (IP %s)", _client_ip(request))
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ungültige Anfrage.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, i18n.t(i18n.lang_of(request=request), "Ungültige Anfrage.", "Invalid request."))
 
     if not payload.terms_accepted:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Bitte akzeptiere die AGB und die Datenschutzerklärung.",
+            i18n.t(i18n.lang_of(request=request), "Bitte akzeptiere die AGB und die Datenschutzerklärung.", "Please accept the terms of service and the privacy policy."),
         )
 
     # Bremse gegen Konto-Farmen: jedes Konto erhaelt Gratis-Tokens (echte Kosten).
@@ -109,7 +110,7 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
         log.warning("Registrierungs-Limit erreicht: %s Konten in 24h von IP %s", recent, ip)
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            "Von diesem Anschluss wurden heute schon viele Konten erstellt – versuch es morgen nochmal.",
+            i18n.t(i18n.lang_of(request=request), "Von diesem Anschluss wurden heute schon viele Konten erstellt – versuch es morgen nochmal.", "Many accounts were already created from this connection today – please try again tomorrow."),
         )
 
     email = payload.email.lower().strip()
@@ -117,7 +118,7 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
 
     if user is not None and user.password_hash:
         raise HTTPException(
-            status.HTTP_409_CONFLICT, "Konto existiert bereits – wechsle zu «Anmelden»."
+            status.HTTP_409_CONFLICT, i18n.t(i18n.lang_of(request=request), "Konto existiert bereits – wechsle zu «Anmelden».", "Account already exists – switch to “Sign in”.")
         )
 
     if user is None:
@@ -128,6 +129,7 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
             display_name=display,
             role=role,
             grade_level=payload.grade_level,
+            language=i18n.norm(payload.language),
         )
         db.add(user)
 
@@ -154,7 +156,7 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
 
 
 @router.post("/login", response_model=TokenResponse)
-def login_password(payload: PasswordLoginRequest, db: Session = Depends(get_db)):
+def login_password(payload: PasswordLoginRequest, request: Request, db: Session = Depends(get_db)):
     email = payload.email.lower().strip()
 
     # Brute-Force-Bremse: zu viele Fehlversuche fuer diese E-Mail -> 429,
@@ -168,7 +170,7 @@ def login_password(payload: PasswordLoginRequest, db: Session = Depends(get_db))
     if fails >= LOGIN_FAIL_MAX:
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
-            "Zu viele fehlgeschlagene Versuche – warte 15 Minuten und versuch es dann nochmal.",
+            i18n.t(i18n.lang_of(request=request), "Zu viele fehlgeschlagene Versuche – warte 15 Minuten und versuch es dann nochmal.", "Too many failed attempts – wait 15 minutes and try again."),
         )
 
     user = db.scalar(select(User).where(User.email == email))
@@ -181,7 +183,7 @@ def login_password(payload: PasswordLoginRequest, db: Session = Depends(get_db))
         db.execute(delete(LoginAttempt).where(LoginAttempt.created_at < fail_window))
         db.add(LoginAttempt(email=email))
         db.commit()
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-Mail oder Passwort falsch.")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, i18n.t(i18n.lang_of(request=request), "E-Mail oder Passwort falsch.", "Email or password is incorrect."))
 
     # Erfolg: Fehlversuchs-Zaehler dieser E-Mail zuruecksetzen
     if fails:

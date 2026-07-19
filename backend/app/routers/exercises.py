@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
+from .. import i18n
 from ..deps import require_student
 from ..models import Attempt, Exercise, Message, MessageRole, Topic, UploadedImage, User
 from ..schemas import (
@@ -71,22 +72,22 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
     """Foto hochladen -> OCR-Preview (erkannter Text + Mathe-Ausdruck)."""
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.")
+                            i18n.t(i18n.lang_of(user), "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.", "Please confirm your email address first – check your inbox."))
     if not quota.can_use_ki(user):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
-                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
+                            i18n.t(i18n.lang_of(user), "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.", "Your balance is used up. Top up tokens or wait for next month."))
     if file.content_type not in ALLOWED_IMG:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte ein Bild hochladen (PNG/JPG/WebP).")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, i18n.t(i18n.lang_of(user), "Bitte ein Bild hochladen (PNG/JPG/WebP).", "Please upload an image (PNG/JPG/WebP)."))
     # Groesse VOR dem Einlesen aus dem Header pruefen (kein RAM-DoS durch Riesen-Body).
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_UPLOAD + 4096:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Bild zu gross (max. 8 MB).")
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, i18n.t(i18n.lang_of(user), "Bild zu gross (max. 8 MB).", "Image too large (max. 8 MB)."))
     # Chunk-weise lesen und bei Ueberschreitung abbrechen (falls Header fehlt/luegt).
     data = b""
     while chunk := await file.read(1024 * 256):
         data += chunk
         if len(data) > MAX_UPLOAD:
-            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Bild zu gross (max. 8 MB).")
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, i18n.t(i18n.lang_of(user), "Bild zu gross (max. 8 MB).", "Image too large (max. 8 MB)."))
     # Magic-Bytes pruefen: nur echte Bilddaten akzeptieren (Content-Type ist client-gesetzt).
     try:
         from PIL import Image
@@ -94,7 +95,7 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
 
         Image.open(io.BytesIO(data)).verify()
     except Exception:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist kein gueltiges Bild.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, i18n.t(i18n.lang_of(user), "Die Datei ist kein gueltiges Bild.", "The file is not a valid image."))
     # Frequenz-Bremse: jede Erkennung ist ein bezahlter KI-Aufruf; mehr als
     # 10 in 10 Minuten schafft kein Mensch beim Aufgaben-Erfassen.
     from datetime import datetime, timedelta, timezone
@@ -112,7 +113,7 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
     ) or 0
     if recent_ocr >= 10:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
-                            "Viele Fotos auf einmal 🙂 – warte ein paar Minuten und versuch es dann nochmal.")
+                            i18n.t(i18n.lang_of(user), "Viele Fotos auf einmal 🙂 – warte ein paar Minuten und versuch es dann nochmal.", "That's a lot of photos at once 🙂 – wait a few minutes and try again."))
 
     provider = get_ocr_provider()
     try:
@@ -120,7 +121,7 @@ async def ocr_upload(request: Request, file: UploadFile = File(...),
     except OcrUnavailable:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "Die Erkennung ist gerade nicht erreichbar – dein Geschriebenes bleibt erhalten, versuch es gleich nochmal.",
+            i18n.t(i18n.lang_of(user), "Die Erkennung ist gerade nicht erreichbar – dein Geschriebenes bleibt erhalten, versuch es gleich nochmal.", "Recognition is unavailable right now – your input is kept, please try again in a moment."),
         )
     # Bild dauerhaft in der DB ablegen – /tmp verliert Dateien bei jedem Kaltstart.
     stored, mime = _shrink_for_storage(data)
@@ -154,14 +155,14 @@ def get_image(token: str, db: Session = Depends(get_db)):
 def create_exercise(payload: ExerciseCreate, user: User = Depends(require_student), db: Session = Depends(get_db)):
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.")
+                            i18n.t(i18n.lang_of(user), "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.", "Please confirm your email address first – check your inbox."))
     if not quota.can_use_ki(user):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
-                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
+                            i18n.t(i18n.lang_of(user), "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.", "Your balance is used up. Top up tokens or wait for next month."))
     if payload.topic_id is not None:
         topic = db.get(Topic, payload.topic_id)
         if topic is None or topic.user_id != user.id:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Thema nicht gefunden")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Thema nicht gefunden", "Topic not found"))
     # Ohne expliziten Ausdruck versuchen, eine pruefbare Gleichung aus dem Text
     # zu ziehen («Löse 3x = 15» -> «3x = 15»); sonst waere die Aufgabe nie verifizierbar.
     math_expr = (payload.math_expression or "").strip() or None
@@ -225,21 +226,25 @@ def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateO
     db.add(attempt)
     db.flush()
 
+    lang = i18n.lang_of(user)
     shown = _strip_figure_notes(ex.text)
     # Bei Bild-Aufgaben nur zitieren, was alleine Sinn ergibt – lose
     # Figur-Beschriftungen («30», «x») bleiben weg, das Bild ist die Aufgabe.
     if ex.image_path and not _meaningful_task_text(shown):
         shown = ""
     if shown and shown != "(Aufgabe auf dem Foto)":
-        intro = f"Los geht's! Deine Aufgabe:\n\n{shown}"
+        intro = i18n.t(lang, "Los geht's! Deine Aufgabe:", "Let's go! Your task:") + f"\n\n{shown}"
     elif ex.image_path:
-        intro = "Los geht's! Deine Aufgabe ist auf dem Bild oben 📷."
+        intro = i18n.t(lang, "Los geht's! Deine Aufgabe ist auf dem Bild oben 📷.",
+                       "Let's go! Your task is in the picture above 📷.")
     else:
-        intro = "Los geht's!"
+        intro = i18n.t(lang, "Los geht's!", "Let's go!")
     opener = Message(
         attempt_id=attempt.id,
         role=MessageRole.tutor,
-        text=f"{intro}\n\nWie würdest du anfangen? Kein Stress – ich helf dir Schritt für Schritt.",
+        text=intro + i18n.t(lang,
+                            "\n\nWie würdest du anfangen? Kein Stress – ich helf dir Schritt für Schritt.",
+                            "\n\nHow would you start? No stress – I'll help you step by step."),
     )
     db.add(opener)
     db.commit()
@@ -257,7 +262,7 @@ def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateO
 def start_attempt(exercise_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
     ex = db.get(Exercise, exercise_id)
     if ex is None or ex.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Aufgabe nicht gefunden", "Task not found"))
     return _start_attempt_state(db, ex, user)
 
 
@@ -267,20 +272,22 @@ def create_variant(exercise_id: int, user: User = Depends(require_student), db: 
     Zahlen) und startet sie direkt – der staerkste Lerneffekt nach dem Loesen."""
     ex = db.get(Exercise, exercise_id)
     if ex is None or ex.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Aufgabe nicht gefunden", "Task not found"))
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.")
+                            i18n.t(i18n.lang_of(user), "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.", "Please confirm your email address first – check your inbox."))
     if not quota.can_use_ki(user):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
-                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
+                            i18n.t(i18n.lang_of(user), "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.", "Your balance is used up. Top up tokens or wait for next month."))
     if not settings.anthropic_api_key:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
-                            "Varianten brauchen die KI – sie ist gerade nicht konfiguriert.")
+                            i18n.t(i18n.lang_of(user), "Varianten brauchen die KI – sie ist gerade nicht konfiguriert.", "Variants need the AI – it is not configured right now."))
 
     import anthropic
 
-    grade = f" (Klassenstufe: {user.grade_level})" if user.grade_level else ""
+    grade = f" (Stufe: {user.grade_level})" if user.grade_level else ""
+    sprache = ("Schreibe die neue Aufgabe auf ENGLISCH."
+               if i18n.lang_of(user) == "en" else "Gleiche Sprache wie das Original.")
     try:
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         resp = client.messages.create(
@@ -291,7 +298,7 @@ def create_variant(exercise_id: int, user: User = Depends(require_student), db: 
                 "content": (
                     "Erzeuge GENAU EINE Variante dieser Mathe-Uebungsaufgabe: gleicher "
                     "Aufgabentyp und Schwierigkeitsgrad, aber andere Zahlen/Werte. "
-                    f"Gleiche Sprache wie das Original{grade}. Gib NUR den neuen "
+                    f"{sprache}{grade} Gib NUR den neuen "
                     f"Aufgabentext zurueck, ohne Einleitung.\n\nOriginal:\n{ex.text}"
                 ),
             }],
@@ -300,10 +307,10 @@ def create_variant(exercise_id: int, user: User = Depends(require_student), db: 
     except Exception:
         logging.getLogger("schrittweise.exercises").exception("Varianten-Erzeugung fehlgeschlagen")
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
-                            "Konnte gerade keine Variante erzeugen – versuch es gleich nochmal.")
+                            i18n.t(i18n.lang_of(user), "Konnte gerade keine Variante erzeugen – versuch es gleich nochmal.", "Couldn't create a variant right now – please try again in a moment."))
     if not new_text or len(new_text) > 1000:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
-                            "Konnte gerade keine Variante erzeugen – versuch es gleich nochmal.")
+                            i18n.t(i18n.lang_of(user), "Konnte gerade keine Variante erzeugen – versuch es gleich nochmal.", "Couldn't create a variant right now – please try again in a moment."))
 
     new_ex = Exercise(
         user_id=user.id,
@@ -327,5 +334,5 @@ def create_variant(exercise_id: int, user: User = Depends(require_student), db: 
 def get_exercise(exercise_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
     ex = db.get(Exercise, exercise_id)
     if ex is None or ex.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Aufgabe nicht gefunden", "Task not found"))
     return ExerciseOut.model_validate(ex)

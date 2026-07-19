@@ -1,3 +1,5 @@
+import { useLang } from "../lib/i18n.jsx";
+
 // Deterministische Lern-Skizzen: die KI liefert nur winzige JSON-Parameter,
 // GEZEICHNET wird hier – präzise, einheitlicher Look, sicher (reines JSX,
 // es wird nie KI-Markup als HTML gerendert). Kaputte Werte -> null (nichts).
@@ -30,6 +32,7 @@ const T = ({ x, y, size = 13, fill = TEXT, anchor = "middle", bold, children }) 
 
 // 1) Bruch: Pizza + Balken
 function Bruch({ zaehler, nenner }) {
+  const { t } = useLang();
   const n = num(nenner, 1, 24);
   const z = zaehler === 0 ? 0 : num(zaehler, 0, 24);
   if (n === null || z === null || z > n) return null;
@@ -49,7 +52,7 @@ function Bruch({ zaehler, nenner }) {
         <rect key={`b${i}`} x={bx + (i * bw) / n} y={by} width={bw / n} height={bh} fill={i < z ? FILL : "#fff"} stroke={INDIGO} strokeWidth="1.2" />
       ))}
       <T x={bx + bw / 2} y={by + bh + 24} size={17} bold>{z}/{n}</T>
-      <T x={bx + bw / 2} y={by - 14} size={12} fill={GRAY}>{z} von {n} Teilen</T>
+      <T x={bx + bw / 2} y={by - 14} size={12} fill={GRAY}>{t(`${z} von ${n} Teilen`, `${z} of ${n} parts`)}</T>
     </Box>
   );
 }
@@ -87,6 +90,7 @@ function Zahlenstrahl({ von, bis, punkte }) {
 
 // 3) Waage (Gleichung im Gleichgewicht)
 function Waage({ links, rechts }) {
+  const { t } = useLang();
   const l = str(links, 16);
   const r = str(rechts, 16);
   if (!l || !r) return null;
@@ -103,7 +107,7 @@ function Waage({ links, rechts }) {
       <path d="M 234 58 Q 268 88 302 58 Z" fill={FILL} stroke={INDIGO} strokeWidth="1.5" />
       <T x={52} y={76} size={14} bold>{l}</T>
       <T x={268} y={76} size={14} bold>{r}</T>
-      <T x={160} y={158} size={12} fill={GRAY}>beide Seiten bleiben im Gleichgewicht</T>
+      <T x={160} y={158} size={12} fill={GRAY}>{t("beide Seiten bleiben im Gleichgewicht", "both sides stay in balance")}</T>
     </Box>
   );
 }

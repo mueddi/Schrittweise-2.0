@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
+import { useLang } from "../lib/i18n.jsx";
 
 // Feedback-Fenster: alle Eingeloggten koennen senden (wird in der DB
 // gespeichert); das Admin-Konto sieht zusaetzlich alle Eingaenge.
 export default function FeedbackModal({ onClose }) {
   const { user } = useAuth();
+  const { t } = useLang();
   const loc = useLocation();
   const [tab, setTab] = useState("senden"); // "senden" | "eingegangen" (nur Admin)
   const [text, setText] = useState("");
@@ -46,7 +48,7 @@ export default function FeedbackModal({ onClose }) {
 
         {user?.is_admin && (
           <div style={{ display: "flex", gap: 6, padding: "10px 18px 0" }}>
-            {[["senden", "Senden"], ["eingegangen", "Eingegangen"]].map(([k, label]) => (
+            {[["senden", t("Senden", "Send")], ["eingegangen", t("Eingegangen", "Inbox")]].map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)} style={{ border: "none", borderRadius: 999, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", background: tab === k ? "#eef0fe" : "#f6f7fb", color: tab === k ? "#4f46e5" : "#6b7280" }}>
                 {label}
               </button>
@@ -59,27 +61,27 @@ export default function FeedbackModal({ onClose }) {
             {sent ? (
               <div style={{ textAlign: "center", padding: "18px 0" }}>
                 <div style={{ fontSize: 30, marginBottom: 8 }}>🙏</div>
-                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>Danke für dein Feedback!</div>
-                <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>Es hilft uns, Schrittweise besser zu machen.</div>
-                <button onClick={onClose} className="btn-primary" style={{ padding: "10px 20px", borderRadius: 10, fontSize: 13, border: "none" }}>Schliessen</button>
+                <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{t("Danke für dein Feedback!", "Thanks for your feedback!")}</div>
+                <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>{t("Es hilft uns, Schrittweise besser zu machen.", "It helps us make Schrittweise better.")}</div>
+                <button onClick={onClose} className="btn-primary" style={{ padding: "10px 20px", borderRadius: 10, fontSize: 13, border: "none" }}>{t("Schliessen", "Close")}</button>
               </div>
             ) : (
               <>
                 <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 10 }}>
-                  Was gefällt dir? Was nervt? Was fehlt? Schreib es uns – wir lesen alles.
+                  {t("Was gefällt dir? Was nervt? Was fehlt? Schreib es uns – wir lesen alles.", "What do you like? What's annoying? What's missing? Tell us – we read everything.")}
                 </div>
                 <textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={5}
                   maxLength={2000}
-                  placeholder="Dein Feedback …"
+                  placeholder={t("Dein Feedback …", "Your feedback …")}
                   autoFocus
                   style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 10 }}
                 />
                 {error && <div style={{ fontSize: 13, color: "#c0392b", marginBottom: 10 }}>{error}</div>}
                 <button onClick={send} disabled={busy || text.trim().length < 3} className="btn-primary" style={{ width: "100%", borderRadius: 11, padding: 12, fontSize: 14, border: "none", opacity: busy || text.trim().length < 3 ? 0.6 : 1 }}>
-                  {busy ? "sendet …" : "Feedback senden"}
+                  {busy ? t("sendet …", "sending …") : t("Feedback senden", "Send feedback")}
                 </button>
               </>
             )}
@@ -88,8 +90,8 @@ export default function FeedbackModal({ onClose }) {
 
         {tab === "eingegangen" && (
           <div style={{ padding: 18, overflowY: "auto" }}>
-            {items === null && <div style={{ fontSize: 13, color: "#9aa0ab" }}>lädt …</div>}
-            {items?.length === 0 && <div style={{ fontSize: 13, color: "#9aa0ab" }}>Noch kein Feedback eingegangen.</div>}
+            {items === null && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("lädt …", "loading …")}</div>}
+            {items?.length === 0 && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("Noch kein Feedback eingegangen.", "No feedback received yet.")}</div>}
             {items?.map((f) => (
               <div key={f.id} style={{ borderTop: "1px solid #f4f5f8", padding: "12px 0" }}>
                 <div style={{ fontSize: 11.5, color: "#9aa0ab", marginBottom: 4 }}>

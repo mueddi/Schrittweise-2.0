@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 
 from ..config import settings
+from ..i18n import t
 from .sympy_verifier import Verification
 
 log = logging.getLogger("schrittweise.tutor")
@@ -207,10 +208,13 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         f"- Bisherige eigene Versuche: {step.own_attempts}",
     ]
     if grade_level:
-        if "gymnasium" in grade_level.lower():
-            lines.append(f"- Klassenstufe: {grade_level} (Gymnasium/Matura-Niveau) – praezise Fachsprache ist erwuenscht, zuegigere Schritte, keine Baby-Schritte.")
+        g = grade_level.lower()
+        if "gym" in g:
+            lines.append(f"- Stufe: {grade_level} (Gymnasium/Matura-Niveau) – praezise Fachsprache ist erwuenscht, zuegigere Schritte, keine Baby-Schritte.")
+        elif "mittel" in g:
+            lines.append(f"- Stufe: {grade_level} (Mittelstufe, ca. 4.-6. Klasse, 10-12 Jahre) – sehr einfache Sprache, ganz kleine Schritte, kleine Zahlen, viele Alltagsbilder; Stoff: Grundoperationen, Brueche, einfache Geometrie. KEINE Fachbegriffe ohne Erklaerung.")
         else:
-            lines.append(f"- Klassenstufe: {grade_level} (Sek I) – einfach erklaeren, kleine Schritte, Alltagsbilder.")
+            lines.append(f"- Stufe: {grade_level} (Oberstufe/Sek I) – einfach erklaeren, kleine Schritte, Alltagsbilder.")
     if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "simpler":
@@ -228,11 +232,16 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     return "\n".join(lines)
 
 
-def _build_system(step, verification, exercise_text, exercise_expr, grade_level=None):
+def _build_system(step, verification, exercise_text, exercise_expr, grade_level=None,
+                  language="de"):
     """System als Blockliste – grosser Prompt gecacht, Regie pro Turn frisch."""
+    regie = _regie(step, verification, exercise_text, exercise_expr, grade_level)
+    if (language or "de").startswith("en"):
+        regie += ("\n- WICHTIG: Der Schueler nutzt die App auf ENGLISCH. "
+                  "Antworte IMMER auf Englisch (alle Erklaerungen, Fragen und Hinweise).")
     return [
         {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": _regie(step, verification, exercise_text, exercise_expr, grade_level)},
+        {"type": "text", "text": regie},
     ]
 
 
@@ -289,22 +298,25 @@ def stream_reply(history, step: LadderStep, verification: Verification,
                  grade_level: str | None = None,
                  image: tuple[bytes, str] | None = None,
                  usage_out: dict | None = None,
-                 last_image: tuple[bytes, str] | None = None):
+                 last_image: tuple[bytes, str] | None = None,
+                 language: str = "de"):
     """Generator, der Text-Chunks der Tutor-Antwort liefert (Streaming).
 
     ``usage_out``: optionales dict, das nach Stream-Ende mit ``model`` und
     ``usage`` (Token-Verbrauch der API-Antwort) gefuellt wird – Grundlage
     der Admin-Kostenauswertung. Im Mock-/Fehlerfall bleibt es leer.
+    ``language``: App-Sprache des Schuelers – der Tutor antwortet darin.
     """
     if not (settings.anthropic_api_key and anthropic):
-        yield from _mock_reply(step, verification, exercise_text)
+        yield from _mock_reply(step, verification, exercise_text, language)
         return
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     # Aufgaben mit Figur brauchen das starke Modell (Bild lesen = Kernaufgabe)
     model = (settings.anthropic_model_smart if (image or last_image)
              else pick_model(exercise_text, exercise_expr))
-    system = _build_system(step, verification, exercise_text, exercise_expr, grade_level)
+    system = _build_system(step, verification, exercise_text, exercise_expr, grade_level,
+                           language)
     messages = _history_to_messages(history, image, last_image)
     produced = False
     try:
@@ -323,31 +335,53 @@ def stream_reply(history, step: LadderStep, verification: Verification,
 
         alert.notify("ki", f"{type(exc).__name__}: {exc}")
         if produced:
-            yield "\n\n⚠️ (Die Verbindung ist mittendrin abgebrochen – frag einfach nochmal, dann mache ich fertig.)"
+            yield t(language,
+                    "\n\n⚠️ (Die Verbindung ist mittendrin abgebrochen – frag einfach nochmal, dann mache ich fertig.)",
+                    "\n\n⚠️ (The connection dropped mid-answer – just ask again and I'll finish.)")
         else:
-            yield ("⚠️ Ich habe gerade technische Probleme und kann dir nicht richtig antworten. "
-                   "Schick deine Nachricht in einem Moment einfach nochmal – dein Fortschritt bleibt erhalten.")
+            yield t(language,
+                    "⚠️ Ich habe gerade technische Probleme und kann dir nicht richtig antworten. "
+                    "Schick deine Nachricht in einem Moment einfach nochmal – dein Fortschritt bleibt erhalten.",
+                    "⚠️ I'm having technical trouble right now and can't answer properly. "
+                    "Please send your message again in a moment – your progress is saved.")
 
 
-def _mock_reply(step: LadderStep, verification: Verification, exercise_text: str):
+def _mock_reply(step: LadderStep, verification: Verification, exercise_text: str,
+                language: str = "de"):
     """Deterministische Antworten ohne API-Key – haelt die Leiter trotzdem ein."""
     if step.intent == "post_solved":
-        text = "Die hast du schon gelöst 🙂 Wenn du magst, erklär ich dir einen Schritt genauer – oder du startest eine neue Aufgabe."
+        text = t(language,
+                 "Die hast du schon gelöst 🙂 Wenn du magst, erklär ich dir einen Schritt genauer – oder du startest eine neue Aufgabe.",
+                 "You already solved this one 🙂 If you like, I can explain a step in more detail – or start a new task.")
     elif step.intent == "correct":
-        text = "Stark, das stimmt! 🎉 Du hast sauber nach der Variablen aufgelöst. Mag noch eine Aufgabe?"
+        text = t(language,
+                 "Stark, das stimmt! 🎉 Du hast sauber nach der Variablen aufgelöst. Mag noch eine Aufgabe?",
+                 "Great, that's correct! 🎉 You solved for the variable cleanly. Want another task?")
     elif step.intent == "plea":
-        text = "Mach ich extra nicht 🙂 – aber ich bring dich hin. Was fällt dir als Erstes auf, das du wegbekommen willst?"
+        text = t(language,
+                 "Mach ich extra nicht 🙂 – aber ich bring dich hin. Was fällt dir als Erstes auf, das du wegbekommen willst?",
+                 "I won't do that on purpose 🙂 – but I'll get you there. What do you notice first that you'd want to get rid of?")
     elif step.intent == "simpler":
-        text = "Okay, ganz langsam nochmal. Schau nur auf die linke Seite der Gleichung: Was steht dort? Sag es mir in deinen eigenen Worten."
+        text = t(language,
+                 "Okay, ganz langsam nochmal. Schau nur auf die linke Seite der Gleichung: Was steht dort? Sag es mir in deinen eigenen Worten.",
+                 "Okay, let's slow down. Look only at the left side of the equation: what's there? Tell me in your own words.")
     elif step.allowed_stage == 1:
-        text = "Kein Stress. Schau die Gleichung an: Was müsstest du zuerst tun, damit die Zahl auf derselben Seite wie das $x$ verschwindet?"
+        text = t(language,
+                 "Kein Stress. Schau die Gleichung an: Was müsstest du zuerst tun, damit die Zahl auf derselben Seite wie das $x$ verschwindet?",
+                 "No stress. Look at the equation: what would you do first so the number on the same side as $x$ disappears?")
     elif step.allowed_stage == 2:
-        text = "Kleiner Tipp: Was auf der einen Seite passiert, machst du auch auf der anderen. Überleg, welche Gegen-Rechnung den Störer auffliegen lässt."
+        text = t(language,
+                 "Kleiner Tipp: Was auf der einen Seite passiert, machst du auch auf der anderen. Überleg, welche Gegen-Rechnung den Störer auffliegen lässt.",
+                 "Small hint: whatever you do on one side, do on the other too. Think about which inverse operation removes the extra term.")
     elif step.allowed_stage == 3:
-        text = "Ich mach den ersten Schritt vor: Wir rechnen auf beiden Seiten $-5$. Was steht dann links, und was rechts? Rechne den nächsten Schritt selber."
+        text = t(language,
+                 "Ich mach den ersten Schritt vor: Wir rechnen auf beiden Seiten $-5$. Was steht dann links, und was rechts? Rechne den nächsten Schritt selber.",
+                 "I'll show the first step: we subtract $5$ on both sides. What's on the left then, and on the right? Do the next step yourself.")
     else:
-        sol = verification.solution or "die Loesung"
-        text = f"Okay, jetzt gemeinsam bis zum Schluss: erst auf beiden Seiten $-5$, dann durch den Koeffizienten teilen. Damit kommst du auf {sol}. Probier den letzten Schritt nochmal selbst nach."
+        sol = verification.solution or t(language, "die Loesung", "the solution")
+        text = t(language,
+                 f"Okay, jetzt gemeinsam bis zum Schluss: erst auf beiden Seiten $-5$, dann durch den Koeffizienten teilen. Damit kommst du auf {sol}. Probier den letzten Schritt nochmal selbst nach.",
+                 f"Okay, let's finish together: first subtract $5$ on both sides, then divide by the coefficient. That gives you {sol}. Try the last step yourself once more.")
     # in kleinen Haeppchen ausgeben, damit sich Streaming echt anfuehlt
     for chunk in re.findall(r"\S+\s*", text):
         yield chunk

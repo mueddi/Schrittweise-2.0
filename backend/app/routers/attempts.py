@@ -17,6 +17,7 @@ from ..schemas import (
     MessageOut,
     message_out,
 )
+from .. import i18n
 from ..services import aggregates, quota, tutor, usage
 from ..services.sympy_verifier import verify
 
@@ -31,7 +32,8 @@ CHAT_MAX_PER_MINUTE = 8
 def _load_owned(db: Session, attempt_id: int, user: User) -> Attempt:
     attempt = db.get(Attempt, attempt_id)
     if attempt is None or attempt.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Session nicht gefunden")
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            i18n.t(i18n.lang_of(user), "Session nicht gefunden", "Session not found"))
     return attempt
 
 
@@ -53,7 +55,8 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     ex = db.get(Exercise, attempt.exercise_id)
     text = payload.text.strip()
     if not text:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Leere Nachricht")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            i18n.t(i18n.lang_of(user), "Leere Nachricht", "Empty message"))
 
     # Frequenz-Bremse (siehe CHAT_MAX_PER_MINUTE)
     minute_ago = datetime.now(timezone.utc) - timedelta(seconds=60)
@@ -64,18 +67,25 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                Message.role == MessageRole.student,
                Message.created_at >= minute_ago)
     ) or 0
+    lang = i18n.lang_of(user)
     if recent_msgs >= CHAT_MAX_PER_MINUTE:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
-                            "Langsam 🙂 – eine Nachricht nach der anderen. Versuch es gleich nochmal.")
+                            i18n.t(lang,
+                                   "Langsam 🙂 – eine Nachricht nach der anderen. Versuch es gleich nochmal.",
+                                   "Slow down 🙂 – one message at a time. Try again in a moment."))
 
     # Guthaben-Gate VOR jeder Zustandsaenderung: sonst staende die Nachricht
     # ohne Antwort im Verlauf und die Leiter wuerde sich gratis weiterdrehen.
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.")
+                            i18n.t(lang,
+                                   "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.",
+                                   "Please confirm your email address first – check your inbox."))
     if not quota.can_use_ki(user):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
-                            "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.")
+                            i18n.t(lang,
+                                   "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.",
+                                   "Your balance is used up. Top up tokens or wait for next month."))
 
     # Angehaengtes Bild (Stift-Zeichnung/Foto aus /api/exercises/ocr) pruefen:
     # nur eigene, tatsaechlich gespeicherte Bilder duerfen an Nachrichten haengen.
@@ -131,6 +141,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     attempt_id_local = attempt.id
     user_id_local = user.id
     grade_level = user.grade_level
+    lang_local = lang
 
     # Aufgaben-Figur (Foto) fuer den Tutor laden – bei Geometrie steckt die
     # halbe Aufgabe im Bild. Fehlt es (alte /tmp-Pfade), laeuft der Chat ohne.
@@ -155,13 +166,16 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         try:
             for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr,
                                             grade_level, image, usage_out,
-                                            last_image=msg_image):
+                                            last_image=msg_image, language=lang_local):
                 parts.append(chunk)
                 yield chunk
         finally:
             # Auch bei Client-Abbruch (GeneratorExit) die bisherige Tutor-Antwort
             # und ggf. die Aggregate persistieren, damit kein Turn verloren geht.
-            full = "".join(parts).strip() or "Erzähl mir, wie du an die Aufgabe rangehst."
+            full = "".join(parts).strip() or i18n.t(
+                lang_local,
+                "Erzähl mir, wie du an die Aufgabe rangehst.",
+                "Tell me how you'd approach the task.")
             with SessionLocal() as s:
                 s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full,
                               hint_level=reply_level))

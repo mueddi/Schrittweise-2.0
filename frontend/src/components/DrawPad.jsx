@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
+import { useLang } from "../lib/i18n.jsx";
 
 // Zeichenfläche für Stift-/Finger-Eingabe: Striche werden als Bild an die
 // OCR-Erkennung geschickt; das Ergebnis landet editierbar im Chat-Eingabefeld.
 export default function DrawPad({ onResult, onClose }) {
+  const { t } = useLang();
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const strokes = useRef([]); // Array von Strichen (je Array von Punkten) für Rückgängig
@@ -155,7 +157,7 @@ export default function DrawPad({ onResult, onClose }) {
       // herausgezogenes Fragment (mit «=») und verstuemmelt mehrzeilige Rechnungen.
       const text = (res.text || res.math_expression || "").trim();
       if (!text && !res.image_path) {
-        setError("Konnte nichts erkennen – schreib etwas grösser und deutlicher.");
+        setError(t("Konnte nichts erkennen – schreib etwas grösser und deutlicher.", "Couldn't recognize anything – write a bit bigger and clearer."));
         return;
       }
       // Zeichnung haengt als Bild an der Nachricht – auch ohne erkannten Text
@@ -183,8 +185,8 @@ export default function DrawPad({ onResult, onClose }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, width: "min(680px, 100%)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(20,22,30,.25)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid #eef0f3" }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>✍️ Mit dem Stift schreiben</div>
-            <div style={{ fontSize: 12, color: "#9aa0ab" }}>Schreib oder zeichne – ich lese es, und deine Zeichnung hängt als Bild an der Nachricht.</div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>✍️ {t("Mit dem Stift schreiben", "Write with a pen")}</div>
+            <div style={{ fontSize: 12, color: "#9aa0ab" }}>{t("Schreib oder zeichne – ich lese es, und deine Zeichnung hängt als Bild an der Nachricht.", "Write or draw – I'll read it, and your drawing is attached to the message as an image.")}</div>
           </div>
           <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 18, color: "#9aa0ab", cursor: "pointer" }}>✕</button>
         </div>
@@ -205,15 +207,15 @@ export default function DrawPad({ onResult, onClose }) {
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 18px" }}>
-          <button onClick={undo} disabled={!hasInk} style={{ ...btn, opacity: hasInk ? 1 : 0.5 }}>↩ Rückgängig</button>
-          <button onClick={clearAll} disabled={!hasInk} style={{ ...btn, opacity: hasInk ? 1 : 0.5 }}>🗑 Löschen</button>
+          <button onClick={undo} disabled={!hasInk} style={{ ...btn, opacity: hasInk ? 1 : 0.5 }}>↩ {t("Rückgängig", "Undo")}</button>
+          <button onClick={clearAll} disabled={!hasInk} style={{ ...btn, opacity: hasInk ? 1 : 0.5 }}>🗑 {t("Löschen", "Clear")}</button>
           <button
             onClick={recognize}
             disabled={!hasInk || busy}
             className="btn-primary"
             style={{ marginLeft: "auto", borderRadius: 10, padding: "10px 18px", fontSize: 13, opacity: !hasInk || busy ? 0.6 : 1 }}
           >
-            {busy ? "wird gelesen …" : "✓ Übernehmen"}
+            {busy ? t("wird gelesen …", "reading …") : t("✓ Übernehmen", "✓ Use it")}
           </button>
         </div>
       </div>

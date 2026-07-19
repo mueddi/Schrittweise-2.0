@@ -5,28 +5,30 @@ import { useShell } from "../components/AppShell.jsx";
 import DrawPad from "../components/DrawPad.jsx";
 import MathText from "../lib/MathText.jsx";
 import MathFigure from "../components/MathFigure.jsx";
+import { useLang } from "../lib/i18n.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
 const STUFEN_LABEL = {
-  1: "Stufe 1: Aktivierende Frage",
-  2: "Stufe 2: Kleiner Tipp",
-  3: "Stufe 3: Teilschritt vorgemacht",
-  4: "Stufe 4: Volle Lösung",
+  1: ["Stufe 1: Aktivierende Frage", "Level 1: Activating question"],
+  2: ["Stufe 2: Kleiner Tipp", "Level 2: Small hint"],
+  3: ["Stufe 3: Teilschritt vorgemacht", "Level 3: Partial step shown"],
+  4: ["Stufe 4: Volle Lösung", "Level 4: Full solution"],
 };
 
 function Ladder({ level, solved, ownAttempts = 0 }) {
+  const { t, lang } = useLang();
   // Nach 2 echten eigenen Versuchen auf hoher Stufe ist die Loesung verdient
   const unlocked = !solved && level >= 3 && ownAttempts >= 2;
   const accent = solved || unlocked ? "#1a7f3c" : "#4f46e5";
   const bg = solved || unlocked ? "#e8f6ec" : "#eef0fe";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, background: bg, borderRadius: 999, padding: "6px 14px", transition: "background .3s" }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>HILFE</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color: accent }}>{t("HILFE", "HELP")}</span>
       {[1, 2, 3, 4].map((i) => (
         <span
           key={i}
-          title={STUFEN_LABEL[i]}
+          title={STUFEN_LABEL[i][lang === "en" ? 1 : 0]}
           className={`ladder-dot ${i <= level ? "filled" : ""}`}
           style={{
             width: 9, height: 9, borderRadius: "50%", display: "inline-block", cursor: "help",
@@ -36,7 +38,7 @@ function Ladder({ level, solved, ownAttempts = 0 }) {
         />
       ))}
       <span style={{ fontSize: 11, fontWeight: 600, color: accent }}>
-        {solved ? "Gelöst 🎉" : unlocked ? "🔓 Lösung verfügbar" : `Stufe ${Math.max(level, 0)}/4`}
+        {solved ? t("Gelöst 🎉", "Solved 🎉") : unlocked ? t("🔓 Lösung verfügbar", "🔓 Solution available") : `${t("Stufe", "Level")} ${Math.max(level, 0)}/4`}
       </span>
     </div>
   );
@@ -64,6 +66,7 @@ function parseSpec(raw) {
 }
 
 function TutorContent({ text, streaming = false }) {
+  const { t } = useLang();
   let src = text || "";
   let drawing = false;
   if (streaming) {
@@ -86,26 +89,28 @@ function TutorContent({ text, streaming = false }) {
     last = re.lastIndex;
   }
   if (last < src.length) parts.push(<MathText key={`t${i++}`} text={src.slice(last)} />);
-  if (drawing) parts.push(<span key="draw" style={{ display: "block", fontSize: 12.5, color: "#9aa0ab", marginTop: 6 }}>✏️ Skizze wird gezeichnet …</span>);
+  if (drawing) parts.push(<span key="draw" style={{ display: "block", fontSize: 12.5, color: "#9aa0ab", marginTop: 6 }}>{t("✏️ Skizze wird gezeichnet …", "✏️ drawing the sketch …")}</span>);
   return <>{parts}</>;
 }
 
 // Was diese Tutor-Antwort ist – macht die Hilfe-Stufen im Chat sichtbar.
 const STAGE_TAG = {
-  1: { label: "💬 Frage zum Nachdenken", bg: "#eef0fe", fg: "#4f46e5" },
-  2: { label: "💡 Kleiner Tipp", bg: "#fdf3e6", fg: "#a05c12" },
-  3: { label: "👣 Teilschritt vorgemacht", bg: "#e7f0fd", fg: "#1d4ed8" },
-  4: { label: "🔓 Ganzer Lösungsweg", bg: "#e8f6ec", fg: "#1a7f3c" },
+  1: { label: ["💬 Frage zum Nachdenken", "💬 Question to think about"], bg: "#eef0fe", fg: "#4f46e5" },
+  2: { label: ["💡 Kleiner Tipp", "💡 Small hint"], bg: "#fdf3e6", fg: "#a05c12" },
+  3: { label: ["👣 Teilschritt vorgemacht", "👣 Partial step shown"], bg: "#e7f0fd", fg: "#1d4ed8" },
+  4: { label: ["🔓 Ganzer Lösungsweg", "🔓 Full solution path"], bg: "#e8f6ec", fg: "#1a7f3c" },
 };
 
 // Visuelles Feedback zur SymPy-Prüfung unter der Schüler-Bubble (nie die Lösung)
 const VERIFY_CHIP = {
-  correct: { label: "✓ stimmt!", bg: "#e8f6ec", fg: "#1a7f3c" },
-  partial: { label: "→ guter Zwischenschritt", bg: "#eef0fe", fg: "#4f46e5" },
-  incorrect: { label: "✗ noch nicht – bleib dran", bg: "#fdecec", fg: "#c0392b" },
+  correct: { label: ["✓ stimmt!", "✓ correct!"], bg: "#e8f6ec", fg: "#1a7f3c" },
+  partial: { label: ["→ guter Zwischenschritt", "→ good intermediate step"], bg: "#eef0fe", fg: "#4f46e5" },
+  incorrect: { label: ["✗ noch nicht – bleib dran", "✗ not yet – keep going"], bg: "#fdecec", fg: "#c0392b" },
 };
 
 function Bubble({ role, verifyStatus, hintLevel, children }) {
+  const { lang } = useLang();
+  const li = lang === "en" ? 1 : 0;
   const tutor = role === "tutor";
   const chip = !tutor && VERIFY_CHIP[verifyStatus];
   const tag = tutor && STAGE_TAG[hintLevel];
@@ -117,7 +122,7 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
     <div style={{ alignSelf: tutor ? "flex-start" : "flex-end", maxWidth: "78%", display: "flex", flexDirection: "column", alignItems: tutor ? "flex-start" : "flex-end", gap: 4 }}>
       {tag && (
         <span style={{ marginLeft: 34, fontSize: 10.5, fontWeight: 700, borderRadius: 999, padding: "2px 9px", background: tag.bg, color: tag.fg }}>
-          {tag.label}
+          {tag.label[li]}
         </span>
       )}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8, position: "relative" }}>
@@ -152,7 +157,7 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
       </div>
       {chip && (
         <span className="verify-chip" style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px", background: chip.bg, color: chip.fg }}>
-          {chip.label}
+          {chip.label[li]}
         </span>
       )}
     </div>
@@ -161,23 +166,24 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
 
 // Schnell-Antworten: ein Tipp genuegt – junge Schueler muessen nicht tippen.
 function QuickReplies({ solved, unlocked, onSend, onNew, onVariant }) {
+  const { t } = useLang();
   const items = solved
     ? [
-        ...(onVariant ? [{ label: "🔁 Nochmal so eine", act: onVariant, accent: true }] : []),
-        { label: "🎯 Erklär mir den Weg nochmal", act: () => onSend("Erklär mir den Lösungsweg nochmal Schritt für Schritt.") },
-        { label: "➕ Neue Aufgabe", act: onNew },
+        ...(onVariant ? [{ label: t("🔁 Nochmal so eine", "🔁 Another one like this"), act: onVariant, accent: true }] : []),
+        { label: t("🎯 Erklär mir den Weg nochmal", "🎯 Explain the path again"), act: () => onSend(t("Erklär mir den Lösungsweg nochmal Schritt für Schritt.", "Explain the solution path to me again step by step.")) },
+        { label: t("➕ Neue Aufgabe", "➕ New task"), act: onNew },
       ]
     : [
         // verdient nach 2 eigenen Versuchen: die Loesung ist jetzt abholbar
-        ...(unlocked ? [{ label: "🔓 Zeig mir die ganze Lösung", act: () => onSend("Zeig mir die Lösung bitte."), accent: true }] : []),
-        { label: "🤔 Ich verstehe es nicht", act: () => onSend("Ich verstehe es nicht.") },
-        { label: "💡 Gib mir einen Tipp", act: () => onSend("Gib mir bitte einen Tipp.") },
-        { label: "👣 Zeig mir den ersten Schritt", act: () => onSend("Zeig mir bitte den ersten Schritt.") },
+        ...(unlocked ? [{ label: t("🔓 Zeig mir die ganze Lösung", "🔓 Show me the full solution"), act: () => onSend(t("Zeig mir die Lösung bitte.", "Please show me the solution.")), accent: true }] : []),
+        { label: t("🤔 Ich verstehe es nicht", "🤔 I don't get it"), act: () => onSend(t("Ich verstehe es nicht.", "I don't understand it.")) },
+        { label: t("💡 Gib mir einen Tipp", "💡 Give me a hint"), act: () => onSend(t("Gib mir bitte einen Tipp.", "Please give me a hint.")) },
+        { label: t("👣 Zeig mir den ersten Schritt", "👣 Show me the first step"), act: () => onSend(t("Zeig mir bitte den ersten Schritt.", "Please show me the first step.")) },
         // andere DARSTELLUNG derselben Stufe – Hilfe-Stufe steigt dabei nicht
-        { label: "🎨 Mit Skizze", act: () => onSend("Kannst du es mir mit einer Skizze zeigen?") },
-        { label: "🍕 Mit Alltagsbeispiel", act: () => onSend("Erklär es mir mit einem Beispiel aus dem Alltag.") },
-        { label: "🔢 Mit Zahlen statt x", act: () => onSend("Erklär es mir mit konkreten Zahlen statt mit x.") },
-        { label: "🐢 Erklär es einfacher", act: () => onSend("Kannst du es mir einfacher erklären?") },
+        { label: t("🎨 Mit Skizze", "🎨 With a sketch"), act: () => onSend(t("Kannst du es mir mit einer Skizze zeigen?", "Can you show it to me with a sketch?")) },
+        { label: t("🍕 Mit Alltagsbeispiel", "🍕 With an everyday example"), act: () => onSend(t("Erklär es mir mit einem Beispiel aus dem Alltag.", "Explain it to me with an everyday example.")) },
+        { label: t("🔢 Mit Zahlen statt x", "🔢 With numbers instead of x"), act: () => onSend(t("Erklär es mir mit konkreten Zahlen statt mit x.", "Explain it to me with concrete numbers instead of x.")) },
+        { label: t("🐢 Erklär es einfacher", "🐢 Explain it more simply"), act: () => onSend(t("Kannst du es mir einfacher erklären?", "Can you explain it to me more simply?")) },
       ];
   return (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 2px 9px", WebkitOverflowScrolling: "touch" }}>
@@ -221,6 +227,7 @@ export default function Lernen() {
   const { attemptId } = useParams();
   const nav = useNavigate();
   const shell = useShell();
+  const { t } = useLang();
   const [state, setState] = useState(null); // {attempt, messages, exercise}
   const [streaming, setStreaming] = useState("");
   const [input, setInput] = useState("");
@@ -324,7 +331,7 @@ export default function Lernen() {
         await api.get("/api/auth/me").catch(() => {}); // loest globalen Logout aus, falls Session weg
         if (myToken === reqToken.current) {
           // Session noch gueltig (Race) -> Fehlerhinweis statt stummer Nachricht
-          setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: "Ups, das hat nicht geklappt. Versuch es nochmal." }] } : s));
+          setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: t("Ups, das hat nicht geklappt. Versuch es nochmal.", "Oops, that didn't work. Please try again.") }] } : s));
         }
         return;
       }
@@ -368,7 +375,7 @@ export default function Lernen() {
     } catch (e) {
       if (controller.signal.aborted || myToken !== reqToken.current) return; // bewusst abgebrochen
       setStreaming("");
-      setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: "Ups, da ging etwas schief. Versuch es nochmal." }] } : s));
+      setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: t("Ups, da ging etwas schief. Versuch es nochmal.", "Oops, something went wrong. Please try again.") }] } : s));
     } finally {
       if (myToken === reqToken.current) setBusy(false);
     }
@@ -380,12 +387,12 @@ export default function Lernen() {
       <div style={{ flex: 1, background: "#f6f7fb", display: "grid", placeItems: "center", padding: 24, height: "100%" }}>
         <div style={{ textAlign: "center", maxWidth: 380 }}>
           <div style={{ fontSize: 34, marginBottom: 10 }}>🔍</div>
-          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>Session nicht gefunden</div>
+          <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>{t("Session nicht gefunden", "Session not found")}</div>
           <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 18 }}>
-            Diese Übungssession gibt es nicht (mehr). Starte eine neue Aufgabe.
+            {t("Diese Übungssession gibt es nicht (mehr). Starte eine neue Aufgabe.", "This practice session doesn't exist (anymore). Start a new task.")}
           </div>
           <button onClick={() => shell.openNewTask()} className="btn-primary" style={{ padding: "12px 20px", borderRadius: 12, fontSize: 14 }}>
-            + Neue Aufgabe
+            {t("+ Neue Aufgabe", "+ New task")}
           </button>
         </div>
       </div>
@@ -396,7 +403,7 @@ export default function Lernen() {
   if (attemptId && !state) {
     return (
       <div style={{ flex: 1, background: "#f6f7fb", display: "grid", placeItems: "center", height: "100%", color: "#9aa0ab", fontSize: 14 }}>
-        lädt …
+        {t("lädt …", "loading …")}
       </div>
     );
   }
@@ -407,25 +414,25 @@ export default function Lernen() {
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 22px", borderBottom: "1px solid #eef0f3" }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Lernen</div>
-            <div style={{ fontSize: 12, color: "#9aa0ab" }}>Schritt für Schritt zur Lösung</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{t("Lernen", "Learn")}</div>
+            <div style={{ fontSize: 12, color: "#9aa0ab" }}>{t("Schritt für Schritt zur Lösung", "Step by step to the solution")}</div>
           </div>
           {/* keine Hilfe-Anzeige: sie gilt pro Aufgabe – hier ist keine offen */}
         </div>
         <div style={{ flex: 1, background: "#f6f7fb", display: "grid", placeItems: "center", padding: 24 }}>
           <div style={{ textAlign: "center", maxWidth: 420 }}>
             <div style={{ width: 64, height: 64, borderRadius: 18, background: "#eef0fe", color: "#4f46e5", fontSize: 28, display: "grid", placeItems: "center", margin: "0 auto 16px" }}>✎</div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Bereit zum Üben?</div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>{t("Bereit zum Üben?", "Ready to practice?")}</div>
             {stats?.serie_tage >= 2 && (
               <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 12 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#d97706", background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 999, padding: "5px 13px" }}>🔥 {stats.serie_tage} Tage in Folge</span>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#d97706", background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 999, padding: "5px 13px" }}>🔥 {stats.serie_tage} {t("Tage in Folge", "days in a row")}</span>
               </div>
             )}
             <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 20, lineHeight: 1.55 }}>
-              Leg eine neue Aufgabe an – tippe sie ab oder fotografiere sie. Ich verrate dir die Lösung nie direkt, sondern helfe dir Stufe für Stufe.
+              {t("Leg eine neue Aufgabe an – tippe sie ab oder fotografiere sie. Ich verrate dir die Lösung nie direkt, sondern helfe dir Stufe für Stufe.", "Create a new task – type it in or take a photo. I never just tell you the answer; I help you level by level.")}
             </div>
             <button onClick={() => shell.openNewTask()} className="btn-primary" style={{ padding: "13px 22px", borderRadius: 12, fontSize: 15 }}>
-              + Neue Aufgabe
+              {t("+ Neue Aufgabe", "+ New task")}
             </button>
           </div>
         </div>
@@ -434,7 +441,7 @@ export default function Lernen() {
   }
 
   const { attempt, exercise } = state;
-  const topicName = shell.topics?.find((t) => t.id === exercise.topic_id)?.name || "Aufgabe";
+  const topicName = shell.topics?.find((t) => t.id === exercise.topic_id)?.name || t("Aufgabe", "Task");
 
   async function retry() {
     if (busy) return;
@@ -543,14 +550,14 @@ export default function Lernen() {
         <div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>{topicName}</div>
           <div style={{ fontSize: 12, color: "#9aa0ab" }}>
-            {attempt.solved ? "gelöst · gut gemacht" : "Schritt für Schritt"}
-            {stats?.serie_tage >= 2 && <span style={{ color: "#d97706", fontWeight: 700 }}> · 🔥 {stats.serie_tage} Tage in Folge</span>}
+            {attempt.solved ? t("gelöst · gut gemacht", "solved · well done") : t("Schritt für Schritt", "Step by step")}
+            {stats?.serie_tage >= 2 && <span style={{ color: "#d97706", fontWeight: 700 }}> · 🔥 {stats.serie_tage} {t("Tage in Folge", "days in a row")}</span>}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {attempt.solved && (
             <button onClick={retry} className="btn-ghost" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 999 }}>
-              ↻ Nochmal üben
+              {t("↻ Nochmal üben", "↻ Practice again")}
             </button>
           )}
           {/* Hilfe-Anzeige gilt PRO Aufgabe: erst zeigen, wenn in dieser
@@ -566,14 +573,14 @@ export default function Lernen() {
           Foto-Aufgaben: das BILD ist die Aufgabe (Text nur auf Wunsch). */}
       <div style={{ background: "#f6f7fb", padding: "12px 24px 0" }}>
         <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: exercise.image_path && showTaskImage ? 270 : 130, overflowY: "auto" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", color: "#4f46e5", marginBottom: 3 }}>DEINE AUFGABE</div>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", color: "#4f46e5", marginBottom: 3 }}>{t("DEINE AUFGABE", "YOUR TASK")}</div>
           {exercise.image_path ? (
             <>
               {showTaskImage && (
                 <img
                   src={`${BASE}${exercise.image_path}`}
-                  alt="Aufgaben-Bild"
-                  title="🔍 vergrössern"
+                  alt={t("Aufgaben-Bild", "Task image")}
+                  title={t("🔍 vergrössern", "🔍 zoom in")}
                   onClick={() => setLightbox(exercise.image_path)}
                   style={{ display: "block", maxWidth: "100%", maxHeight: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in" }}
                 />
@@ -582,7 +589,7 @@ export default function Lernen() {
                 onClick={() => setShowTaskImage(!showTaskImage)}
                 style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 12px 2px 0" }}
               >
-                Bild {showTaskImage ? "ausblenden ▴" : "anzeigen ▾"}
+                {t("Bild", "Image")} {showTaskImage ? t("ausblenden ▴", "hide ▴") : t("anzeigen ▾", "show ▾")}
               </button>
               {exercise.text && exercise.text !== "(Aufgabe auf dem Foto)" && (
                 <>
@@ -590,7 +597,7 @@ export default function Lernen() {
                     onClick={() => setShowTaskText(!showTaskText)}
                     style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 0 2px" }}
                   >
-                    Aufgabentext {showTaskText ? "ausblenden ▴" : "anzeigen ▾"}
+                    {t("Aufgabentext", "Task text")} {showTaskText ? t("ausblenden ▴", "hide ▴") : t("anzeigen ▾", "show ▾")}
                   </button>
                   {showTaskText && (
                     <div style={{ fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", color: "#4b4f5c" }}>
@@ -617,7 +624,7 @@ export default function Lernen() {
               if (lastLevel && m.hint_level > lastLevel) {
                 out.push(
                   <div key={`lvl-${m.id}`} style={{ alignSelf: "center", fontSize: 11, fontWeight: 700, color: "#4f46e5", background: "#eef0fe", border: "1px solid #e0e2fb", borderRadius: 999, padding: "4px 13px" }}>
-                    ⬆️ Nächste Hilfe-Stufe
+                    {t("⬆️ Nächste Hilfe-Stufe", "⬆️ Next help level")}
                   </div>
                 );
               }
@@ -626,13 +633,12 @@ export default function Lernen() {
             if (m.kind === "quota") {
               out.push(
                 <div key={m.id} style={{ alignSelf: "flex-start", maxWidth: 420, background: "#fffaf0", border: "1px solid #f0e2c4", borderRadius: 16, padding: "14px 16px" }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>⚡ Dein Guthaben ist aufgebraucht</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>{t("⚡ Dein Guthaben ist aufgebraucht", "⚡ Your balance is used up")}</div>
                   <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, marginBottom: 10 }}>
-                    Deine Nachricht wurde nicht gesendet – sie steht noch im Eingabefeld.
-                    Lad Tokens oder warte auf die Gratis-Tokens vom nächsten Monat.
+                    {t("Deine Nachricht wurde nicht gesendet – sie steht noch im Eingabefeld. Lad Tokens oder warte auf die Gratis-Tokens vom nächsten Monat.", "Your message was not sent – it's still in the input field. Top up tokens or wait for next month's free tokens.")}
                   </div>
                   <button onClick={() => nav("/app/preise")} className="btn-primary" style={{ border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13 }}>
-                    Tokens laden →
+                    {t("Tokens laden →", "Top up tokens →")}
                   </button>
                 </div>
               );
@@ -644,8 +650,8 @@ export default function Lernen() {
                 {m.image_path && (
                   <img
                     src={`${BASE}${m.image_path}`}
-                    alt="Angehängtes Bild"
-                    title="🔍 vergrössern"
+                    alt={t("Angehängtes Bild", "Attached image")}
+                    title={t("🔍 vergrössern", "🔍 zoom in")}
                     onClick={() => setLightbox(m.image_path)}
                     style={{ display: "block", maxWidth: 220, maxHeight: 180, borderRadius: 10, background: "#fff", border: "1px solid rgba(255,255,255,.4)", cursor: "zoom-in", marginBottom: hideText ? 0 : 8 }}
                   />
@@ -668,15 +674,15 @@ export default function Lernen() {
         )}
         {attempt.solved && !busy && !streaming && (
           <div className="solved-banner" style={{ alignSelf: "center", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center", background: "#e8f6ec", border: "1px solid #cde7d6", color: "#1a7f3c", borderRadius: 999, padding: "8px 18px", fontSize: 13, fontWeight: 700 }}>
-            🎉 Aufgabe gelöst – stark!
+            {t("🎉 Aufgabe gelöst – stark!", "🎉 Task solved – great job!")}
             <button onClick={makeVariant} disabled={variantBusy} style={{ border: "none", background: "transparent", color: "#1a7f3c", fontWeight: 700, fontSize: 13, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
-              {variantBusy ? "erstelle Variante …" : "🔁 nochmal so eine"}
+              {variantBusy ? t("erstelle Variante …", "creating variant …") : t("🔁 nochmal so eine", "🔁 another one like this")}
             </button>
             <button onClick={retry} style={{ border: "none", background: "transparent", color: "#1a7f3c", fontWeight: 700, fontSize: 13, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
-              nochmal üben
+              {t("nochmal üben", "practice again")}
             </button>
             <button onClick={() => shell.openNewTask(exercise.topic_id ?? undefined)} style={{ border: "none", background: "transparent", color: "#1a7f3c", fontWeight: 700, fontSize: 13, textDecoration: "underline", cursor: "pointer", padding: 0 }}>
-              neue Aufgabe
+              {t("neue Aufgabe", "new task")}
             </button>
           </div>
         )}
@@ -694,7 +700,7 @@ export default function Lernen() {
         )}
         {inputLooksMathy && (
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 12, padding: "7px 14px", marginBottom: 8, fontSize: 14, overflowX: "auto" }}>
-            <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", color: "#9aa0ab", flex: "0 0 auto" }}>SO SIEHT'S AUS</span>
+            <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", color: "#9aa0ab", flex: "0 0 auto" }}>{t("SO SIEHT'S AUS", "THIS IS HOW IT LOOKS")}</span>
             <MathText text={input} />
           </div>
         )}
@@ -724,24 +730,24 @@ export default function Lernen() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 12, padding: "6px 10px" }}>
             <img
               src={`${BASE}${pendingImage}`}
-              alt="Bild-Anhang"
+              alt={t("Bild-Anhang", "Image attachment")}
               onClick={() => setLightbox(pendingImage)}
               style={{ height: 48, maxWidth: 90, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e2fb", cursor: "zoom-in", background: "#fff" }}
             />
-            <span style={{ fontSize: 12.5, color: "#6b7280", flex: 1 }}>Bild hängt an deiner nächsten Nachricht</span>
-            <button onClick={() => setPendingImage(null)} aria-label="Bild entfernen" style={{ border: "none", background: "transparent", color: "#9aa0ab", fontSize: 15, cursor: "pointer" }}>✕</button>
+            <span style={{ fontSize: 12.5, color: "#6b7280", flex: 1 }}>{t("Bild hängt an deiner nächsten Nachricht", "Image attached to your next message")}</span>
+            <button onClick={() => setPendingImage(null)} aria-label={t("Bild entfernen", "Remove image")} style={{ border: "none", background: "transparent", color: "#9aa0ab", fontSize: 15, cursor: "pointer" }}>✕</button>
           </div>
         )}
         <input ref={fileRef} type="file" accept="image/*" onChange={attachPhoto} style={{ display: "none" }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #d2d4dd", borderRadius: 24, padding: "7px 8px 7px 14px" }}>
-          <span onClick={() => !uploadBusy && fileRef.current?.click()} title="Foto anhängen" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer", opacity: uploadBusy ? 0.5 : 1 }}>{uploadBusy ? "⏳" : "📷"}</span>
-          <span onClick={() => setDrawOpen(true)} title="Mit dem Stift schreiben oder zeichnen" style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
+          <span onClick={() => !uploadBusy && fileRef.current?.click()} title={t("Foto anhängen", "Attach photo")} style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer", opacity: uploadBusy ? 0.5 : 1 }}>{uploadBusy ? "⏳" : "📷"}</span>
+          <span onClick={() => setDrawOpen(true)} title={t("Mit dem Stift schreiben oder zeichnen", "Write or draw with a pen")} style={{ color: "#b6bcc6", fontSize: 15, cursor: "pointer" }}>✍️</span>
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Schreib deinen nächsten Schritt …"
+            placeholder={t("Schreib deinen nächsten Schritt …", "Write your next step …")}
             style={{ flex: 1, border: "none", outline: "none", fontSize: 13, color: "#1a1c22", background: "transparent", paddingLeft: 4 }}
           />
           <button onClick={send} disabled={busy} style={{ width: 34, height: 34, borderRadius: "50%", background: "#6366f1", color: "#fff", border: "none", display: "grid", placeItems: "center", fontSize: 15, boxShadow: "0 2px 8px rgba(99,102,241,.35)", opacity: busy ? 0.6 : 1 }}>↑</button>
@@ -769,12 +775,12 @@ export default function Lernen() {
         >
           <img
             src={`${BASE}${lightbox}`}
-            alt="Bild gross"
+            alt={t("Bild gross", "Image enlarged")}
             style={{ maxWidth: "92vw", maxHeight: "88vh", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.5)", background: "#fff" }}
           />
           <button
             onClick={() => setLightbox(null)}
-            aria-label="Schliessen"
+            aria-label={t("Schliessen", "Close")}
             style={{ position: "fixed", top: 18, right: 18, width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(255,255,255,.92)", color: "#1a1c22", fontSize: 17, fontWeight: 700, cursor: "pointer" }}
           >
             ✕

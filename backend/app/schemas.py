@@ -43,6 +43,8 @@ class PasswordRegisterRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=80)
     role: str = "student"  # "student" | "parent"
     grade_level: str | None = None
+    # App-Sprache bei der Registrierung ("de"/"en") – wird im Profil gespeichert
+    language: str | None = Field(default=None, max_length=8)
     # Honeypot: unsichtbares Feld im Formular – Menschen lassen es leer,
     # simple Bots fuellen es aus und fliegen auf.
     website: str = Field(default="", max_length=200)

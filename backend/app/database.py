@@ -90,3 +90,37 @@ def init_db() -> None:
             logging.getLogger("schrittweise.db").exception(
                 "Auto-Migration fehlgeschlagen (%s.%s)", table, column
             )
+
+    # Daten-Migration Stufen: alte Klassen-Werte («2. Oberstufe»,
+    # «Gymnasium 1./2.») auf die kanonischen Keys mittelstufe/oberstufe/
+    # gymnasium abbilden. Idempotent – trifft nur Alt-Werte.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE users SET grade_level='gymnasium' "
+                "WHERE grade_level LIKE '%ymnasium%' AND grade_level != 'gymnasium'"))
+            conn.execute(text(
+                "UPDATE users SET grade_level='oberstufe' "
+                "WHERE grade_level LIKE '%berstufe%' AND grade_level != 'oberstufe'"))
+        # Bibliothek: kommagetrennte Listen zeilenweise umschreiben
+        with engine.begin() as conn:
+            rows = conn.execute(text(
+                "SELECT id, grade_levels FROM library_documents "
+                "WHERE grade_levels LIKE '%berstufe%' OR grade_levels LIKE '%ymnasium%'"
+            )).fetchall()
+            for row_id, levels in rows:
+                mapped = []
+                for part in (levels or "").split(","):
+                    p = part.strip().lower()
+                    key = ("gymnasium" if "ymnasium" in p or "gym" in p
+                           else "mittelstufe" if "ittelstufe" in p
+                           else "oberstufe" if "berstufe" in p else part.strip())
+                    if key and key not in mapped:
+                        mapped.append(key)
+                new_levels = ",".join(mapped)
+                if new_levels != levels:
+                    conn.execute(text(
+                        "UPDATE library_documents SET grade_levels=:gl WHERE id=:id"),
+                        {"gl": new_levels, "id": row_id})
+    except Exception:
+        logging.getLogger("schrittweise.db").exception("Stufen-Daten-Migration fehlgeschlagen")

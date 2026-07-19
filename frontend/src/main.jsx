@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter, HashRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./lib/auth.jsx";
+import { LanguageProvider } from "./lib/i18n.jsx";
 import "./styles/theme.css";
 
 // Demo-Build (VITE_DEMO=1): Mock-Backend im Browser + HashRouter (kein Server-Rewrite noetig)
@@ -57,9 +58,11 @@ async function boot() {
     <React.StrictMode>
       <ErrorBoundary>
         <Router>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </LanguageProvider>
         </Router>
       </ErrorBoundary>
     </React.StrictMode>

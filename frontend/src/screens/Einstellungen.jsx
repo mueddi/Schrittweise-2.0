@@ -2,26 +2,27 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
-
-const TABS = [
-  { key: "profil", icon: "👤", label: "Profil" },
-  { key: "passwort", icon: "🔑", label: "Passwort" },
-  { key: "sprache", icon: "🌐", label: "Sprache" },
-  { key: "privat", icon: "🔒", label: "Privatsphäre" },
-  { key: "abo", icon: "💳", label: "Abo & Tokens" },
-];
-const GRADES = ["1. Oberstufe", "2. Oberstufe", "3. Oberstufe", "Gymnasium 1./2.", "Gymnasium 3./4."];
+import { useLang, GRADE_KEYS, gradeLabel } from "../lib/i18n.jsx";
 
 export default function Einstellungen() {
   const nav = useNavigate();
   const { user, setUser } = useAuth();
+  const { t, lang, setLang } = useLang();
   const [tab, setTab] = useState("profil");
   const [name, setName] = useState(user?.display_name || "");
-  const [grade, setGrade] = useState(user?.grade_level || "2. Oberstufe");
-  const [language, setLanguage] = useState(user?.language || "de");
+  const [grade, setGrade] = useState(user?.grade_level || "oberstufe");
+  const [language, setLanguage] = useState(user?.language === "en" ? "en" : "de");
   const [share, setShare] = useState(user?.share_with_parents ?? true);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const TABS = [
+    { key: "profil", icon: "👤", label: t("Profil", "Profile") },
+    { key: "passwort", icon: "🔑", label: t("Passwort", "Password") },
+    { key: "sprache", icon: "🌐", label: t("Sprache", "Language") },
+    { key: "privat", icon: "🔒", label: t("Privatsphäre", "Privacy") },
+    { key: "abo", icon: "💳", label: t("Abo & Tokens", "Plan & tokens") },
+  ];
 
   async function save(extra = {}) {
     setBusy(true);
@@ -35,6 +36,8 @@ export default function Einstellungen() {
         ...extra,
       });
       setUser(updated);
+      // Sprache sofort in der ganzen App umschalten
+      if (updated?.language === "de" || updated?.language === "en") setLang(updated.language);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       return true;
@@ -51,14 +54,14 @@ export default function Einstellungen() {
   return (
     <div style={{ height: "100%", display: "flex" }} className="settings">
       <div style={{ flex: "0 0 220px", background: "#fbfbfd", borderRight: "1px solid #eef0f3", padding: "18px 0" }} className="settings-nav">
-        <div style={{ padding: "0 18px 14px", fontSize: 18, fontWeight: 800, letterSpacing: "-.02em" }}>Einstellungen</div>
-        {TABS.map((t) => (
+        <div style={{ padding: "0 18px 14px", fontSize: 18, fontWeight: 800, letterSpacing: "-.02em" }}>{t("Einstellungen", "Settings")}</div>
+        {TABS.map((tb) => (
           <div
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 8px", padding: "9px 12px", borderRadius: 10, fontSize: 13, cursor: "pointer", background: tab === t.key ? "#eef0fe" : "transparent", color: tab === t.key ? "#4f46e5" : "#1a1c22", fontWeight: tab === t.key ? 600 : 400 }}
+            key={tb.key}
+            onClick={() => setTab(tb.key)}
+            style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 8px", padding: "9px 12px", borderRadius: 10, fontSize: 13, cursor: "pointer", background: tab === tb.key ? "#eef0fe" : "transparent", color: tab === tb.key ? "#4f46e5" : "#1a1c22", fontWeight: tab === tb.key ? 600 : 400 }}
           >
-            {t.icon} {t.label}
+            {tb.icon} {tb.label}
           </div>
         ))}
       </div>
@@ -66,34 +69,35 @@ export default function Einstellungen() {
       <div style={{ flex: 1, overflowY: "auto", padding: "30px 36px", background: "#fff" }}>
         {tab === "profil" && (
           <>
-            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 24 }}>Profil</div>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 24 }}>{t("Profil", "Profile")}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 28 }}>
               <span style={{ width: 64, height: 64, borderRadius: "50%", background: "#eef0fe", color: "#4f46e5", fontWeight: 800, fontSize: 24, display: "grid", placeItems: "center" }}>{initial}</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#4f46e5", marginBottom: 4 }}>Anzeigename statt Klarname</div>
-                <div style={{ fontSize: 12, color: "#9aa0ab" }}>Wir speichern bewusst keinen echten Namen.</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#4f46e5", marginBottom: 4 }}>{t("Anzeigename statt Klarname", "Display name instead of real name")}</div>
+                <div style={{ fontSize: 12, color: "#9aa0ab" }}>{t("Wir speichern bewusst keinen echten Namen.", "We deliberately don't store your real name.")}</div>
               </div>
             </div>
             <div style={{ maxWidth: 520 }}>
-              <Field label="Anzeigename">
+              <Field label={t("Anzeigename", "Display name")}>
                 <input value={name} onChange={(e) => setName(e.target.value)} className="input-clean" style={{ width: "100%", fontSize: 14 }} />
               </Field>
-              <Field label="E-Mail">
+              <Field label={t("E-Mail", "Email")}>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280" }}>
                   <span>{user?.email}</span>
                   {user?.email_verified ? (
-                    <span style={{ fontSize: 11, color: "#1a7f3c", fontWeight: 700 }}>✓ bestätigt</span>
+                    <span style={{ fontSize: 11, color: "#1a7f3c", fontWeight: 700 }}>{t("✓ bestätigt", "✓ confirmed")}</span>
                   ) : (
-                    <span style={{ fontSize: 11, color: "#a05c12", fontWeight: 700 }}>noch nicht bestätigt</span>
+                    <span style={{ fontSize: 11, color: "#a05c12", fontWeight: 700 }}>{t("noch nicht bestätigt", "not yet confirmed")}</span>
                   )}
                 </div>
               </Field>
-              <Field label="Klassenstufe">
+              <Field label={t("Stufe", "Level")}>
                 <select value={grade} onChange={(e) => setGrade(e.target.value)} style={selectStyle}>
-                  {GRADES.map((g) => <option key={g}>{g}</option>)}
+                  {!GRADE_KEYS.includes(grade) && grade && <option value={grade}>{grade}</option>}
+                  {GRADE_KEYS.map((g) => <option key={g} value={g}>{gradeLabel(g, lang)}</option>)}
                 </select>
               </Field>
-              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} />
+              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
             </div>
           </>
         )}
@@ -104,29 +108,31 @@ export default function Einstellungen() {
 
         {tab === "sprache" && (
           <>
-            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Sprache</div>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>{t("Sprache", "Language")}</div>
             <div style={{ maxWidth: 520 }}>
-              <Field label="Sprache der App">
+              <Field label={t("Sprache der App", "App language")}>
                 <select value={language} onChange={(e) => setLanguage(e.target.value)} style={selectStyle}>
-                  <option value="de">Deutsch (Schweiz)</option>
-                  <option value="fr">Français</option>
-                  <option value="it">Italiano</option>
+                  <option value="de">Deutsch</option>
+                  <option value="en">English</option>
                 </select>
               </Field>
-              <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 20 }}>Weitere Sprachen folgen. Der Tutor bleibt vorerst auf Deutsch.</div>
-              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} />
+              <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 20 }}>
+                {t("Auch der Tutor antwortet in dieser Sprache. Die App erkennt die Sprache beim ersten Besuch automatisch – hier stellst du sie fest ein.",
+                   "The tutor also replies in this language. The app auto-detects your language on first visit – here you set it permanently.")}
+              </div>
+              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
             </div>
           </>
         )}
 
         {tab === "privat" && (
           <>
-            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Privatsphäre</div>
+            <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>{t("Privatsphäre", "Privacy")}</div>
             <div style={{ maxWidth: 620 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid #eef0f3", padding: "16px 0" }}>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>Fortschritt für Eltern freigeben</div>
-                  <div style={{ fontSize: 12, color: "#9aa0ab" }}>Nur grober Fortschritt, keine einzelnen Nachrichten.</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{t("Fortschritt für Eltern freigeben", "Share progress with parents")}</div>
+                  <div style={{ fontSize: 12, color: "#9aa0ab" }}>{t("Nur grober Fortschritt, keine einzelnen Nachrichten.", "Only overall progress, never individual messages.")}</div>
                 </div>
                 <Toggle on={share} onClick={async () => {
                   const next = !share;
@@ -136,7 +142,8 @@ export default function Einstellungen() {
                 }} />
               </div>
               <div style={{ background: "#f6f7fb", border: "1px solid #eef0f3", borderRadius: 14, padding: 16, fontSize: 13, color: "#6b7280", lineHeight: 1.55, marginTop: 12 }}>
-                🔒 Deine Chats bleiben privat. Eltern sehen nur Aggregate wie Selbständigkeit, gelöste Aufgaben und Themen-Trends – technisch gibt es aus der Eltern-Ansicht keinen Zugriff auf deine Nachrichten.
+                {t("🔒 Deine Chats bleiben privat. Eltern sehen nur Aggregate wie Selbständigkeit, gelöste Aufgaben und Themen-Trends – technisch gibt es aus der Eltern-Ansicht keinen Zugriff auf deine Nachrichten.",
+                   "🔒 Your chats stay private. Parents only see aggregates like independence, solved tasks and topic trends – technically the parent view has no access to your messages.")}
               </div>
               <DeleteAccount />
             </div>
@@ -148,23 +155,24 @@ export default function Einstellungen() {
 }
 
 function AboTab({ onBuy }) {
+  const { t } = useLang();
   const [quota, setQuota] = useState(null);
   useEffect(() => {
     api.get("/api/quota").then(setQuota).catch(() => setQuota(null));
   }, []);
 
-  if (!quota) return <div style={{ fontSize: 14, color: "#9aa0ab" }}>lädt …</div>;
+  if (!quota) return <div style={{ fontSize: 14, color: "#9aa0ab" }}>{t("lädt …", "loading …")}</div>;
 
   if (quota.unlimited) {
     return (
       <>
-        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Abo &amp; Tokens</div>
+        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>{t("Abo & Tokens", "Plan & tokens")}</div>
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 20, maxWidth: 620 }}>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Plan</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>∞ Unbegrenzt</div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>{t("Plan", "Plan")}</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{t("∞ Unbegrenzt", "∞ Unlimited")}</div>
           <div style={{ fontSize: 13, color: "#6b7280", marginTop: 8, lineHeight: 1.55 }}>
-            Dieses Konto ist ein Betreiber-Konto: Aufgaben sind unbegrenzt und kostenlos –
-            es werden weder Gratis-Kontingent noch Tokens abgebucht.
+            {t("Dieses Konto ist ein Betreiber-Konto: Aufgaben sind unbegrenzt und kostenlos – es werden weder Gratis-Kontingent noch Tokens abgebucht.",
+               "This is an operator account: tasks are unlimited and free – neither the free quota nor tokens are charged.")}
           </div>
         </div>
       </>
@@ -176,30 +184,30 @@ function AboTab({ onBuy }) {
 
   return (
     <>
-      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>Abo &amp; Tokens</div>
+      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 24 }}>{t("Abo & Tokens", "Plan & tokens")}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, maxWidth: 620, marginBottom: 20 }} className="eltern-tiles">
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Plan</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{quota.plan === "free" ? "Gratis" : "Token"}</div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>{t("Plan", "Plan")}</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{quota.plan === "free" ? t("Gratis", "Free") : "Token"}</div>
         </div>
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Gratis-Tokens (Monat)</div>
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{freeUsed} <span style={{ fontSize: 13, color: "#9aa0ab" }}>von {quota.monthly_free_tokens}</span></div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>{t("Gratis-Tokens (Monat)", "Free tokens (month)")}</div>
+          <div style={{ fontSize: 20, fontWeight: 800 }}>{freeUsed} <span style={{ fontSize: 13, color: "#9aa0ab" }}>{t("von", "of")} {quota.monthly_free_tokens}</span></div>
           <div style={{ height: 5, borderRadius: 999, background: "#eef0f3", overflow: "hidden", marginTop: 8 }}>
             <div style={{ width: `${freePct}%`, height: "100%", background: freePct >= 90 ? "#d9573a" : "#6366f1" }} />
           </div>
         </div>
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 16 }}>
-          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>Token-Guthaben</div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 6 }}>{t("Token-Guthaben", "Token balance")}</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: quota.token_balance > 0 ? "#1a7f3c" : "#1a1c22" }}>{quota.token_balance}</div>
         </div>
       </div>
       <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 18, lineHeight: 1.55 }}>
-        1 Token = 1 Rappen KI-Hilfe · eine normale Tutor-Antwort kostet ≈ 1 Token, eine Antwort mit
-        Foto-Auswertung ≈ 3–5 · Tokens laufen nie ab · kein Abo, keine automatische Verlängerung
+        {t("1 Token = 1 Rappen KI-Hilfe · eine normale Tutor-Antwort kostet ≈ 1 Token, eine Antwort mit Foto-Auswertung ≈ 3–5 · Tokens laufen nie ab · kein Abo, keine automatische Verlängerung",
+           "1 token = 1 Swiss centime of AI help · a normal tutor reply costs ≈ 1 token, a reply with photo analysis ≈ 3–5 · tokens never expire · no subscription, no automatic renewal")}
       </div>
       <button onClick={onBuy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>
-        Tokens kaufen →
+        {t("Tokens kaufen →", "Buy tokens →")}
       </button>
     </>
   );
@@ -207,6 +215,7 @@ function AboTab({ onBuy }) {
 
 export function PasswordTab() {
   const { login } = useAuth();
+  const { t } = useLang();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [repeat, setRepeat] = useState("");
@@ -215,11 +224,11 @@ export function PasswordTab() {
 
   async function change() {
     if (next.length < 8) {
-      setNote({ type: "error", text: "Das neue Passwort braucht mindestens 8 Zeichen." });
+      setNote({ type: "error", text: t("Das neue Passwort braucht mindestens 8 Zeichen.", "The new password needs at least 8 characters.") });
       return;
     }
     if (next !== repeat) {
-      setNote({ type: "error", text: "Die beiden neuen Passwörter stimmen nicht überein." });
+      setNote({ type: "error", text: t("Die beiden neuen Passwörter stimmen nicht überein.", "The two new passwords don't match.") });
       return;
     }
     setBusy(true);
@@ -231,7 +240,7 @@ export function PasswordTab() {
       });
       await login(res.access_token, res.user); // frisches Token übernehmen
       setCurrent(""); setNext(""); setRepeat("");
-      setNote({ type: "ok", text: "✓ Passwort geändert." });
+      setNote({ type: "ok", text: t("✓ Passwort geändert.", "✓ Password changed.") });
     } catch (e) {
       setNote({ type: "error", text: e.message });
     } finally {
@@ -241,26 +250,26 @@ export function PasswordTab() {
 
   return (
     <>
-      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Passwort ändern</div>
+      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>{t("Passwort ändern", "Change password")}</div>
       <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 24, maxWidth: 520 }}>
-        Passwort vergessen? Melde dich ab und nutze auf der Anmelde-Seite «Passwort vergessen» –
-        dann kommst du per E-Mail-Link zurück und kannst hier ohne altes Passwort ein neues setzen.
+        {t("Passwort vergessen? Melde dich ab und nutze auf der Anmelde-Seite «Passwort vergessen» – dann kommst du per E-Mail-Link zurück und kannst hier ohne altes Passwort ein neues setzen.",
+           "Forgot your password? Sign out and use “Forgot password” on the sign-in page – you'll come back via email link and can set a new one here without the old password.")}
       </div>
       <div style={{ maxWidth: 520 }}>
-        <Field label="Aktuelles Passwort">
+        <Field label={t("Aktuelles Passwort", "Current password")}>
           <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" className="input-clean" style={{ width: "100%", fontSize: 14 }} />
         </Field>
-        <Field label="Neues Passwort (mind. 8 Zeichen)">
+        <Field label={t("Neues Passwort (mind. 8 Zeichen)", "New password (min. 8 characters)")}>
           <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" className="input-clean" style={{ width: "100%", fontSize: 14 }} />
         </Field>
-        <Field label="Neues Passwort wiederholen">
+        <Field label={t("Neues Passwort wiederholen", "Repeat new password")}>
           <input type="password" value={repeat} onChange={(e) => setRepeat(e.target.value)} autoComplete="new-password" className="input-clean" style={{ width: "100%", fontSize: 14 }} />
         </Field>
         {note && (
           <div style={{ fontSize: 13, marginBottom: 12, color: note.type === "error" ? "#c0392b" : "#1a7f3c", fontWeight: 600 }}>{note.text}</div>
         )}
         <button onClick={change} disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none", opacity: busy ? 0.7 : 1 }}>
-          {busy ? "ändert …" : "Passwort ändern"}
+          {busy ? t("ändert …", "changing …") : t("Passwort ändern", "Change password")}
         </button>
       </div>
     </>
@@ -278,14 +287,14 @@ function Field({ label, children }) {
   );
 }
 
-function SaveRow({ busy, saved, onSave, onCancel }) {
+function SaveRow({ busy, saved, onSave, onCancel, t }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
       <button onClick={onSave} disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>
-        {busy ? "speichert …" : "Speichern"}
+        {busy ? t("speichert …", "saving …") : t("Speichern", "Save")}
       </button>
-      <button onClick={onCancel} className="btn-ghost" style={{ padding: "11px 20px", fontSize: 14 }}>Abbrechen</button>
-      {saved && <span style={{ fontSize: 13, color: "#1a7f3c", fontWeight: 600 }}>✓ gespeichert</span>}
+      <button onClick={onCancel} className="btn-ghost" style={{ padding: "11px 20px", fontSize: 14 }}>{t("Abbrechen", "Cancel")}</button>
+      {saved && <span style={{ fontSize: 13, color: "#1a7f3c", fontWeight: 600 }}>{t("✓ gespeichert", "✓ saved")}</span>}
     </div>
   );
 }
@@ -301,13 +310,14 @@ function Toggle({ on, onClick }) {
 // Roter Bereich: Konto endgültig löschen (Datenschutz-Selbstbedienung)
 export function DeleteAccount() {
   const { logout } = useAuth();
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function doDelete() {
-    if (!window.confirm("Wirklich alles löschen? Aufgaben, Chats und Guthaben sind danach unwiderruflich weg.")) return;
+    if (!window.confirm(t("Wirklich alles löschen? Aufgaben, Chats und Guthaben sind danach unwiderruflich weg.", "Really delete everything? Tasks, chats and balance will be gone for good."))) return;
     setBusy(true);
     setErr("");
     try {
@@ -315,21 +325,21 @@ export function DeleteAccount() {
       logout();
       window.location.href = "/";
     } catch (e) {
-      setErr(e.message || "Löschen fehlgeschlagen.");
+      setErr(e.message || t("Löschen fehlgeschlagen.", "Deletion failed."));
       setBusy(false);
     }
   }
 
   return (
     <div style={{ border: "1px solid #f2c9c0", background: "#fdf6f4", borderRadius: 14, padding: 16, marginTop: 24 }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: "#b3492f", marginBottom: 4 }}>Konto löschen</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#b3492f", marginBottom: 4 }}>{t("Konto löschen", "Delete account")}</div>
       <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.55, marginBottom: 12 }}>
-        Löscht dein Konto mit allen Aufgaben, Chats, Bildern und deinem Token-Guthaben – endgültig.
-        Zahlungsbelege bleiben beim Zahlungsanbieter (gesetzliche Aufbewahrung).
+        {t("Löscht dein Konto mit allen Aufgaben, Chats, Bildern und deinem Token-Guthaben – endgültig. Zahlungsbelege bleiben beim Zahlungsanbieter (gesetzliche Aufbewahrung).",
+           "Deletes your account with all tasks, chats, images and your token balance – permanently. Payment records remain with the payment provider (legal retention).")}
       </div>
       {!open ? (
         <button onClick={() => setOpen(true)} style={{ border: "1px solid #e5b0a4", background: "#fff", color: "#b3492f", borderRadius: 10, padding: "9px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-          Konto löschen …
+          {t("Konto löschen …", "Delete account …")}
         </button>
       ) : (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -337,14 +347,14 @@ export function DeleteAccount() {
             type="password"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
-            placeholder="Passwort zur Bestätigung"
+            placeholder={t("Passwort zur Bestätigung", "Password to confirm")}
             style={{ border: "1px solid #e5b0a4", borderRadius: 10, padding: "9px 12px", fontSize: 13, flex: "1 1 200px" }}
           />
           <button onClick={doDelete} disabled={busy} style={{ border: "none", background: "#b3492f", color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.7 : 1 }}>
-            {busy ? "lösche …" : "Endgültig löschen"}
+            {busy ? t("lösche …", "deleting …") : t("Endgültig löschen", "Delete permanently")}
           </button>
           <button onClick={() => { setOpen(false); setPw(""); setErr(""); }} style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 13, cursor: "pointer" }}>
-            Abbrechen
+            {t("Abbrechen", "Cancel")}
           </button>
         </div>
       )}
