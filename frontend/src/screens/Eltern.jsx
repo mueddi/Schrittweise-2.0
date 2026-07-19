@@ -68,12 +68,16 @@ function trendText(delta, t) {
 }
 
 export function ChildDashboard({ data }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const TAGE = [t("Mo", "Mon"), t("Di", "Tue"), t("Mi", "Wed"), t("Do", "Thu"), t("Fr", "Fri"), t("Sa", "Sat"), t("So", "Sun")];
   const struggles = data.top_struggles || [];
   const daily = data.daily_activity || [0, 0, 0, 0, 0, 0, 0];
   const maxV = Math.max(...daily, 1);
   const trend = trendText(data.dranbleiben_delta || 0, t);
+  // «Woche vom …»: Montag der angezeigten Woche, lokal formatiert
+  const weekLabel = data.week_start
+    ? new Date(data.week_start).toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { day: "numeric", month: "long" })
+    : null;
   return (
     <>
       {/* Das Wichtigste zuerst: ein Satz in Klartext, aus echten Daten */}
@@ -93,22 +97,28 @@ export function ChildDashboard({ data }) {
           {struggles.length === 0 && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("Kein Thema auffällig – läuft rund.", "No topic stands out – everything is going smoothly.")}</div>}
           {struggles.map((s) => {
             const chip = labelChip(s.label, t);
+            // Sammel-Eintrag fuer Aufgaben ohne Themen-Zuordnung uebersetzen
+            const topicLabel = s.topic === "Ohne Thema" ? t("Ohne Thema", "No topic") : s.topic;
             return (
               <div key={s.topic} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 0", borderTop: "1px solid #f4f5f8" }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{s.topic}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{topicLabel}</span>
                 <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "4px 11px", background: chip.bg, color: chip.fg }}>{chip.text}</span>
               </div>
             );
           })}
         </div>
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>{t("An welchen Tagen geübt wurde", "Which days were practice days")}</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 90 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t("An welchen Tagen geübt wurde", "Which days were practice days")}</div>
+          <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>
+            {weekLabel ? `${t("Woche vom", "Week of")} ${weekLabel} · ` : ""}{t("Zahl = gestartete Aufgaben", "number = tasks started")}
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 104 }}>
             {daily.map((v, i) => {
-              const h = Math.max(Math.round((v / maxV) * 74), v > 0 ? 10 : 2);
+              const h = Math.max(Math.round((v / maxV) * 68), v > 0 ? 10 : 2);
               return (
-                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                  <div title={`${v} ${v === 1 ? t("Aufgabe", "task") : t("Aufgaben", "tasks")}`} style={{ width: "100%", height: h, background: v > 0 ? (v >= maxV ? "#6366f1" : "#e7e8fb") : "#eef0f3", borderRadius: 6 }} />
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                  {v > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: v >= maxV ? "#4f46e5" : "#9aa0ab" }}>{v}</span>}
+                  <div style={{ width: "100%", height: h, background: v > 0 ? (v >= maxV ? "#6366f1" : "#e7e8fb") : "#eef0f3", borderRadius: 6 }} />
                   <span style={{ fontSize: 10, color: "#9aa0ab" }}>{TAGE[i]}</span>
                 </div>
               );

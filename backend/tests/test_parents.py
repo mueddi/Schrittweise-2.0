@@ -49,3 +49,17 @@ def test_parent_role_blocked_from_student_endpoints(client):
     assert client.get("/api/quota", headers=p).status_code == 403
     assert client.get("/api/attempts/1", headers=p).status_code == 403
     assert client.get("/api/topics", headers=p).status_code == 403
+
+
+def test_themenlose_aufgaben_zaehlen_als_ohne_thema(client):
+    """Aufgaben ohne Thema mit viel Hilfebedarf erscheinen als Sammel-Eintrag
+    «Ohne Thema» in den Stolpersteinen (statt komplett zu fehlen)."""
+    s = register(client, "kind3@test.ch", name="Kind3")
+
+    # themenlose Aufgabe, Attempt bleibt ungeloest -> Stolperstein
+    ex = client.post("/api/exercises", headers=s, json={"text": "3x + 5 = 20"}).json()
+    client.post(f"/api/exercises/{ex['id']}/attempts", headers=s)
+
+    preview = client.get("/api/parents/preview", headers=s).json()
+    topics = [t["topic"] for t in preview["top_struggles"]]
+    assert "Ohne Thema" in topics

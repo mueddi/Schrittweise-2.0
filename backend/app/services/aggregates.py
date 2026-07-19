@@ -65,18 +65,19 @@ def recompute_week(db: Session, user_id: int, ref: datetime | None = None) -> Pr
             daily[idx] += 1
             active_days_set.add(idx)
 
-    # Stolpersteine: Themen mit vielen genutzten Hinweisen / ungeloest
+    # Stolpersteine: Themen mit vielen genutzten Hinweisen / ungeloest.
+    # Aufgaben ohne Themen-Zuordnung landen im Sammel-Eintrag «Ohne Thema» –
+    # sonst wirkt die Karte bei Nutzern ohne Themen faelschlich immer leer.
     struggles: Counter = Counter()
     ex_ids = {a.exercise_id for a in attempts}
     if ex_ids:
         ex_topic = dict(db.execute(select(Exercise.id, Exercise.topic_id).where(Exercise.id.in_(ex_ids))).all())
         topic_names = dict(db.execute(select(Topic.id, Topic.name).where(Topic.user_id == user_id)).all())
         for a in attempts:
-            tid = ex_topic.get(a.exercise_id)
-            if tid is None:
-                continue
             if not a.solved or a.hint_level >= 3:
-                struggles[topic_names.get(tid, "Thema")] += 1
+                tid = ex_topic.get(a.exercise_id)
+                name = topic_names.get(tid, "Thema") if tid is not None else "Ohne Thema"
+                struggles[name] += 1
     top_struggles = [{"topic": name, "trend": TREND_UEBEN} for name, _ in struggles.most_common(3)]
 
     agg = db.scalar(

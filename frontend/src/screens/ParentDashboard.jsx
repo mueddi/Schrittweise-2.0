@@ -44,7 +44,10 @@ export default function ParentDashboard({ preview = false }) {
   const child = children[active];
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fbfbfd" }}>
+    // Vorschau laeuft INNERHALB der App-Shell: dort selber scrollen und den
+    // doppelten Logo-Kopfbalken weglassen; echte Eltern-Seite bleibt Vollseite.
+    <div style={preview ? { height: "100%", overflowY: "auto", background: "#fbfbfd" } : { minHeight: "100vh", background: "#fbfbfd" }}>
+      {!preview && (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 28px", borderBottom: "1px solid #eef0f3", background: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <span style={{ width: 22, height: 22, borderRadius: 7, background: "#6366f1" }} />
@@ -53,21 +56,19 @@ export default function ParentDashboard({ preview = false }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontSize: 13, color: "#6b7280" }}>{user?.display_name}</span>
-          {preview ? (
-            <Link to="/app/lernen" style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5" }}>{t("← Zurück zur App", "← Back to the app")}</Link>
-          ) : (
-            <>
-              <span onClick={() => setKontoOpen(!kontoOpen)} style={{ fontSize: 12, fontWeight: 600, color: kontoOpen ? "#1a1c22" : "#4f46e5", cursor: "pointer" }}>⚙ {t("Konto", "Account")}</span>
-              <span onClick={logout} style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("Abmelden", "Log out")}</span>
-            </>
-          )}
+          <span onClick={() => setKontoOpen(!kontoOpen)} style={{ fontSize: 12, fontWeight: 600, color: kontoOpen ? "#1a1c22" : "#4f46e5", cursor: "pointer" }}>⚙ {t("Konto", "Account")}</span>
+          <span onClick={logout} style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("Abmelden", "Log out")}</span>
         </div>
       </div>
+      )}
 
       {preview && (
-        <div style={{ background: "#fdf3e6", borderBottom: "1px solid #f2ddb8", padding: "8px 28px", fontSize: 12.5, color: "#a05c12" }}>
-          {t("👁 Vorschau: So sehen Eltern die Ansicht – gezeigt werden deine eigenen Übungsdaten.",
-             "👁 Preview: this is what parents see – showing your own practice data.")}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", background: "#fdf3e6", borderBottom: "1px solid #f2ddb8", padding: "8px 28px", fontSize: 12.5, color: "#a05c12" }}>
+          <span>
+            {t("👁 Elternansicht (Vorschau): So sehen Eltern die Ansicht – gezeigt werden deine eigenen Übungsdaten.",
+               "👁 Parent view (preview): this is what parents see – showing your own practice data.")}
+          </span>
+          <Link to="/app/lernen" style={{ fontSize: 12, fontWeight: 700, color: "#4f46e5", whiteSpace: "nowrap" }}>{t("← Zurück zur App", "← Back to the app")}</Link>
         </div>
       )}
 
@@ -116,13 +117,15 @@ export default function ParentDashboard({ preview = false }) {
           </div>
         )}
 
-        <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", margin: "48px 0 24px" }}>
-          <Link to="/impressum" style={{ color: "#9aa0ab", textDecoration: "underline" }}>{t("Impressum", "Legal notice")}</Link>
-          {" · "}
-          <Link to="/datenschutz" style={{ color: "#9aa0ab", textDecoration: "underline" }}>{t("Datenschutz", "Privacy")}</Link>
-          {" · "}
-          <Link to="/agb" style={{ color: "#9aa0ab", textDecoration: "underline" }}>{t("AGB", "Terms")}</Link>
-        </div>
+        {!preview && (
+          <div style={{ fontSize: 11, color: "#9aa0ab", textAlign: "center", margin: "48px 0 24px" }}>
+            <Link to="/impressum" style={{ color: "#9aa0ab", textDecoration: "underline" }}>{t("Impressum", "Legal notice")}</Link>
+            {" · "}
+            <Link to="/datenschutz" style={{ color: "#9aa0ab", textDecoration: "underline" }}>{t("Datenschutz", "Privacy")}</Link>
+            {" · "}
+            <Link to="/agb" style={{ color: "#9aa0ab", textDecoration: "underline" }}>{t("AGB", "Terms")}</Link>
+          </div>
+        )}
       </div>
     </div>
   );
