@@ -214,7 +214,6 @@ export default function AppShell() {
             <button onClick={() => setNavOpen(true)} aria-label={t("Menü", "Menu")} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid #e7e8ee", background: "#fff", fontSize: 16 }}>☰</button>
             <span style={{ width: 20, height: 20, borderRadius: 6, background: "#6366f1" }} />
             <span style={{ fontWeight: 800, fontSize: 15, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
-            <button onClick={() => setModal({})} className="btn-primary" style={{ marginLeft: "auto", fontSize: 12, borderRadius: 9, padding: "8px 12px", border: "none" }}>{t("+ Aufgabe", "+ Task")}</button>
           </div>
           {user?.email_verified === false && mailOk && (
             <div style={{ background: "#fdf3e6", borderBottom: "1px solid #f2ddb8", padding: "8px 16px", fontSize: 12.5, color: "#a05c12", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
