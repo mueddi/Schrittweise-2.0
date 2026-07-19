@@ -469,6 +469,17 @@ export default function Lernen() {
     }
   }
 
+  // OCR-Beschreibungszeilen ([Figur: …]/[Graph: …]) gehoeren nicht in den
+  // Chat-Text – das Bild haengt sichtbar an der Nachricht und der Tutor
+  // sieht es direkt. Nur der eigentliche Mathe-/Text-Inhalt bleibt.
+  function stripFigureNotes(t) {
+    return (t || "")
+      .replace(/\[(Figur|Graph)\s*:[\s\S]*?\]/gi, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{2,}/g, "\n")
+      .trim();
+  }
+
   // 📷 im Composer: Foto an die NAECHSTE Chat-Nachricht anhaengen.
   // Upload laeuft ueber die OCR-Route (speichert das Bild, liest den Text mit).
   async function attachPhoto(e) {
@@ -480,7 +491,7 @@ export default function Lernen() {
       const fd = new FormData();
       fd.append("file", file, file.name || "foto.jpg");
       const res = await api.upload("/api/exercises/ocr", fd);
-      const text = (res.text || "").trim();
+      const text = stripFigureNotes(res.text);
       if (text) setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
       if (res.image_path) setPendingImage(res.image_path);
     } catch (err) {
@@ -727,7 +738,8 @@ export default function Lernen() {
         <DrawPad
           onClose={() => setDrawOpen(false)}
           onResult={({ text, imagePath }) => {
-            if (text) setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+            const clean = stripFigureNotes(text);
+            if (clean) setInput((prev) => (prev.trim() ? `${prev.trim()} ${clean}` : clean));
             if (imagePath) setPendingImage(imagePath); // Zeichnung haengt als Bild an
           }}
         />
