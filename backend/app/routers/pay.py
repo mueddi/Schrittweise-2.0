@@ -18,6 +18,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from .. import i18n
 from ..config import settings
 from ..database import get_db
 from ..deps import require_student
@@ -42,16 +43,16 @@ def create_checkout(payload: CheckoutRequest | None = None, user: User = Depends
     """Erstellt eine Stripe-Checkout-Session und gibt deren Bezahl-URL zurück."""
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
-                            "Bitte bestätige zuerst deine E-Mail-Adresse, bevor du kaufst – schau in dein Postfach.")
+                            i18n.t(i18n.lang_of(user), "Bitte bestätige zuerst deine E-Mail-Adresse, bevor du kaufst – schau in dein Postfach.", "Please confirm your email address before buying – check your inbox."))
     if not settings.payments_enabled:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "Zahlung ist noch nicht eingerichtet – bitte den Betreiber informieren.",
+            i18n.t(i18n.lang_of(user), "Die Zahlung ist noch nicht freigeschaltet – es wurde nichts belastet. Der Betreiber schaltet sie in Kürze frei.", "Payments are not enabled yet – nothing was charged. The operator will enable them shortly."),
         )
     pkg_key = payload.package if payload else "power"
     pkg = PACKAGES.get(pkg_key)
     if pkg is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekanntes Paket.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, i18n.t(i18n.lang_of(user), "Unbekanntes Paket.", "Unknown package."))
     base = settings.frontend_base_url.rstrip("/")
     data = {
         "mode": "payment",

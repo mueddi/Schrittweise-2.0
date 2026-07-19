@@ -10,6 +10,29 @@ import "./styles/theme.css";
 const IS_DEMO = import.meta.env.VITE_DEMO === "1";
 const Router = IS_DEMO ? HashRouter : BrowserRouter;
 
+// Browser-Fehler an den Betreiber melden (Admin -> Kosten -> Stoerungen).
+// Best effort: nur eingeloggt, max. 3 Meldungen pro Seiten-Session,
+// Fehler beim Melden werden still geschluckt (nie Folgefehler ausloesen).
+let errorReports = 0;
+function reportClientError(message) {
+  try {
+    if (IS_DEMO || errorReports >= 3) return;
+    const token = localStorage.getItem("sw_token");
+    if (!token || !message) return;
+    errorReports += 1;
+    fetch(`${import.meta.env.VITE_API_BASE || ""}/api/feedback/app-fehler`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ message: String(message).slice(0, 300), url: window.location.pathname }),
+    }).catch(() => {});
+  } catch { /* nie weiterwerfen */ }
+}
+window.addEventListener("error", (e) => reportClientError(e?.message || "window.onerror"));
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e?.reason;
+  reportClientError(`unhandledrejection: ${r?.message || String(r).slice(0, 200)}`);
+});
+
 // Auffangnetz: ein JS-Fehler in einem Screen zeigt eine freundliche Meldung
 // statt eines weissen Bildschirms.
 class ErrorBoundary extends React.Component {
@@ -24,6 +47,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, info) {
     console.error("Unbehandelter Fehler:", error, info);
+    reportClientError(`ErrorBoundary: ${error?.message || error}`);
   }
 
   render() {

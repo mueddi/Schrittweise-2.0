@@ -22,16 +22,24 @@ KIND_LABEL = {
     "ki": "KI-Tutor nicht erreichbar",
     "ocr": "Handschrift-Erkennung ausgefallen",
     "webhook": "Stripe-Webhook abgelehnt",
+    "server": "Server-Fehler",
+    "client": "Fehler in der App (Browser)",
 }
 
 
-def notify(kind: str, detail: str) -> None:
-    """Stoerung melden: DB-Protokoll immer, Mail bei konfiguriertem SMTP."""
+def notify(kind: str, detail: str, key: str | None = None) -> None:
+    """Stoerung melden: DB-Protokoll immer, Mail bei konfiguriertem SMTP.
+
+    ``key``: verfeinert die Drosselung – verschiedene Fehler desselben
+    Typs (z.B. unterschiedliche Routen/Meldungen) verschlucken sich
+    dann nicht mehr gegenseitig.
+    """
     try:
         now = time.time()
-        if now - _last_sent.get(kind, 0) < COOLDOWN_SECONDS:
+        throttle_key = f"{kind}:{key}" if key else kind
+        if now - _last_sent.get(throttle_key, 0) < COOLDOWN_SECONDS:
             return
-        _last_sent[kind] = now
+        _last_sent[throttle_key] = now
 
         title = KIND_LABEL.get(kind, kind)
         detail = (detail or "")[:500]

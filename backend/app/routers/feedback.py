@@ -22,6 +22,25 @@ def create_feedback(
     return {"ok": True}
 
 
+@router.post("/app-fehler", status_code=201)
+def report_client_error(
+    payload: dict,
+    user: User = Depends(get_current_user),
+):
+    """Browser-Fehler (JS-Crash) als Stoerung im Admin sichtbar machen.
+
+    Bewusst schlank: nur Meldung + Seite, hart gekappt; die Drosselung in
+    alert.notify (pro Meldungs-Schluessel) verhindert Fluten.
+    """
+    from ..services import alert
+
+    message = str((payload or {}).get("message") or "")[:300].strip()
+    url = str((payload or {}).get("url") or "")[:300].strip()
+    if message:
+        alert.notify("client", f"{url} – {message}", key=message[:80])
+    return {"ok": True}
+
+
 @router.get("", response_model=list[FeedbackOut])
 def list_feedback(user: User = Depends(require_admin), db: Session = Depends(get_db)):
     rows = db.execute(

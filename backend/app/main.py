@@ -56,6 +56,26 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Schrittweise API", version="0.1.0", lifespan=lifespan)
 
 
+@app.exception_handler(Exception)
+async def unhandled_error(request, exc):
+    """Unbehandelte Server-Fehler: loggen + als Stoerung im Admin sichtbar
+    machen (Alert-Zeile, gedrosselt pro Route+Fehlertyp), generisch antworten."""
+    from fastapi.responses import JSONResponse
+
+    from . import i18n
+    from .services import alert
+
+    logger.exception("Unbehandelter Fehler bei %s %s", request.method, request.url.path)
+    alert.notify("server", f"{request.method} {request.url.path} – {type(exc).__name__}: {exc}",
+                 key=f"{request.url.path}:{type(exc).__name__}")
+    lang = i18n.lang_of(request=request)
+    return JSONResponse(status_code=500, content={
+        "detail": i18n.t(lang,
+                         "Unerwarteter Fehler – der Betreiber wurde informiert. Versuch es gleich nochmal.",
+                         "Unexpected error – the operator has been notified. Please try again in a moment."),
+    })
+
+
 @app.middleware("http")
 async def security_headers(request, call_next):
     response = await call_next(request)

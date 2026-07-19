@@ -73,3 +73,55 @@ def test_redeem_respects_share_flag(client):
     hidden = client.post("/api/parents/redeem", json={"invite_code": code}, headers=hp).json()
     assert hidden["solved_count"] == 0           # ohne Freigabe genullt
     assert hidden["daily_activity"] == [0] * 7
+
+
+def test_browser_fehler_landet_im_stoerungsprotokoll(client):
+    """POST /api/feedback/app-fehler legt eine Alert-Zeile kind='client' an;
+    dieselbe Meldung wird innerhalb der Drossel-Zeit nur einmal erfasst."""
+    from app.database import SessionLocal
+    from app.models import Alert
+    from app.services import alert as alert_service
+    from .test_library import register_pw
+
+    alert_service._last_sent.clear()
+    headers = register_pw(client, "jsfehler@test.ch")
+
+    for _ in range(2):  # zweite identische Meldung wird gedrosselt
+        r = client.post("/api/feedback/app-fehler", headers=headers,
+                        json={"message": "TypeError: x is not a function", "url": "/app/lernen"})
+        assert r.status_code == 201
+
+    with SessionLocal() as db:
+        rows = [a for a in db.query(Alert).all() if a.kind == "client"]
+    assert len(rows) == 1
+    assert "TypeError" in rows[0].detail and "/app/lernen" in rows[0].detail
+
+
+def test_server_fehler_landet_im_stoerungsprotokoll(client):
+    """Unbehandelte Exceptions -> 500 mit freundlicher Meldung + Alert kind='server'."""
+    from fastapi.testclient import TestClient
+
+    from app.database import SessionLocal
+    from app.main import app
+    from app.models import Alert
+    from app.services import alert as alert_service
+
+    alert_service._last_sent.clear()
+
+    @app.get("/api/_test_boom")
+    def _boom():
+        raise RuntimeError("kaputt")
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as c:
+            r = c.get("/api/_test_boom")
+            assert r.status_code == 500
+            assert "Unerwarteter Fehler" in r.json()["detail"]
+            r_en = c.get("/api/_test_boom", headers={"X-Lang": "en"})
+            assert "Unexpected error" in r_en.json()["detail"]
+    finally:
+        app.router.routes = [rt for rt in app.router.routes if getattr(rt, "path", "") != "/api/_test_boom"]
+
+    with SessionLocal() as db:
+        rows = [a for a in db.query(Alert).all() if a.kind == "server"]
+    assert rows and "RuntimeError" in rows[0].detail

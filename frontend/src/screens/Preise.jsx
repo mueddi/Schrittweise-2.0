@@ -62,6 +62,12 @@ export default function Preise() {
         <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" }}>{t("Preise & Tokens", "Prices & tokens")}</div>
         <span onClick={() => nav("/app/lernen")} style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("← zur App", "← back to the app")}</span>
       </div>
+      {shell.quota?.unlimited && (
+        <div style={{ maxWidth: 920, margin: "0 auto 18px", fontSize: 13, borderRadius: 12, padding: "11px 16px", background: "#eef0fe", color: "#4f46e5", border: "1px solid #dfe1fb" }}>
+          {t("∞ Dein Betreiber-Konto ist unbegrenzt und gratis – kaufen brauchst du nichts. Die Kauf-Knöpfe bleiben nur zum Testen der Zahlung aktiv.",
+             "∞ Your operator account is unlimited and free – you don't need to buy anything. The buy buttons stay active only for testing payments.")}
+        </div>
+      )}
       {note && (
         <div style={{ maxWidth: 920, margin: "0 auto 18px", fontSize: 13, borderRadius: 12, padding: "11px 16px", background: note.type === "error" ? "#fdecec" : "#e8f6ec", color: note.type === "error" ? "#c0392b" : "#1a7f3c", border: `1px solid ${note.type === "error" ? "#f5cccc" : "#cde7d6"}` }}>
           {note.text}
