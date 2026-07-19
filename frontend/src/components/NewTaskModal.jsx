@@ -62,6 +62,25 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
     }
   }
 
+  // «Keine Aufgabe zur Hand»: KI erzeugt eine passende Aufgabe und startet sie
+  async function generate() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const st = await api.post("/api/exercises/generieren", { topic_id: topicId ? Number(topicId) : null });
+      shell.reloadQuota?.();
+      shell.reloadTopics?.();
+      onClose();
+      nav(`/app/lernen/${st.attempt.id}`);
+    } catch (err) {
+      if (err.status === 402) setQuotaOut(true);
+      else setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function start() {
     // Mit Foto darf der Text leer bleiben – der Tutor schaut sich das Bild an.
     if (!text.trim() && !imagePath) {
@@ -179,6 +198,16 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
             style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, resize: "vertical", outline: "none", marginBottom: 12 }}
           />
 
+          {!imagePath && (
+            <button
+              type="button"
+              onClick={generate}
+              disabled={busy}
+              style={{ border: "none", background: "transparent", color: "#4f46e5", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 12, opacity: busy ? 0.6 : 1 }}
+            >
+              {busy ? t("✨ erstelle Aufgabe …", "✨ creating a task …") : t("✨ Keine Aufgabe zur Hand? Ich erstelle dir eine.", "✨ No task at hand? I'll create one for you.")}
+            </button>
+          )}
           <label style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", display: "block", marginBottom: 6 }}>{t("Thema (optional)", "Topic (optional)")}</label>
           <select value={topicId} onChange={(e) => setTopicId(e.target.value)} style={{ width: "100%", border: "1px solid #d2d4dd", borderRadius: 12, padding: "11px 13px", fontSize: 14, outline: "none", marginBottom: 14, background: "#fff" }}>
             <option value="">{t("– kein Thema –", "– no topic –")}</option>

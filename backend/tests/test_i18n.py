@@ -49,6 +49,48 @@ def test_deutsch_bleibt_standard(client):
     assert "Los geht's" in opener
 
 
+def test_meta_bitte_erzeugt_echte_aufgabe(client):
+    """«Mache mir eine Aufgabe» wird nicht woertlich gespeichert, sondern
+    durch eine erzeugte Aufgabe ersetzt (Mock-Fallback ohne API-Key)."""
+    headers = register_pw(client, "meta@test.ch")
+
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "mache mir eine aufgabe"}).json()
+    assert "mache mir" not in ex["text"].lower()
+    assert ex["text"]  # echte Aufgabe vorhanden
+    opener = client.post(f"/api/exercises/{ex['id']}/attempts",
+                         headers=headers).json()["messages"][0]["text"]
+    assert "mache mir" not in opener.lower()
+
+    # englische Bitte funktioniert ebenso
+    ex_en = client.post("/api/exercises", headers=headers,
+                        json={"text": "make me a task please"}).json()
+    assert "make me" not in ex_en["text"].lower()
+
+    # echte Aufgaben bleiben unveraendert
+    real = client.post("/api/exercises", headers=headers,
+                       json={"text": "Löse nach x auf: 3x + 5 = 20"}).json()
+    assert real["text"] == "Löse nach x auf: 3x + 5 = 20"
+
+
+def test_generieren_endpoint_startet_aufgabe(client):
+    """POST /api/exercises/generieren erzeugt Aufgabe + Attempt in einem
+    Schritt; der Fallback richtet sich nach der Stufe."""
+    headers = register_pw(client, "gen@test.ch")
+    client.patch("/api/auth/me", headers=headers, json={"grade_level": "gymnasium"})
+
+    r = client.post("/api/exercises/generieren", headers=headers, json={})
+    assert r.status_code == 201, r.text
+    state = r.json()
+    assert state["attempt"]["id"]
+    assert "f(x)" in state["exercise"]["text"]  # Gymnasium-Fallback
+
+    client.patch("/api/auth/me", headers=headers, json={"grade_level": "mittelstufe"})
+    r2 = client.post("/api/exercises/generieren", headers=headers, json={})
+    assert r2.status_code == 201
+    assert "348" in r2.json()["exercise"]["text"]  # Mittelstufe-Fallback
+
+
 def test_regie_kennt_die_drei_stufen():
     from app.services.tutor import LadderStep, _regie
     from app.services.sympy_verifier import Verification

@@ -151,6 +151,77 @@ def get_image(token: str, db: Session = Depends(get_db)):
                     headers={"Cache-Control": "private, max-age=86400"})
 
 
+def _is_task_request(text: str) -> bool:
+    """Erkennt Meta-Bitten wie «mache mir eine aufgabe» / "make me a task".
+
+    Nur kurze Texte ohne Gleichung und mit hoechstens einer Ziffer –
+    echte (Text-)Aufgaben enthalten Zahlen oder ein «=» und bleiben
+    unangetastet.
+    """
+    import re
+
+    t = (text or "").strip().lower()
+    if not t or len(t) > 100 or "=" in t or sum(c.isdigit() for c in t) > 1:
+        return False
+    de = re.search(r"\b(mach|mache|gib|erstell|erstelle|generier|generiere|stell|stelle)\b.*\b(aufgabe|übung|uebung)", t)
+    en = re.search(r"\b(make|give|create|generate)\b.*\b(task|exercise|problem)", t)
+    return bool(de or en)
+
+
+# Deterministische Beispiel-Aufgaben, falls keine KI konfiguriert ist (lokal/Tests)
+_FALLBACK_TASKS = {
+    "mittelstufe": {"de": "Berechne: 348 + 267", "en": "Calculate: 348 + 267"},
+    "oberstufe": {"de": "Löse nach x auf: 3x + 5 = 20", "en": "Solve for x: 3x + 5 = 20"},
+    "gymnasium": {"de": "Bestimme die Nullstellen von f(x) = x^2 - 5x + 6",
+                  "en": "Find the zeros of f(x) = x^2 - 5x + 6"},
+}
+
+
+def _generate_task_text(db: Session, user: User, topic_name: str | None) -> str:
+    """Erzeugt eine passende Uebungsaufgabe (Stufe/Thema/Sprache des Nutzers).
+
+    Mit API-Key via Haiku (verrechnet wie eine Variante), sonst ein
+    deterministischer Fallback pro Stufe.
+    """
+    lang = i18n.lang_of(user)
+    grade = (user.grade_level or "oberstufe").lower()
+    if not settings.anthropic_api_key:
+        key = ("gymnasium" if "gym" in grade
+               else "mittelstufe" if "mittel" in grade else "oberstufe")
+        return _FALLBACK_TASKS[key][lang]
+
+    import anthropic
+
+    stufe = f"Stufe: {user.grade_level}" if user.grade_level else "Stufe: Oberstufe (Sek I)"
+    thema = f" Thema: {topic_name}." if topic_name else ""
+    sprache = "auf ENGLISCH" if lang == "en" else "auf Deutsch"
+    resp = anthropic.Anthropic(api_key=settings.anthropic_api_key).messages.create(
+        model=settings.anthropic_model_default,
+        max_tokens=200,
+        messages=[{
+            "role": "user",
+            "content": (
+                "Erzeuge GENAU EINE Mathe-Uebungsaufgabe fuer Schweizer "
+                f"Schueler:innen ({stufe}).{thema} Schwierigkeitsgrad passend "
+                f"zur Stufe, {sprache}. Gib NUR den Aufgabentext zurueck, "
+                "ohne Einleitung oder Loesung."
+            ),
+        }],
+    )
+    text = "".join(b.text for b in resp.content if b.type == "text").strip()
+    charged = 0
+    if not quota.is_unlimited(user):
+        charged = usage.charged_tokens(usage.cost_usd(settings.anthropic_model_default, resp.usage))
+        quota.charge(db, user.id, charged)
+    usage.record(db, "generiert", settings.anthropic_model_default, resp.usage,
+                 user_id=user.id, charged=charged)
+    if not text or len(text) > 1000:
+        key = ("gymnasium" if "gym" in grade
+               else "mittelstufe" if "mittel" in grade else "oberstufe")
+        return _FALLBACK_TASKS[key][lang]
+    return text
+
+
 @router.post("", response_model=ExerciseOut, status_code=201)
 def create_exercise(payload: ExerciseCreate, user: User = Depends(require_student), db: Session = Depends(get_db)):
     if quota.blocked_unverified(user):
@@ -163,14 +234,23 @@ def create_exercise(payload: ExerciseCreate, user: User = Depends(require_studen
         topic = db.get(Topic, payload.topic_id)
         if topic is None or topic.user_id != user.id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Thema nicht gefunden", "Topic not found"))
+    # «Mache mir eine Aufgabe»: Meta-Bitte statt Aufgabe -> echte Aufgabe
+    # erzeugen (Stufe/Thema/Sprache), sonst startet der Chat ins Leere.
+    text = payload.text.strip()
+    math_expr = (payload.math_expression or "").strip() or None
+    if not payload.image_path and _is_task_request(text):
+        topic_name = None
+        if payload.topic_id is not None:
+            topic_name = getattr(db.get(Topic, payload.topic_id), "name", None)
+        text = _generate_task_text(db, user, topic_name)
+        math_expr = None
     # Ohne expliziten Ausdruck versuchen, eine pruefbare Gleichung aus dem Text
     # zu ziehen («Löse 3x = 15» -> «3x = 15»); sonst waere die Aufgabe nie verifizierbar.
-    math_expr = (payload.math_expression or "").strip() or None
     if math_expr is None:
-        math_expr = extract_expression(payload.text)
+        math_expr = extract_expression(text)
     ex = Exercise(
         user_id=user.id,
-        text=payload.text.strip(),
+        text=text,
         math_expression=math_expr,
         topic_id=payload.topic_id,
         image_path=payload.image_path,
@@ -328,6 +408,38 @@ def create_variant(exercise_id: int, user: User = Depends(require_student), db: 
     usage.record(db, "variante", settings.anthropic_model_default, resp.usage,
                  user_id=user.id, exercise_id=new_ex.id, charged=charged)
     return _start_attempt_state(db, new_ex, user)
+
+
+@router.post("/generieren", response_model=AttemptStateOut, status_code=201)
+def generate_exercise(payload: dict | None = None,
+                      user: User = Depends(require_student), db: Session = Depends(get_db)):
+    """«Keine Aufgabe zur Hand»: KI erzeugt eine passende Aufgabe (Stufe/
+    Thema/Sprache) und startet sie direkt."""
+    if quota.blocked_unverified(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            i18n.t(i18n.lang_of(user), "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.", "Please confirm your email address first – check your inbox."))
+    if not quota.can_use_ki(user):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
+                            i18n.t(i18n.lang_of(user), "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.", "Your balance is used up. Top up tokens or wait for next month."))
+    topic_id = (payload or {}).get("topic_id")
+    topic_name = None
+    if topic_id is not None:
+        topic = db.get(Topic, int(topic_id))
+        if topic is None or topic.user_id != user.id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Thema nicht gefunden", "Topic not found"))
+        topic_name = topic.name
+    try:
+        text = _generate_task_text(db, user, topic_name)
+    except Exception:
+        logging.getLogger("schrittweise.exercises").exception("Aufgaben-Erzeugung fehlgeschlagen")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            i18n.t(i18n.lang_of(user), "Konnte gerade keine Aufgabe erzeugen – versuch es gleich nochmal.", "Couldn't create a task right now – please try again in a moment."))
+    ex = Exercise(user_id=user.id, text=text,
+                  math_expression=extract_expression(text),
+                  topic_id=int(topic_id) if topic_id is not None else None)
+    db.add(ex)
+    db.flush()
+    return _start_attempt_state(db, ex, user)
 
 
 @router.get("/{exercise_id}", response_model=ExerciseOut)

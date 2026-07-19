@@ -29,6 +29,7 @@ KIND_LABEL = {
     "ocr": "Erkennung (Foto/Stift)",
     "suche": "KI-Suche Bibliothek",
     "variante": "Übungs-Variante",
+    "generiert": "Aufgabe erstellt",
 }
 
 
