@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 import { useLang } from "../lib/i18n.jsx";
 
 // Zwei Dinge, sauber getrennt:
@@ -125,6 +126,7 @@ export function ChildDashboard({ data }) {
 // SCHUELER-Seite: nur Eltern verbinden – kein Dashboard in der Kinder-App.
 export default function Eltern() {
   const { t } = useLang();
+  const { user } = useAuth();
   const [invite, setInvite] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -174,6 +176,15 @@ export default function Eltern() {
           {t("Du kannst die Freigabe jederzeit ausschalten:", "You can turn off sharing at any time:")}{" "}
           <Link to="/app/einstellungen" style={{ color: "#4f46e5", fontWeight: 600 }}>{t("Einstellungen → Privatsphäre", "Settings → Privacy")}</Link>
         </div>
+
+        {user?.is_admin && (
+          <div style={{ background: "#fdf3e6", border: "1px solid #f2ddb8", borderRadius: 14, padding: "14px 18px", marginTop: 20, fontSize: 13 }}>
+            <span style={{ color: "#a05c12", fontWeight: 700 }}>{t("Admin:", "Admin:")}</span>{" "}
+            <Link to="/app/elternansicht" style={{ color: "#4f46e5", fontWeight: 700 }}>
+              {t("👁 Elternansicht als Vorschau öffnen →", "👁 Open the parent view preview →")}
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );
