@@ -169,6 +169,31 @@ def test_history_builder_embeds_last_message_image():
     assert both[-1]["content"][0]["type"] == "image"
 
 
+def test_eroeffnung_zitiert_keine_figurbeschreibung(client):
+    """Die Eroeffnungs-Nachricht zeigt den Aufgabentext OHNE [Figur:/Graph:]-
+    Beschreibungszeilen; reine Bild-Aufgaben verweisen aufs Bild statt auf
+    den Platzhalter."""
+    headers = register_pw(client, "mia@test.ch")
+    up = client.post("/api/exercises/ocr", headers=headers,
+                     files={"file": ("skizze.png", tiny_png(), "image/png")})
+    image_path = up.json()["image_path"]
+
+    # Text + Beschreibung: nur der echte Text wird zitiert
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "Berechne x.\n[Figur: Dreieck mit Winkel 30 Grad]",
+                           "image_path": image_path}).json()
+    opener = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["messages"][0]
+    assert "Berechne x." in opener["text"]
+    assert "[Figur" not in opener["text"]
+
+    # Platzhalter-Fall: Verweis aufs Bild statt «(Aufgabe auf dem Foto)»
+    ex2 = client.post("/api/exercises", headers=headers,
+                      json={"text": "(Aufgabe auf dem Foto)", "image_path": image_path}).json()
+    opener2 = client.post(f"/api/exercises/{ex2['id']}/attempts", headers=headers).json()["messages"][0]
+    assert "auf dem Bild" in opener2["text"]
+    assert "(Aufgabe auf dem Foto)" not in opener2["text"]
+
+
 def test_ocr_upload_accepts_heic(client):
     """iPhone-Fotos (HEIC) werden akzeptiert und als JPEG gespeichert."""
     import io

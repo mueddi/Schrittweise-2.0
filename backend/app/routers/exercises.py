@@ -182,17 +182,36 @@ def create_exercise(payload: ExerciseCreate, user: User = Depends(require_studen
     return ExerciseOut.model_validate(ex)
 
 
+def _strip_figure_notes(text: str) -> str:
+    """Entfernt OCR-Beschreibungszeilen ([Figur: …]/[Graph: …]) fuer die Anzeige.
+
+    Im gespeicherten Exercise.text bleiben sie erhalten (Tutor-Kontext),
+    aber im sichtbaren Chat sind sie ueberfluessig – das Bild steht direkt
+    darueber in der Aufgaben-Karte.
+    """
+    import re
+
+    cleaned = re.sub(r"\[(figur|graph)\s*:[\s\S]*?\]", "", text or "", flags=re.IGNORECASE)
+    return re.sub(r"\n{2,}", "\n", cleaned).strip()
+
+
 def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateOut:
     """Neuen Attempt mit Eroeffnungsnachricht anlegen (fuer Start, Retry, Variante)."""
     attempt = Attempt(exercise_id=ex.id, user_id=user.id, hint_level=0, own_attempts=0)
     db.add(attempt)
     db.flush()
 
+    shown = _strip_figure_notes(ex.text)
+    if shown and shown != "(Aufgabe auf dem Foto)":
+        intro = f"Los geht's! Deine Aufgabe:\n\n{shown}"
+    else:
+        # Bild-Aufgabe ohne echten Text: nicht den Platzhalter/die
+        # Figur-Beschreibung zitieren – das Bild ist die Aufgabe.
+        intro = "Los geht's! Deine Aufgabe ist auf dem Bild oben 📷."
     opener = Message(
         attempt_id=attempt.id,
         role=MessageRole.tutor,
-        text=(f"Los geht's! Deine Aufgabe:\n\n{ex.text}\n\n"
-              "Wie würdest du anfangen? Kein Stress – ich helf dir Schritt für Schritt."),
+        text=f"{intro}\n\nWie würdest du anfangen? Kein Stress – ich helf dir Schritt für Schritt.",
     )
     db.add(opener)
     db.commit()
