@@ -92,6 +92,7 @@ export default function App() {
         <Route path="einstellungen" element={<Einstellungen />} />
         <Route path="kosten" element={<RequireAdmin><Kosten /></RequireAdmin>} />
         <Route path="nutzer" element={<RequireAdmin><Nutzer /></RequireAdmin>} />
+        <Route path="elternansicht" element={<RequireAdmin><ParentDashboard preview /></RequireAdmin>} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

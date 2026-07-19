@@ -7,7 +7,9 @@ import { ChildDashboard } from "./Eltern.jsx";
 import { DeleteAccount, PasswordTab } from "./Einstellungen.jsx";
 
 // Eigenständige Eltern-Ansicht (Rolle parent). Kein Schüler-Sidebar.
-export default function ParentDashboard() {
+// preview: Admin-Vorschau – zeigt dieselbe Ansicht mit den EIGENEN
+// Übungsdaten (GET /api/parents/preview), zum Testen der Eltern-Sicht.
+export default function ParentDashboard({ preview = false }) {
   const { user, logout } = useAuth();
   const { t, lang } = useLang();
   const [children, setChildren] = useState([]);
@@ -17,8 +19,11 @@ export default function ParentDashboard() {
   const [active, setActive] = useState(0);
   const [kontoOpen, setKontoOpen] = useState(false);
 
-  const load = () => api.get("/api/parents/children").then(setChildren).catch(() => setChildren([]));
-  useEffect(() => { load(); }, []);
+  const load = () => (preview
+    ? api.get("/api/parents/preview").then((d) => setChildren([d]))
+    : api.get("/api/parents/children").then(setChildren)
+  ).catch(() => setChildren([]));
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function redeem(e) {
     e?.preventDefault();
@@ -48,10 +53,23 @@ export default function ParentDashboard() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontSize: 13, color: "#6b7280" }}>{user?.display_name}</span>
-          <span onClick={() => setKontoOpen(!kontoOpen)} style={{ fontSize: 12, fontWeight: 600, color: kontoOpen ? "#1a1c22" : "#4f46e5", cursor: "pointer" }}>⚙ {t("Konto", "Account")}</span>
-          <span onClick={logout} style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("Abmelden", "Log out")}</span>
+          {preview ? (
+            <Link to="/app/lernen" style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5" }}>{t("← Zurück zur App", "← Back to the app")}</Link>
+          ) : (
+            <>
+              <span onClick={() => setKontoOpen(!kontoOpen)} style={{ fontSize: 12, fontWeight: 600, color: kontoOpen ? "#1a1c22" : "#4f46e5", cursor: "pointer" }}>⚙ {t("Konto", "Account")}</span>
+              <span onClick={logout} style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("Abmelden", "Log out")}</span>
+            </>
+          )}
         </div>
       </div>
+
+      {preview && (
+        <div style={{ background: "#fdf3e6", borderBottom: "1px solid #f2ddb8", padding: "8px 28px", fontSize: 12.5, color: "#a05c12" }}>
+          {t("👁 Vorschau: So sehen Eltern die Ansicht – gezeigt werden deine eigenen Übungsdaten.",
+             "👁 Preview: this is what parents see – showing your own practice data.")}
+        </div>
+      )}
 
       <div style={{ maxWidth: 1000, margin: "0 auto", padding: "24px 28px" }}>
         {children.length > 1 && (
@@ -83,10 +101,12 @@ export default function ParentDashboard() {
           </div>
         )}
 
+        {!preview && (
         <form onSubmit={redeem} style={{ display: "flex", gap: 10, marginTop: 24, maxWidth: 420 }}>
           <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder={t("Einladungscode, z.B. 8ZEWHBZT", "Invite code, e.g. 8ZEWHBZT")} style={{ flex: 1, border: "1px solid #d2d4dd", borderRadius: 11, padding: "11px 13px", fontSize: 14, outline: "none", letterSpacing: ".1em", fontFamily: "ui-monospace, monospace" }} />
           <button type="submit" disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>{busy ? "…" : t("Verknüpfen", "Link")}</button>
         </form>
+        )}
         {error && <div style={{ fontSize: 13, color: "#c0392b", marginTop: 10 }}>{error}</div>}
 
         {kontoOpen && (
