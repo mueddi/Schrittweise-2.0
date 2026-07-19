@@ -234,6 +234,7 @@ export default function Lernen() {
   const [uploadBusy, setUploadBusy] = useState(false); // 📷-Upload im Composer laeuft
   const fileRef = useRef(null);
   const [showTaskText, setShowTaskText] = useState(false); // Text unter Foto-Aufgabe
+  const [showTaskImage, setShowTaskImage] = useState(true); // Aufgaben-Bild einklappbar (mehr Platz zum Chatten)
   const [stats, setStats] = useState(null); // {serie_tage, geloest_woche}
   const inputRef = useRef(null);
   const chatRef = useRef(null);
@@ -279,6 +280,8 @@ export default function Lernen() {
     setState(null);
     setLoadError(false);
     setPendingImage(null); // Anhang gehoert zur alten Aufgabe
+    setShowTaskImage(true); // neue Aufgabe: Bild wieder zeigen
+    setShowTaskText(false);
     load();
   }, [load]);
 
@@ -537,17 +540,25 @@ export default function Lernen() {
       {/* Aufgabe immer sichtbar – Schueler muessen nie hochscrollen.
           Foto-Aufgaben: das BILD ist die Aufgabe (Text nur auf Wunsch). */}
       <div style={{ background: "#f6f7fb", padding: "12px 24px 0" }}>
-        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: exercise.image_path ? 270 : 130, overflowY: "auto" }}>
+        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 14, padding: "10px 16px", maxHeight: exercise.image_path && showTaskImage ? 270 : 130, overflowY: "auto" }}>
           <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".07em", color: "#4f46e5", marginBottom: 3 }}>DEINE AUFGABE</div>
           {exercise.image_path ? (
             <>
-              <img
-                src={`${BASE}${exercise.image_path}`}
-                alt="Aufgaben-Bild"
-                title="🔍 vergrössern"
-                onClick={() => setLightbox(exercise.image_path)}
-                style={{ display: "block", maxWidth: "100%", maxHeight: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in" }}
-              />
+              {showTaskImage && (
+                <img
+                  src={`${BASE}${exercise.image_path}`}
+                  alt="Aufgaben-Bild"
+                  title="🔍 vergrössern"
+                  onClick={() => setLightbox(exercise.image_path)}
+                  style={{ display: "block", maxWidth: "100%", maxHeight: 190, borderRadius: 10, border: "1px solid #e0e2fb", cursor: "zoom-in" }}
+                />
+              )}
+              <button
+                onClick={() => setShowTaskImage(!showTaskImage)}
+                style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 12px 2px 0" }}
+              >
+                Bild {showTaskImage ? "ausblenden ▴" : "anzeigen ▾"}
+              </button>
               {exercise.text && exercise.text !== "(Aufgabe auf dem Foto)" && (
                 <>
                   <button
