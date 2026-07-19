@@ -195,6 +195,30 @@ def _strip_figure_notes(text: str) -> str:
     return re.sub(r"\n{2,}", "\n", cleaned).strip()
 
 
+def _meaningful_task_text(text: str) -> bool:
+    """Ist der Text alleine aussagekraeftig – oder nur lose Figur-Fragmente?
+
+    Bei Geometrie-Zeichnungen transkribiert die Erkennung manchmal einzelne
+    Beschriftungen («30», «x») als eigene Zeilen; ohne das Bild ergeben die
+    keinen Sinn. Aussagekraeftig ist eine Zeile mit ganzem Satz/Formelzeile
+    (>= 3 Tokens), einem echten Wort (>= 4 Buchstaben) oder einer
+    Gleichung (enthaelt «=», z.B. «x = 6»).
+    """
+    import re
+
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if len(line.split()) >= 3:
+            return True
+        if re.search(r"[A-Za-zÄÖÜäöüß]{4,}", line):
+            return True
+        if "=" in line:
+            return True
+    return False
+
+
 def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateOut:
     """Neuen Attempt mit Eroeffnungsnachricht anlegen (fuer Start, Retry, Variante)."""
     attempt = Attempt(exercise_id=ex.id, user_id=user.id, hint_level=0, own_attempts=0)
@@ -202,12 +226,16 @@ def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateO
     db.flush()
 
     shown = _strip_figure_notes(ex.text)
+    # Bei Bild-Aufgaben nur zitieren, was alleine Sinn ergibt – lose
+    # Figur-Beschriftungen («30», «x») bleiben weg, das Bild ist die Aufgabe.
+    if ex.image_path and not _meaningful_task_text(shown):
+        shown = ""
     if shown and shown != "(Aufgabe auf dem Foto)":
         intro = f"Los geht's! Deine Aufgabe:\n\n{shown}"
-    else:
-        # Bild-Aufgabe ohne echten Text: nicht den Platzhalter/die
-        # Figur-Beschreibung zitieren – das Bild ist die Aufgabe.
+    elif ex.image_path:
         intro = "Los geht's! Deine Aufgabe ist auf dem Bild oben 📷."
+    else:
+        intro = "Los geht's!"
     opener = Message(
         attempt_id=attempt.id,
         role=MessageRole.tutor,

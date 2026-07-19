@@ -480,6 +480,20 @@ export default function Lernen() {
       .trim();
   }
 
+  // Lose Figur-Beschriftungen («30», «x») ergeben ohne Bild keinen Sinn –
+  // nur Text uebernehmen, der alleine aussagekraeftig ist (Satz, echtes
+  // Wort oder echte Gleichung). Gleiche Heuristik wie im Backend-Opener.
+  function looksMeaningful(t) {
+    return (t || "").split("\n").some((line) => {
+      const l = line.trim();
+      if (!l) return false;
+      if (l.split(/\s+/).length >= 3) return true;
+      if (/[A-Za-zÄÖÜäöüß]{4,}/.test(l)) return true;
+      if (l.includes("=")) return true;
+      return false;
+    });
+  }
+
   // 📷 im Composer: Foto an die NAECHSTE Chat-Nachricht anhaengen.
   // Upload laeuft ueber die OCR-Route (speichert das Bild, liest den Text mit).
   async function attachPhoto(e) {
@@ -492,7 +506,7 @@ export default function Lernen() {
       fd.append("file", file, file.name || "foto.jpg");
       const res = await api.upload("/api/exercises/ocr", fd);
       const text = stripFigureNotes(res.text);
-      if (text) setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      if (text && looksMeaningful(text)) setInput((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
       if (res.image_path) setPendingImage(res.image_path);
     } catch (err) {
       if (err.status === 402) {
@@ -739,7 +753,7 @@ export default function Lernen() {
           onClose={() => setDrawOpen(false)}
           onResult={({ text, imagePath }) => {
             const clean = stripFigureNotes(text);
-            if (clean) setInput((prev) => (prev.trim() ? `${prev.trim()} ${clean}` : clean));
+            if (clean && looksMeaningful(clean)) setInput((prev) => (prev.trim() ? `${prev.trim()} ${clean}` : clean));
             if (imagePath) setPendingImage(imagePath); // Zeichnung haengt als Bild an
           }}
         />

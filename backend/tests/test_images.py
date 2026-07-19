@@ -194,6 +194,38 @@ def test_eroeffnung_zitiert_keine_figurbeschreibung(client):
     assert "(Aufgabe auf dem Foto)" not in opener2["text"]
 
 
+def test_eroeffnung_zitiert_keine_losen_figur_fragmente(client):
+    """Lose Figur-Beschriftungen («30», «x») ergeben ohne Bild keinen Sinn –
+    die Eroeffnung verweist dann aufs Bild. Echter Text/Gleichungen und
+    getippte Aufgaben ohne Bild bleiben unveraendert zitiert."""
+    headers = register_pw(client, "mia@test.ch")
+    up = client.post("/api/exercises/ocr", headers=headers,
+                     files={"file": ("dreieck.png", tiny_png(), "image/png")})
+    image_path = up.json()["image_path"]
+
+    def opener_for(payload):
+        ex = client.post("/api/exercises", headers=headers, json=payload).json()
+        return client.post(f"/api/exercises/{ex['id']}/attempts",
+                           headers=headers).json()["messages"][0]["text"]
+
+    # Nur lose Fragmente + Bild -> Bild-Hinweis, keine «30»
+    t = opener_for({"text": "30\nx", "image_path": image_path})
+    assert "auf dem Bild" in t
+    assert "30" not in t
+
+    # Echter Satz + Bild -> wird zitiert
+    t = opener_for({"text": "Berechne die Fläche.\n30\nx", "image_path": image_path})
+    assert "Berechne die Fläche." in t
+
+    # Gleichung + Bild -> wird zitiert (Stift-Rechenschritt)
+    t = opener_for({"text": "x = 6", "image_path": image_path})
+    assert "x = 6" in t
+
+    # OHNE Bild: auch kurzer getippter Text bleibt zitiert
+    t = opener_for({"text": "17x"})
+    assert "17x" in t
+
+
 def test_ocr_upload_accepts_heic(client):
     """iPhone-Fotos (HEIC) werden akzeptiert und als JPEG gespeichert."""
     import io
