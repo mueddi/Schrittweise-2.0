@@ -68,17 +68,22 @@ def recompute_week(db: Session, user_id: int, ref: datetime | None = None) -> Pr
     # Stolpersteine: Themen mit vielen genutzten Hinweisen / ungeloest.
     # Aufgaben ohne Themen-Zuordnung landen im Sammel-Eintrag «Ohne Thema» –
     # sonst wirkt die Karte bei Nutzern ohne Themen faelschlich immer leer.
-    struggles: Counter = Counter()
+    heavy: Counter = Counter()
+    totals: Counter = Counter()
     ex_ids = {a.exercise_id for a in attempts}
     if ex_ids:
         ex_topic = dict(db.execute(select(Exercise.id, Exercise.topic_id).where(Exercise.id.in_(ex_ids))).all())
         topic_names = dict(db.execute(select(Topic.id, Topic.name).where(Topic.user_id == user_id)).all())
         for a in attempts:
+            tid = ex_topic.get(a.exercise_id)
+            name = topic_names.get(tid, "Thema") if tid is not None else "Ohne Thema"
+            totals[name] += 1
             if not a.solved or a.hint_level >= 3:
-                tid = ex_topic.get(a.exercise_id)
-                name = topic_names.get(tid, "Thema") if tid is not None else "Ohne Thema"
-                struggles[name] += 1
-    top_struggles = [{"topic": name, "trend": TREND_UEBEN} for name, _ in struggles.most_common(3)]
+                heavy[name] += 1
+    top_struggles = [
+        {"topic": name, "heavy": count, "total": totals[name], "trend": TREND_UEBEN}
+        for name, count in heavy.most_common(3)
+    ]
 
     agg = db.scalar(
         select(ProgressAggregate).where(
@@ -118,9 +123,37 @@ def build_summary(db: Session, student, ref: datetime | None = None) -> dict:
         # Keine (aussagekraeftige) Vorwoche -> kein irrefuehrendes «+100 % vs. Vorwoche».
         delta = 0
 
-    struggles = [
-        {"topic": s.get("topic", "Thema"), "label": _TREND_LABEL.get(s.get("trend", ""), "Noch üben")}
-        for s in (agg.top_struggles or [])
+    # Label je Stolperstein: hat sich der Hilfe-Anteil desselben Themas
+    # gegenueber der Vorwoche verbessert -> «Wird besser», sonst «Noch üben».
+    prev_ratio: dict[str, float] = {}
+    for s in (prev.top_struggles or []) if prev else []:
+        total = s.get("total") or 0
+        if total:
+            prev_ratio[s.get("topic")] = (s.get("heavy") or 0) / total
+    struggles = []
+    for s in (agg.top_struggles or []):
+        total = s.get("total") or 0
+        heavy = s.get("heavy")
+        ratio = (heavy / total) if (heavy is not None and total) else None
+        before = prev_ratio.get(s.get("topic"))
+        if ratio is not None and before is not None and ratio < before:
+            label = "Wird besser"
+        else:
+            label = _TREND_LABEL.get(s.get("trend", ""), "Noch üben")
+        struggles.append({"topic": s.get("topic", "Thema"), "label": label,
+                          "heavy": heavy, "total": s.get("total")})
+
+    # Verlauf: letzte 4 Wochen (aktuelle zuerst) fuer den Eltern-Chart
+    history_rows = list(db.scalars(
+        select(ProgressAggregate)
+        .where(ProgressAggregate.user_id == student.id)
+        .order_by(ProgressAggregate.week_start.desc())
+        .limit(4)
+    ))
+    history = [
+        {"week_start": r.week_start, "solved_count": r.solved_count,
+         "autonomy_rate": int(round(r.autonomy_rate * 100)), "active_days": r.active_days}
+        for r in history_rows
     ]
     return {
         "student_display_name": student.display_name,
@@ -133,4 +166,5 @@ def build_summary(db: Session, student, ref: datetime | None = None) -> dict:
         "daily_activity": agg.daily_activity or [0] * 7,
         "week_start": agg.week_start,
         "shared": bool(student.share_with_parents),
+        "history": history,
     }

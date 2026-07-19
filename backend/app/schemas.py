@@ -270,6 +270,14 @@ class ParentRedeem(BaseModel):
     invite_code: str
 
 
+class ParentWeek(BaseModel):
+    """Eine Woche im Verlauf der Elternansicht (nur Zaehlwerte)."""
+    week_start: date
+    solved_count: int
+    autonomy_rate: int  # in %
+    active_days: int
+
+
 class ParentChildSummary(BaseModel):
     student_display_name: str
     grade_level: str | None
@@ -277,10 +285,14 @@ class ParentChildSummary(BaseModel):
     solved_count: int
     active_days: int
     dranbleiben_delta: int  # % vs. Vorwoche
+    # Eintraege: {topic, label, heavy?, total?} – heavy/total fehlen bei
+    # Aggregat-Zeilen aus der Zeit vor dieser Erweiterung.
     top_struggles: list[dict]
     daily_activity: list[int]
     week_start: date | None
     shared: bool  # Schueler hat Freigabe erteilt?
+    # letzte Wochen (aktuelle zuerst) fuer den Verlaufs-Chart
+    history: list[ParentWeek] = []
 
 
 # ---------- Aufgaben-Bibliothek ----------

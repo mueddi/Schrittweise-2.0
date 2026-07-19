@@ -61,6 +61,40 @@ function summarySentence(d, t) {
   return s;
 }
 
+// Regelbasierte, konkrete Hilfe-Tipps aus den Wochen-Zahlen (max. 2).
+function helpTips(d, t) {
+  const tips = [];
+  const worst = (d.top_struggles || [])[0];
+  if (worst) {
+    const topicLabel = worst.topic === "Ohne Thema"
+      ? t("den Aufgaben ohne Thema", "the tasks without a topic")
+      : `«${worst.topic}»`;
+    tips.push(t(
+      `Setzen Sie bei ${topicLabel} an: Lassen Sie sich 2–3 gelöste Aufgaben Schritt für Schritt erklären – wer erklärt, festigt das Verständnis am stärksten.`,
+      `Start with ${topicLabel}: have your child explain 2–3 solved tasks step by step – explaining is the strongest way to consolidate understanding.`
+    ));
+  }
+  if ((d.active_days ?? 0) <= 1) {
+    tips.push(t(
+      "Regelmässigkeit schlägt Länge: 3× pro Woche 15 Minuten bringen mehr als eine lange Sitzung. Ein fester Übungsmoment (z.B. nach dem Znacht) hilft.",
+      "Consistency beats length: 15 minutes 3× a week beats one long session. A fixed practice moment (e.g. after dinner) helps."
+    ));
+  }
+  if ((d.autonomy_rate ?? 0) < 40 && (d.solved_count ?? 0) >= 3) {
+    tips.push(t(
+      "Viel Hilfe genutzt: Ermutigen Sie Ihr Kind, vor jedem Tipp zuerst einen eigenen Versuch zu schreiben – der Tutor gibt die Lösung nie direkt vor.",
+      "A lot of help was used: encourage your child to write an own attempt before each hint – the tutor never gives the answer away."
+    ));
+  }
+  if (tips.length === 0) {
+    tips.push(t(
+      "Läuft rund! Benennen Sie den Fortschritt konkret («Du hast das diese Woche selbständig gelöst») – das wirkt stärker als Lob fürs Resultat.",
+      "Going well! Name the progress specifically (“you solved that on your own this week”) – that works better than praising results."
+    ));
+  }
+  return tips.slice(0, 2);
+}
+
 function trendText(delta, t) {
   if (delta > 15) return { value: t("mehr", "more"), sub: t("geübt als letzte Woche", "practice than last week"), color: "#1a7f3c" };
   if (delta < -15) return { value: t("weniger", "less"), sub: t("geübt als letzte Woche", "practice than last week"), color: "#c0392b" };
@@ -101,8 +135,15 @@ export function ChildDashboard({ data }) {
             const topicLabel = s.topic === "Ohne Thema" ? t("Ohne Thema", "No topic") : s.topic;
             return (
               <div key={s.topic} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 0", borderTop: "1px solid #f4f5f8" }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600 }}>{topicLabel}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "4px 11px", background: chip.bg, color: chip.fg }}>{chip.text}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{topicLabel}</div>
+                  {s.heavy != null && s.total ? (
+                    <div style={{ fontSize: 11.5, color: "#9aa0ab" }}>
+                      {s.heavy} {t("von", "of")} {s.total} {s.total === 1 ? t("Aufgabe brauchte", "task needed") : t("Aufgaben brauchten", "tasks needed")} {t("viel Hilfe", "a lot of help")}
+                    </div>
+                  ) : null}
+                </div>
+                <span style={{ flex: "0 0 auto", fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "4px 11px", background: chip.bg, color: chip.fg }}>{chip.text}</span>
               </div>
             );
           })}
@@ -125,6 +166,46 @@ export function ChildDashboard({ data }) {
             })}
           </div>
         </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginTop: 16 }} className="eltern-charts">
+        {/* Konkrete Handlungsempfehlungen aus den Wochen-Zahlen */}
+        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 16, padding: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("💡 So können Sie helfen", "💡 How you can help")}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {helpTips(data, t).map((tip, i) => (
+              <div key={i} style={{ display: "flex", gap: 9, fontSize: 13.5, lineHeight: 1.55, color: "#3a3d46" }}>
+                <span style={{ color: "#4f46e5", fontWeight: 800 }}>→</span>
+                <span>{tip}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Verlauf ueber die letzten Wochen (nur mit genug Daten) */}
+        {(data.history || []).length >= 2 ? (
+          <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t("Verlauf", "Trend over time")}</div>
+            <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>{t("Gelöste Aufgaben pro Woche · Zahl = Selbständigkeit", "Tasks solved per week · number = independence")}</div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 104 }}>
+              {[...data.history].reverse().map((w, i, arr) => {
+                const maxSolved = Math.max(...arr.map((x) => x.solved_count), 1);
+                const h = Math.max(Math.round((w.solved_count / maxSolved) * 62), w.solved_count > 0 ? 10 : 2);
+                const isCurrent = i === arr.length - 1;
+                const label = new Date(w.week_start).toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { day: "numeric", month: "numeric" });
+                return (
+                  <div key={w.week_start} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: isCurrent ? "#4f46e5" : "#9aa0ab" }}>{w.solved_count > 0 ? `${w.autonomy_rate}%` : "–"}</span>
+                    <div title={`${w.solved_count} ${t("gelöst", "solved")}`} style={{ width: "100%", height: h, background: w.solved_count > 0 ? (isCurrent ? "#6366f1" : "#e7e8fb") : "#eef0f3", borderRadius: 6 }} />
+                    <span style={{ fontSize: 10, color: "#9aa0ab" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: "#fff", border: "1px dashed #e7e8ee", borderRadius: 16, padding: 20, display: "grid", placeItems: "center", fontSize: 12.5, color: "#9aa0ab", textAlign: "center" }}>
+            {t("Der Wochen-Verlauf erscheint hier, sobald zwei Übungswochen zusammengekommen sind.", "The weekly trend will appear here once there are two weeks of practice.")}
+          </div>
+        )}
       </div>
       <div style={{ marginTop: 16, fontSize: 12.5, color: "#9aa0ab" }}>
         {t("🔒 Sie sehen den groben Fortschritt – nie einzelne Nachrichten Ihres Kindes.", "🔒 You see overall progress – never your child's individual messages.")}

@@ -28,7 +28,8 @@ def _summary_respecting_share(db: Session, student: User) -> dict:
     summary = aggregates.build_summary(db, student)
     if not summary["shared"]:
         summary.update({"autonomy_rate": 0, "solved_count": 0, "active_days": 0,
-                        "dranbleiben_delta": 0, "top_struggles": [], "daily_activity": [0] * 7})
+                        "dranbleiben_delta": 0, "top_struggles": [], "daily_activity": [0] * 7,
+                        "history": []})
     return summary
 
 

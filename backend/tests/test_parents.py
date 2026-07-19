@@ -63,3 +63,28 @@ def test_themenlose_aufgaben_zaehlen_als_ohne_thema(client):
     preview = client.get("/api/parents/preview", headers=s).json()
     topics = [t["topic"] for t in preview["top_struggles"]]
     assert "Ohne Thema" in topics
+
+
+def test_stolpersteine_mit_zahlen_und_verlauf(client):
+    """Stolpersteine tragen heavy/total, die Zusammenfassung einen
+    Wochen-Verlauf; ohne Freigabe wird auch der Verlauf genullt."""
+    s = register(client, "kind4@test.ch", name="Kind4")
+
+    # zwei themenlose Aufgaben: eine ungeloest (heavy), eine nur gestartet
+    for text in ("3x + 5 = 20", "2x = 10"):
+        ex = client.post("/api/exercises", headers=s, json={"text": text}).json()
+        client.post(f"/api/exercises/{ex['id']}/attempts", headers=s)
+
+    preview = client.get("/api/parents/preview", headers=s).json()
+    entry = next(t for t in preview["top_struggles"] if t["topic"] == "Ohne Thema")
+    assert entry["heavy"] == 2 and entry["total"] == 2
+    assert preview["history"], "Verlauf fehlt"
+    assert preview["history"][0]["week_start"] == preview["week_start"]
+
+    # Freigabe aus -> Eltern-Pfad nullt auch den Verlauf
+    client.patch("/api/auth/me", headers=s, json={"share_with_parents": False})
+    p = register(client, "papi4@test.ch", role="parent", name="Papi")
+    code = _invite_code(client, s)
+    summary = client.post("/api/parents/redeem", headers=p, json={"invite_code": code}).json()
+    assert summary["shared"] is False
+    assert summary["history"] == [] and summary["top_struggles"] == []
