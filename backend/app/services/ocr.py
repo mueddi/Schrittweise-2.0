@@ -87,9 +87,12 @@ class ClaudeVisionOcr:
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
             # Bewusst das staerkere Modell: Handschrift-Erkennung ist die
             # Kernfunktion der App – Erkennungsqualitaet schlaegt hier Kosten.
+            # temperature=0: Transkribieren verlangt die plausibelste Lesart,
+            # keine Kreativitaet – liefert konsistentere Ergebnisse.
             resp = client.messages.create(
                 model=settings.anthropic_model_smart,
-                max_tokens=600,
+                max_tokens=1000,
+                temperature=0,
                 messages=[
                     {
                         "role": "user",

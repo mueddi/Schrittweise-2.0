@@ -17,6 +17,7 @@ log = logging.getLogger("schrittweise.usage")
 # Cache-Schreiben (5-Min-TTL) 1.25x.
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5": (1.00, 5.00),
+    "claude-sonnet-5": (3.00, 15.00),
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-sonnet-4-5": (3.00, 15.00),
     "claude-opus-4-6": (5.00, 25.00),

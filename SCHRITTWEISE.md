@@ -27,7 +27,7 @@ Live: **https://schrittweise-2-0.vercel.app** · Der visuelle Massstab ist
 | Frontend | React + Vite, Formeln via **KaTeX**, deterministische Skizzen (SVG) |
 | Backend | Python + **FastAPI** |
 | Mathe | **SymPy** |
-| KI | Anthropic API – `claude-haiku-4-5` (Standard), `claude-sonnet-4-6` (Foto/Geometrie), Prompt-Caching |
+| KI | Anthropic API – `claude-haiku-4-5` (Standard), `claude-sonnet-5` (Foto/Geometrie), Prompt-Caching |
 | Handschrift/Foto | **Claude Vision** (liest Stift-Eingabe und Fotos; ohne API-Key: einfacher lokaler Fallback) |
 | DB | **Supabase Postgres** (lokal SQLite) via SQLAlchemy |
 | Auth | **E-Mail + Passwort** (scrypt) + JWT; Mail-Link nur für «Passwort vergessen» |

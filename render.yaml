@@ -38,7 +38,7 @@ services:
       - key: ANTHROPIC_MODEL_DEFAULT
         value: claude-haiku-4-5
       - key: ANTHROPIC_MODEL_SMART
-        value: claude-sonnet-4-6
+        value: claude-sonnet-5
       # Supabase «Session pooler»-URL, im Dashboard eintragen. Format:
       #   postgresql://postgres.<projekt>:<PASSWORT>@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
       # (postgres:// / postgresql:// wird automatisch auf psycopg normalisiert)

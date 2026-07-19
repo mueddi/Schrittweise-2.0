@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str = ""
     anthropic_model_default: str = "claude-haiku-4-5"
-    anthropic_model_smart: str = "claude-sonnet-4-6"
+    anthropic_model_smart: str = "claude-sonnet-5"
 
     # Auth / JWT
     jwt_secret: str = "dev-secret-nur-fuer-lokal-nicht-in-produktion"

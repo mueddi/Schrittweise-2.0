@@ -109,12 +109,45 @@ export default function DrawPad({ onResult, onClose }) {
     redraw();
   }
 
+  // Export in hoher Aufloesung: die Striche auf einen Offscreen-Canvas mit
+  // mind. 2x-Massstab neu zeichnen – mehr Pixel = deutlich bessere Erkennung
+  // (der sichtbare Canvas hat nur Bildschirmaufloesung).
+  function exportBlob() {
+    const { width, height } = wrapRef.current.getBoundingClientRect();
+    const scale = Math.max(window.devicePixelRatio || 1, 2);
+    const out = document.createElement("canvas");
+    out.width = Math.round(width * scale);
+    out.height = Math.round(height * scale);
+    const ctx = out.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "#1a1c22";
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const stroke of strokes.current) {
+      if (stroke.length < 2) {
+        ctx.beginPath();
+        ctx.arc(stroke[0].x, stroke[0].y, 1.4, 0, Math.PI * 2);
+        ctx.fillStyle = "#1a1c22";
+        ctx.fill();
+        continue;
+      }
+      ctx.beginPath();
+      ctx.moveTo(stroke[0].x, stroke[0].y);
+      for (const p of stroke.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+    return new Promise((resolve) => out.toBlob(resolve, "image/png"));
+  }
+
   async function recognize() {
     if (!hasInk || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const blob = await new Promise((resolve) => canvasRef.current.toBlob(resolve, "image/png"));
+      const blob = await exportBlob();
       const fd = new FormData();
       fd.append("file", blob, "stift-eingabe.png");
       const res = await api.upload("/api/exercises/ocr", fd);
