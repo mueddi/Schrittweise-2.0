@@ -149,6 +149,13 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileName || t("wird erkannt …", "recognizing …")}</div>
                 <div style={{ fontSize: 12, color: ocrNote?.startsWith("✓") ? "#1a7f3c" : "#9aa0ab", lineHeight: 1.45 }}>{ocrBusy ? t("erkenne …", "recognizing …") : ocrNote}</div>
+                {!ocrBusy && ocrText && (
+                  // So habe ich es gelesen: Lesart sofort sichtbar machen,
+                  // damit Fehl-Erkennungen nicht erst im Chat auffallen.
+                  <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11.5, color: "#4b4f5c", background: "#fff", border: "1px solid #e7e8ee", borderRadius: 8, padding: "4px 8px", marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {ocrText}
+                  </div>
+                )}
                 {!ocrBusy && !imagePath && lastFile && (
                   <button onClick={() => handleFile(lastFile)} style={{ marginTop: 6, border: "1px solid #c9ccf6", background: "#fff", color: "#4f46e5", borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                     {t("↻ Nochmal versuchen", "↻ Try again")}
@@ -170,7 +177,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
           {imagePath && ocrText && (
             <div style={{ marginBottom: 12 }}>
               <button onClick={() => setOcrOpen(!ocrOpen)} style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
-                {t("Erkannter Text (nur falls du korrigieren willst)", "Recognized text (only if you want to correct it)")} {ocrOpen ? "▴" : "▾"}
+                {t("Erkannten Text korrigieren", "Correct the recognized text")} {ocrOpen ? "▴" : "▾"}
               </button>
               {ocrOpen && (
                 <textarea
