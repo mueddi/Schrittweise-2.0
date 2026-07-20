@@ -137,3 +137,23 @@ def test_solved_attempt_state_frozen(client):
     assert a["hint_level"] == frozen_level
     assert a["own_attempts"] == frozen_attempts
     assert a["solved"] is True
+
+
+def test_rechenaufgabe_wird_geloest_markiert(client):
+    """«2 + 4» + Antwort «= 6» -> Attempt ist geloest (gruener Haken/🎉)."""
+    from .test_library import register_pw
+
+    headers = register_pw(client, "rechnen@test.ch")
+    ex = client.post("/api/exercises", headers=headers, json={"text": "2 + 4"}).json()
+    assert ex["math_expression"] == "2 + 4"
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+
+    with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                       json={"text": "= 6"}) as r:
+        assert r.status_code == 200
+        assert "".join(r.iter_text())
+
+    state = client.get(f"/api/attempts/{aid}", headers=headers).json()
+    assert state["attempt"]["solved"] is True
+    student = [m for m in state["messages"] if m["role"] == "student"][-1]
+    assert student["verification_status"] == "correct"

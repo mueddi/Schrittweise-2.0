@@ -40,3 +40,35 @@ def test_solution_never_in_context():
     v = verify("3*x+5=20", "keine ahnung")
     assert v.solution == "x = 5"          # intern bekannt
     assert "solution" not in v.to_context()  # geht nie ungefiltert raus
+
+
+def test_reine_rechenaufgabe_wird_erkannt_und_geprueft():
+    """«2 + 4» ist auch ohne Gleichheitszeichen pruefbar."""
+    from app.services.sympy_verifier import extract_expression, verify
+
+    assert extract_expression("2 + 4") == "2 + 4"
+    assert extract_expression("Berechne: 348 + 267") is not None
+    assert extract_expression("Erkläre mir Brüche") is None
+    assert extract_expression("42") is None  # einzelne Zahl ist keine Aufgabe
+
+    assert verify("2 + 4", "= 6").status == "correct"
+    assert verify("2 + 4", "6").status == "correct"
+    assert verify("2 + 4", "2 + 4 = 6").status == "correct"
+    v = verify("2 + 4", "7")
+    assert v.status == "incorrect"
+    assert v.solution == "= 6"
+    assert verify("2 + 4", "keine ahnung").status == "unknown"
+
+
+def test_lineare_schreibweise_von_links_nach_rechts():
+    """Schul-Lesart: «3/2y» = (3/2)·y, nicht 3/(2y); Klassiker bleibt korrekt."""
+    from app.services.sympy_verifier import verify
+
+    # (3/2)·y = 6  ->  y = 4
+    assert verify("3/2y = 6", "y = 4").status == "correct"
+    assert verify("3/2y = 6", "y = 9").status == "incorrect"
+    # explizite Klammern unveraendert korrekt
+    assert verify("(3/2)*x = 6", "x = 4").status == "correct"
+    # Regression: impliziertes Mal in Koeffizienten bleibt richtig
+    assert verify("3x + 5 = 20", "x = 5").status == "correct"
+    assert verify("2(x + 1) = 8", "x = 3").status == "correct"

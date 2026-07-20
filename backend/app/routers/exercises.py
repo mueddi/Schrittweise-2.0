@@ -302,6 +302,12 @@ def _meaningful_task_text(text: str) -> bool:
 
 def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateOut:
     """Neuen Attempt mit Eroeffnungsnachricht anlegen (fuer Start, Retry, Variante)."""
+    # Alt-Aufgaben heilen: fehlt der pruefbare Ausdruck (z.B. «2 + 4» aus der
+    # Zeit, als nur Gleichungen erkannt wurden), einmalig nachziehen.
+    if not ex.math_expression:
+        guessed = extract_expression(ex.text)
+        if guessed:
+            ex.math_expression = guessed
     attempt = Attempt(exercise_id=ex.id, user_id=user.id, hint_level=0, own_attempts=0)
     db.add(attempt)
     db.flush()

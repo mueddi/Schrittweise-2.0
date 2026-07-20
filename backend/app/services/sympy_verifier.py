@@ -43,8 +43,23 @@ def _normalize(s: str) -> str:
     return s
 
 
+def _insert_explicit_mult(s: str) -> str:
+    """Schul-Lesart erzwingen: implizites Mal EXPLIZIT machen, BEVOR SymPy parst.
+
+    SymPy's implicit multiplication bindet staerker als die Division –
+    «3/2y» wuerde zu 3/(2·y). Schueler:innen lesen linear von links nach
+    rechts: «3/2y» = (3/2)·y. Darum «2y»→«2*y», «)x»→«)*x», «y(»→«y*(»
+    (einzelne Variable, Funktionsnamen wie sqrt( bleiben unberuehrt).
+    """
+    s = re.sub(r"(\d)\s*(?=[A-Za-z(])", r"\1*", s)
+    s = re.sub(r"(\))\s*(?=[A-Za-z0-9(])", r"\1*", s)
+    s = re.sub(r"(?<![A-Za-z])([A-Za-z])\s*(?=\()", r"\1*", s)
+    return s
+
+
 def _parse(expr: str):
-    return parse_expr(_normalize(expr), transformations=_TRANSFORMS, evaluate=True)
+    return parse_expr(_insert_explicit_mult(_normalize(expr)),
+                      transformations=_TRANSFORMS, evaluate=True)
 
 
 def _split_equation(text: str):
@@ -116,22 +131,55 @@ def _extract_candidates(message: str) -> list[str]:
     return cands
 
 
+def _arithmetic_expression(text: str) -> str | None:
+    """Reine Rechen-Aufgabe ohne «=» erkennen («2 + 4», «Berechne: 348 + 267»).
+
+    Nur Ziffern/Operatoren/Klammern, mindestens ein Operator zwischen zwei
+    Zahlen, und SymPy muss das Fragment zu einer ZAHL auswerten koennen.
+    """
+    msg = _normalize(text)
+    label = re.match(r"^\s*[A-Za-zÀ-ÿ ]+:\s*(.+)$", msg)
+    if label:
+        msg = label.group(1)
+    m = re.search(r"[-+]?[0-9(][0-9+\-*/^(). ]*", msg)
+    if not m:
+        return None
+    frag = m.group(0).strip().rstrip("+-*/^(. ")
+    if not re.search(r"[0-9)]\s*[+\-*/^]\s*[-+]?[0-9(]", frag):
+        return None  # einzelne Zahl ist keine Aufgabe
+    try:
+        value = _parse(frag)
+    except Exception:
+        return None
+    return frag if getattr(value, "is_number", False) else None
+
+
 def extract_expression(text: str) -> str | None:
     """Zieht aus einem Aufgabentext eine prüfbare Gleichung («Löse 3x = 15» -> «3x = 15»).
 
     Wird beim Anlegen einer Aufgabe als Fallback benutzt, wenn kein expliziter
     Mathe-Ausdruck hinterlegt wurde – sonst wäre die Aufgabe nie verifizierbar.
     """
-    if not text or "=" not in text:
+    if not text:
+        return None
+    if "=" not in text:
+        # Reine Rechen-Aufgaben («2 + 4») sind auch ohne «=» pruefbar.
+        for ln in [l for l in text.splitlines() if l.strip()] or [text]:
+            found = _arithmetic_expression(ln)
+            if found:
+                return found
         return None
     # Mehrzeilige Eingaben (Stift/Foto-Erkennung): erst Zeile fuer Zeile
     # versuchen, dann alles zu EINER Zeile verbunden («2 + 3\n= 2y»).
     lines = [ln for ln in text.splitlines() if ln.strip()]
     if len(lines) > 1:
+        # nur Zeilen MIT «=» einzeln probieren – sonst schnappt sich der
+        # Arithmetik-Zweig die erste Zeile einer zerteilten Gleichung
         for ln in lines:
-            found = extract_expression(ln)
-            if found:
-                return found
+            if "=" in ln:
+                found = extract_expression(ln)
+                if found:
+                    return found
         return extract_expression(" ".join(lines))
     # Fuehrendes Prosa-Label mit Doppelpunkt abtrennen («Berechne x: 2x+4=10»),
     # damit der Doppelpunkt nicht als Division normalisiert wird.
@@ -188,7 +236,34 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
 
     eq = _split_equation(exercise_expr)
     if eq is None:
-        # Aufgabe ist keine Gleichung (z.B. reiner Term) – nur grob prüfen
+        # Reine Rechen-Aufgabe («2 + 4»): Zahlenwert der Antwort vergleichen.
+        try:
+            expected = _parse(exercise_expr)
+        except Exception:
+            expected = None
+        if expected is not None and getattr(expected, "is_number", False):
+            sol_str = f"= {sp.nsimplify(expected)}"
+            values = []
+            for cand in _cands:
+                ceq = _split_equation(cand)
+                if ceq is not None:
+                    values += [side for side in ceq if side.is_number]
+                else:
+                    try:
+                        c = _parse(cand)
+                        if c.is_number:
+                            values.append(c)
+                    except Exception:
+                        pass
+            if any(sp.simplify(v - expected) == 0 for v in values):
+                return Verification("correct", "Zahlenwert stimmt", solution=sol_str,
+                                    extracted=_attempted, score=1.0)
+            if values:
+                return Verification("incorrect", "Zahlenwert stimmt nicht", solution=sol_str,
+                                    extracted=_attempted)
+            return Verification("unknown", "keine Zahl in der Antwort erkannt",
+                                solution=sol_str, extracted=_attempted)
+        # Aufgabe ist keine Gleichung (z.B. Term mit Variablen) – nur grob prüfen
         return Verification("unknown", "Aufgabe ist keine Gleichung, keine deterministische Prüfung",
                             extracted=_attempted)
 
