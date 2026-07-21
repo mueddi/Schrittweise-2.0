@@ -232,3 +232,17 @@ a {
 @media (max-width: 560px) {
   .themen-grid, .preise-grid, .eltern-tiles { grid-template-columns: 1fr !important; }
 }
+
+/* KaTeX-Haarlinien: Bruch-/Wurzelstriche sind nur 0.04em duenn und werden
+   auf manchen Handy-Displays (Subpixel-Rundung, v.a. Chrome/Android) auf
+   0 px gerundet – der Bruchstrich verschwindet. Dicker zeichnen und eine
+   Mindesthoehe von 1 px erzwingen (!important noetig: KaTeX setzt die
+   Breite als Inline-Style). */
+.katex .frac-line,
+.katex .sqrt-line,
+.katex .overline-line,
+.katex .underline-line,
+.katex .hline {
+  border-bottom-width: 0.08em !important;
+  min-height: 1px;
+}
