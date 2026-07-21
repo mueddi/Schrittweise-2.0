@@ -24,6 +24,7 @@ KIND_LABEL = {
     "webhook": "Stripe-Webhook abgelehnt",
     "server": "Server-Fehler",
     "client": "Fehler in der App (Browser)",
+    "ki-qualitaet": "KI-Rechenfehler (auto-korrigiert)",
 }
 
 

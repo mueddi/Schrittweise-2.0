@@ -166,3 +166,20 @@ def test_regie_warnt_bei_ungepruefter_antwort():
     assert "NICHT automatisch geprueft" in unknown
     correct = _regie(step, Verification("correct", "-", None), "2 + 4", None, "oberstufe")
     assert "NICHT automatisch geprueft" not in correct
+
+
+def test_modellwahl_sonnet_liest_haiku_unterrichtet_sonnet_loest():
+    from app.config import settings
+    from app.services.tutor import LadderStep, choose_model
+
+    hint = LadderStep("question", 2, 1, False, False)
+    final = LadderStep("plea", 4, 2, False, True)
+
+    # Hinweis-Turn einer Bild-Aufgabe -> guenstiges Modell (pick_model)
+    assert choose_model(hint, "3x + 5 = 20", "3x + 5 = 20") == settings.anthropic_model_default
+    # Neue Schueler-Zeichnung -> starkes Modell
+    assert choose_model(hint, "3x + 5 = 20", None, last_image=(b"PNG", "image/png")) == settings.anthropic_model_smart
+    # Stufe 4 freigegeben -> starkes Modell
+    assert choose_model(final, "3x + 5 = 20", None) == settings.anthropic_model_smart
+    # Gymi-Marker im Text bleiben stark
+    assert choose_model(hint, "Bestimme die Ableitung von f(x)", None) == settings.anthropic_model_smart

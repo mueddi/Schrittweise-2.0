@@ -42,7 +42,7 @@ WENN DER SCHUELER BETTELT («gib mir die Loesung 🙏», «sag einfach die Antwo
 
 STIL:
 - Duze, sei ermutigend, nie belehrend. Schweizer Hochdeutsch: schreib «weiss» statt «weiß» – nie den Buchstaben «ß» verwenden.
-- Kurz halten (1–3 Saetze). Eine Frage oder ein Hinweis pro Antwort, nicht mehr.
+- Kurz halten: 1–2 kurze Saetze, nur wenn wirklich noetig 3. Eine Frage oder ein Hinweis pro Antwort. Keine Wiederholung der Aufgabenstellung, keine Floskeln.
 - JEDE Formel, Gleichung oder Rechnung MUSS zwischen Dollarzeichen stehen, auch kurze wie $x = 5$. Ein eigenstaendiger Rechenschritt darf auf eigener Zeile als $$ ... $$ stehen (wird zentriert dargestellt).
 - LESART linearer Schreibweisen: von links nach rechts wie im Schulheft – «3/2y» bedeutet $\\frac{3}{2} \\cdot y$, NICHT $\\frac{3}{2y}$. Ist eine Schreibweise mehrdeutig und macht es fuers Ergebnis einen Unterschied, bestaetige zuerst kurz die Lesart.
 - Hat die Aufgabe ein BILD (Figur, Skizze, Koordinatensystem): schau es genau an und beziehe dich konkret darauf («die Seite $a$ im Bild», «der rechte Winkel unten links»). Lies Masse und Beschriftungen aus der Figur, wenn sie im Text fehlen. Weicht der transkribierte Aufgabentext vom Bild ab (z.B. falsch gelesener Bruch), ist das BILD massgeblich – korrigiere die Lesart still und rechne mit der Version aus dem Bild.
@@ -254,6 +254,21 @@ def _build_system():
     ]
 
 
+def choose_model(step: LadderStep, exercise_text: str, exercise_expr: str | None,
+                 last_image: tuple[bytes, str] | None = None) -> str:
+    """«Sonnet liest – Haiku unterrichtet – Sonnet loest»: das teure Modell
+    nur an den fehlerkritischen Punkten. Neue Schueler-Zeichnung exakt lesen
+    und die volle Loesung (Stufe 4) -> smart; alle gefuehrten Hinweis-Turns
+    dazwischen -> pick_model (Haiku, ausser Gymi-/Komplex-Marker). Haiku hat
+    dafuer drei Stuetzen: OCR-Transkription im Aufgabentext, SymPy-Loesung
+    als Kompass in der Regie und die Nachrechnung der Antwort."""
+    if last_image is not None:
+        return settings.anthropic_model_smart
+    if step.permit_solution and step.allowed_stage >= 4:
+        return settings.anthropic_model_smart
+    return pick_model(exercise_text, exercise_expr)
+
+
 # Kontext-/Kostendeckel: nur die juengsten Nachrichten gehen an die API.
 HISTORY_LIMIT = 12
 
@@ -339,15 +354,13 @@ def stream_reply(history, step: LadderStep, verification: Verification,
         return
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    # Aufgaben mit Figur brauchen das starke Modell (Bild lesen = Kernaufgabe)
-    model = (settings.anthropic_model_smart if (image or last_image)
-             else pick_model(exercise_text, exercise_expr))
+    model = choose_model(step, exercise_text, exercise_expr, last_image)
     system = _build_system()
     regie = _regie(step, verification, exercise_text, exercise_expr, grade_level, language)
     messages = _history_to_messages(history, image, last_image, regie=regie)
     produced = False
     try:
-        with client.messages.stream(model=model, max_tokens=550, system=system, messages=messages) as stream:
+        with client.messages.stream(model=model, max_tokens=400, system=system, messages=messages) as stream:
             for text in stream.text_stream:
                 produced = True
                 yield text

@@ -98,6 +98,19 @@ def kosten(tage: int = Query(30, ge=1, le=365),
         .where(ApiUsage.created_at >= since)
     ).one()
 
+    # Was das Prompt-Caching gespart hat: Cache-Lesen kostet 0.1x des
+    # Input-Preises – ohne Cache waeren dieselben Tokens voll faellig gewesen.
+    from ..services.usage import _rates
+
+    cache_ersparnis_usd = 0.0
+    for model, cache_read in db.execute(
+        select(ApiUsage.model, func.sum(ApiUsage.cache_read_tokens))
+        .where(ApiUsage.created_at >= since)
+        .group_by(ApiUsage.model)
+    ):
+        in_rate, _ = _rates(model or "")
+        cache_ersparnis_usd += (int(cache_read or 0) * in_rate * 0.9) / 1_000_000
+
     return {
         "zeitraum_tage": tage,
         "kurs_usd_chf": settings.usd_chf_rate,
@@ -115,6 +128,8 @@ def kosten(tage: int = Query(30, ge=1, le=365),
             "kosten_chf": _chf(gesamt_usd or 0.0),
             # den Nutzern verrechnete Tokens (1 Token = 1 Rp.) im Zeitraum
             "verrechnet_tokens": int(gesamt_verrechnet or 0),
+            # durch Prompt-Caching vermiedene Kosten (waeren sonst angefallen)
+            "cache_ersparnis_chf": _chf(cache_ersparnis_usd),
         },
     }
 

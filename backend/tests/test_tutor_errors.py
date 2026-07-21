@@ -94,3 +94,34 @@ def test_ki_failure_writes_alert(client, monkeypatch):
     _run(monkeypatch, _FailingCtx())
     with SessionLocal() as db:
         assert db.query(Alert).count() == 1
+
+
+def test_rechenfehler_in_tutorantwort_wird_korrigiert(client, monkeypatch):
+    """Falsche Zahlen-Gleichung in der Antwort -> Korrektur-Chunk im Stream,
+    in der gespeicherten Message und Alarm fuer den Admin."""
+    from app.database import SessionLocal
+    from app.models import Alert
+    from app.services import alert as alert_service, tutor
+    from .test_library import register_pw
+
+    alert_service._last_sent.clear()
+
+    def fake_stream(*args, **kwargs):
+        yield "Genau richtig! $2 \\cdot 3 = 5$"
+
+    monkeypatch.setattr(tutor, "stream_reply", fake_stream)
+    headers = register_pw(client, "korrektur@test.ch")
+    ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+
+    with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                       json={"text": "ich probiere"}) as r:
+        reply = "".join(r.iter_text())
+    assert "Korrektur" in reply and "6" in reply
+
+    state = client.get(f"/api/attempts/{aid}", headers=headers).json()
+    tutor_msgs = [m["text"] for m in state["messages"] if m["role"] == "tutor"]
+    assert any("Korrektur" in t for t in tutor_msgs)
+
+    with SessionLocal() as db:
+        assert any(a.kind == "ki-qualitaet" for a in db.query(Alert).all())

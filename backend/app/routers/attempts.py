@@ -18,8 +18,8 @@ from ..schemas import (
     message_out,
 )
 from .. import i18n
-from ..services import aggregates, quota, tutor, usage
-from ..services.sympy_verifier import verify
+from ..services import aggregates, alert, quota, tutor, usage
+from ..services.sympy_verifier import check_reply_math, verify
 
 router = APIRouter(prefix="/api/attempts", tags=["attempts"])
 
@@ -165,8 +165,13 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
 
     # Aufgaben-Figur (Foto) fuer den Tutor laden – bei Geometrie steckt die
     # halbe Aufgabe im Bild. Fehlt es (alte /tmp-Pfade), laeuft der Chat ohne.
+    # Nach der Loesung (post_solved, keine neue Zeichnung) wird das Bild nicht
+    # mehr mitgeschickt: Verstaendnisfragen brauchen es nicht, und der Turn
+    # laeuft dann uebers guenstige Modell.
     image = None
-    if ex.image_path and ex.image_path.startswith("/api/exercises/images/"):
+    if (already_solved and msg_image is None):
+        pass
+    elif ex.image_path and ex.image_path.startswith("/api/exercises/images/"):
         token = ex.image_path.rsplit("/", 1)[-1]
         img = db.scalar(select(UploadedImage).where(UploadedImage.token == token))
         if img is not None:
@@ -189,6 +194,22 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                                             last_image=msg_image, language=lang_local):
                 parts.append(chunk)
                 yield chunk
+            # Nachrechnung der Tutor-Antwort: rein numerische Gleichungen per
+            # SymPy pruefen; Fehler sichtbar korrigieren + Betreiber-Alarm.
+            try:
+                fehler = check_reply_math("".join(parts))
+            except Exception:
+                fehler = []
+            if fehler:
+                korr = ("\n\n" + i18n.t(lang_local,
+                                        "⚠️ Korrektur – oben hat sich ein Rechenfehler eingeschlichen: ",
+                                        "⚠️ Correction – there's a calculation slip above: ")
+                        + "; ".join(f"${raw}$ → ${richtig}$" for raw, richtig in fehler))
+                parts.append(korr)
+                yield korr
+                alert.notify("ki-qualitaet",
+                             f"Attempt {attempt_id_local}: " + "; ".join(f"{raw} -> {richtig}" for raw, richtig in fehler),
+                             key=str(attempt_id_local))
         finally:
             # Auch bei Client-Abbruch (GeneratorExit) die bisherige Tutor-Antwort
             # und ggf. die Aggregate persistieren, damit kein Turn verloren geht.

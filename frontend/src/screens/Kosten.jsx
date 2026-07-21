@@ -97,6 +97,9 @@ export default function Kosten() {
               <Tile label={t("Günstigste Aufgabe", "Cheapest task")} value={rp(pa.min_rappen)} unit=" Rp." sub={t("Summe aller Chat-Aufrufe", "Sum of all chat calls")} color="#1a7f3c" />
               <Tile label={t("Teuerste Aufgabe", "Most expensive task")} value={rp(pa.max_rappen)} unit=" Rp." sub={t("Summe aller Chat-Aufrufe", "Sum of all chat calls")} color="#d9573a" />
               <Tile label={`${t("Gesamt", "Total")} (${data.zeitraum_tage} ${t("Tage", "days")})`} value={chf(data.gesamt.kosten_chf)} unit=" CHF" sub={`${data.gesamt.aufrufe} ${t("Aufrufe", "calls")} · ${tok(data.gesamt.verrechnet_tokens ?? 0)} ${t("Rp. verrechnet", "Rp. charged")}`} />
+              {data.gesamt.cache_ersparnis_chf != null && (
+                <Tile label={t("Durch Caching gespart", "Saved by caching")} value={chf(data.gesamt.cache_ersparnis_chf)} unit=" CHF" sub={t("wäre ohne Prompt-Cache zusätzlich angefallen", "would have been charged without prompt caching")} color="#1a7f3c" />
+              )}
             </div>
 
             {data.gesamt.aufrufe === 0 && (

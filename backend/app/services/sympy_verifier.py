@@ -224,6 +224,46 @@ def extract_expression(text: str) -> str | None:
     return None
 
 
+def _latex_to_linear(s: str) -> str:
+    """Uebliche LaTeX-Formen in lineare Schreibweise fuer die Nachrechnung."""
+    s = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"(\1)/(\2)", s)
+    s = (s.replace(r"\cdot", "*").replace(r"\times", "*").replace(r"\div", "/")
+          .replace(r"\left", "").replace(r"\right", ""))
+    s = re.sub(r"\^\{([^{}]+)\}", r"^(\1)", s)
+    return s
+
+
+def check_reply_math(text: str) -> list[tuple[str, str]]:
+    """Rechnet rein NUMERISCHE Gleichungen in $…$-Formeln einer Tutor-Antwort nach.
+
+    Liefert [(original_formel, richtiger_wert), …] fuer jede falsche
+    Gleichung. Alles mit Variablen oder nicht Parsebares wird still
+    uebersprungen – lieber ein Fehler verpasst als eine falsche Korrektur.
+    """
+    corrections: list[tuple[str, str]] = []
+    for m in re.finditer(r"\$\$?([^$]+)\$\$?", text or ""):
+        raw = m.group(1).strip()
+        s = _latex_to_linear(raw)
+        if "\\" in s or "=" not in s:
+            continue  # unbekanntes LaTeX / keine Gleichung -> nicht pruefbar
+        segments = [p.strip() for p in s.split("=")]
+        if len(segments) < 2 or any(not p for p in segments):
+            continue
+        try:
+            values = [_parse(p) for p in segments]
+        except Exception:
+            continue
+        if not all(getattr(v, "is_number", False) for v in values):
+            continue  # Variablen im Spiel -> keine reine Zahlen-Gleichung
+        expected = values[0]  # erster Teil ist die Rechnung, dahinter das Resultat
+        try:
+            if any(sp.simplify(v - expected) != 0 for v in values[1:]):
+                corrections.append((raw, str(sp.nsimplify(expected))))
+        except Exception:
+            continue
+    return corrections
+
+
 def verify(exercise_expr: str | None, message: str) -> Verification:
     """Prüft eine Schülerantwort gegen den Aufgaben-Ausdruck."""
     # Auch ohne pruefbare Aufgabe erkennen wir, OB eine Antwort versucht wurde –

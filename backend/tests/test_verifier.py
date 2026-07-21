@@ -72,3 +72,19 @@ def test_lineare_schreibweise_von_links_nach_rechts():
     # Regression: impliziertes Mal in Koeffizienten bleibt richtig
     assert verify("3x + 5 = 20", "x = 5").status == "correct"
     assert verify("2(x + 1) = 8", "x = 3").status == "correct"
+
+
+def test_check_reply_math_findet_nur_echte_zahlenfehler():
+    from app.services.sympy_verifier import check_reply_math
+
+    assert check_reply_math("Gut! $2 + 2 = 4$ stimmt.") == []
+    assert check_reply_math("Nur Prosa ohne Formeln.") == []
+    assert check_reply_math("$x = 5$ und $3x + 5 = 20$") == []  # Variablen -> skip
+    assert check_reply_math(r"$\frac{1}{2} = 0.5$") == []
+
+    fehler = check_reply_math(r"Genau richtig! $2 \cdot 3 = 5$")
+    assert len(fehler) == 1
+    raw, richtig = fehler[0]
+    assert "2" in raw and richtig == "6"
+
+    assert check_reply_math(r"$$10 - 4 = 7$$")[0][1] == "6"
