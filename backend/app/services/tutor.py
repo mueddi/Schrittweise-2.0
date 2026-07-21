@@ -203,7 +203,7 @@ def pick_model(exercise_text: str, exercise_expr: str | None) -> str:
 
 
 def _regie(step: LadderStep, verification: Verification, exercise_text: str, exercise_expr: str | None,
-           grade_level: str | None = None) -> str:
+           grade_level: str | None = None, language: str = "de") -> str:
     lines = [
         "REGIE-ANWEISUNG (nicht an den Schueler weitergeben):",
         f"- Aufgabe: {exercise_text}" + (f"  [Ausdruck: {exercise_expr}]" if exercise_expr else ""),
@@ -234,20 +234,23 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     if step.permit_solution and verification.solution:
         lines.append(f"- Stufe 4 freigegeben. Interne Loesung (jetzt zeigbar): {verification.solution}")
     elif verification.solution:
-        lines.append("- Interne Loesung ist bekannt, aber NOCH GESPERRT – nicht verraten.")
+        # Loesung IMMER als Orientierung mitgeben: der Tutor zielt damit in
+        # jedem Hinweis aufs verifizierte Resultat (weniger Rechen-Patzer) –
+        # verraten darf er sie weiterhin erst auf Stufe 4.
+        lines.append("- Interne Loesung NUR ZU DEINER ORIENTIERUNG – dem Schueler NIEMALS nennen, "
+                     f"Stufe 4 ist NICHT freigegeben: {verification.solution}")
+    if (language or "de").startswith("en"):
+        lines.append("- WICHTIG: Der Schueler nutzt die App auf ENGLISCH. "
+                     "Antworte IMMER auf Englisch (alle Erklaerungen, Fragen und Hinweise).")
     return "\n".join(lines)
 
 
-def _build_system(step, verification, exercise_text, exercise_expr, grade_level=None,
-                  language="de"):
-    """System als Blockliste – grosser Prompt gecacht, Regie pro Turn frisch."""
-    regie = _regie(step, verification, exercise_text, exercise_expr, grade_level)
-    if (language or "de").startswith("en"):
-        regie += ("\n- WICHTIG: Der Schueler nutzt die App auf ENGLISCH. "
-                  "Antworte IMMER auf Englisch (alle Erklaerungen, Fragen und Hinweise).")
+def _build_system():
+    """Nur der grosse, STATISCHE System-Prompt – als Cache-Praefix. Die
+    Regie-Anweisung wandert in die letzte User-Nachricht, damit der Cache
+    (System + Aufgabe + Bild) ueber die Turns hinweg bestehen bleibt."""
     return [
         {"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": regie},
     ]
 
 
@@ -270,7 +273,8 @@ def _image_block(image: tuple[bytes, str]) -> dict:
 
 
 def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = None,
-                         last_image: tuple[bytes, str] | None = None) -> list[dict]:
+                         last_image: tuple[bytes, str] | None = None,
+                         regie: str | None = None) -> list[dict]:
     if len(history) > HISTORY_LIMIT:
         # Eroeffnungsnachricht (Aufgabenstellung) behalten + juengster Verlauf
         history = [history[0]] + history[-(HISTORY_LIMIT - 1):]
@@ -283,8 +287,12 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
     if image is not None:
         # Aufgaben-Figur (Foto) in die erste User-Nachricht einbetten – das
         # Modell sieht sie damit in jedem Turn (wichtig fuer Geometrie).
+        # cache_control auf dem letzten Block: System + Aufgabe + Bild werden
+        # ab dem 2. Turn zu 10 % des Preises aus dem Cache gelesen.
         first_text = msgs[0]["content"] if isinstance(msgs[0]["content"], str) else "(Aufgabe gestartet)"
-        msgs[0]["content"] = [_image_block(image), {"type": "text", "text": first_text}]
+        msgs[0]["content"] = [_image_block(image),
+                              {"type": "text", "text": first_text,
+                               "cache_control": {"type": "ephemeral"}}]
     if last_image is not None:
         # Zeichnung/Foto der AKTUELLEN Schueler-Nachricht in die letzte
         # User-Nachricht einbetten. Nur das juengste Bild geht mit – aeltere
@@ -296,6 +304,19 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
                 else:
                     m["content"] = [_image_block(last_image)] + list(m["content"])
                 break
+    if regie:
+        # Regie-Anweisung als Block VOR dem Schueler-Text der letzten
+        # User-Nachricht (statt im System): haelt den Cache-Praefix stabil.
+        last = msgs[-1]
+        block = {"type": "text", "text": regie}
+        if last["role"] != "user":
+            msgs.append({"role": "user", "content": [block]})
+        elif isinstance(last["content"], str):
+            last["content"] = [block, {"type": "text", "text": last["content"]}]
+        else:
+            imgs = [c for c in last["content"] if c.get("type") == "image"]
+            rest = [c for c in last["content"] if c.get("type") != "image"]
+            last["content"] = imgs + [block] + rest
     return msgs
 
 
@@ -321,9 +342,9 @@ def stream_reply(history, step: LadderStep, verification: Verification,
     # Aufgaben mit Figur brauchen das starke Modell (Bild lesen = Kernaufgabe)
     model = (settings.anthropic_model_smart if (image or last_image)
              else pick_model(exercise_text, exercise_expr))
-    system = _build_system(step, verification, exercise_text, exercise_expr, grade_level,
-                           language)
-    messages = _history_to_messages(history, image, last_image)
+    system = _build_system()
+    regie = _regie(step, verification, exercise_text, exercise_expr, grade_level, language)
+    messages = _history_to_messages(history, image, last_image, regie=regie)
     produced = False
     try:
         with client.messages.stream(model=model, max_tokens=550, system=system, messages=messages) as stream:

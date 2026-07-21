@@ -109,16 +109,52 @@ def test_regie_kennt_die_drei_stufen():
     assert "Matura" in legacy
 
 
-def test_system_prompt_erzwingt_englisch():
-    from app.services.tutor import LadderStep, _build_system
+def test_regie_erzwingt_englisch_und_system_bleibt_cachebar():
+    from app.services.tutor import LadderStep, _build_system, _regie
     from app.services.sympy_verifier import Verification
 
     v = Verification(status="unknown", detail="-", solution=None)
     step = LadderStep("question", 1, 0, False, False)
-    en = _build_system(step, v, "3x + 5 = 20", None, "oberstufe", "en")
-    assert "Englisch" in en[1]["text"]
-    de = _build_system(step, v, "3x + 5 = 20", None, "oberstufe", "de")
-    assert "Englisch" not in de[1]["text"]
+    en = _regie(step, v, "3x + 5 = 20", None, "oberstufe", "en")
+    assert "Englisch" in en
+    de = _regie(step, v, "3x + 5 = 20", None, "oberstufe", "de")
+    assert "Englisch" not in de
+
+    # System besteht nur noch aus dem statischen, gecachten Prompt-Block –
+    # die Regie wandert in die letzte User-Nachricht (Cache-Praefix stabil).
+    system = _build_system()
+    assert len(system) == 1
+    assert system[0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_regie_traegt_loesung_als_orientierung():
+    """Die verifizierte Loesung geht IMMER als interner Kontext mit –
+    gesperrt markiert, solange Stufe 4 nicht freigegeben ist."""
+    from app.services.tutor import LadderStep, _regie
+    from app.services.sympy_verifier import Verification
+
+    v = Verification(status="incorrect", detail="-", solution="x = 5")
+    locked = _regie(LadderStep("wrong", 2, 1, False, False), v, "3x + 5 = 20", None)
+    assert "x = 5" in locked and "NIEMALS nennen" in locked
+    freigegeben = _regie(LadderStep("plea", 4, 2, False, True), v, "3x + 5 = 20", None)
+    assert "jetzt zeigbar" in freigegeben and "x = 5" in freigegeben
+
+
+def test_regie_landet_in_letzter_user_nachricht():
+    from app.services.tutor import _history_to_messages
+
+    history = [
+        {"role": "tutor", "text": "Los geht's!"},
+        {"role": "student", "text": "3x = 15"},
+    ]
+    msgs = _history_to_messages(history, image=(b"TASK", "image/jpeg"),
+                                regie="REGIE-ANWEISUNG: ...")
+    # Bild-Nachricht traegt den Cache-Breakpoint auf dem letzten Block
+    assert msgs[0]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    last = msgs[-1]
+    assert last["role"] == "user"
+    assert last["content"][0]["text"].startswith("REGIE-ANWEISUNG")
+    assert last["content"][1]["text"] == "3x = 15"
 
 
 def test_regie_warnt_bei_ungepruefter_antwort():

@@ -30,7 +30,7 @@ Live: **https://schrittweise-2-0.vercel.app** · Der visuelle Massstab ist
 | Frontend | React + Vite, Formeln via **KaTeX**, deterministische Skizzen (SVG) |
 | Backend | Python + **FastAPI** |
 | Mathe | **SymPy** |
-| KI | Anthropic API – `claude-haiku-4-5` (Standard), `claude-sonnet-5` (Foto/Geometrie), Prompt-Caching |
+| KI | Anthropic API – `claude-haiku-4-5` (Standard), `claude-sonnet-5` (Foto/Geometrie), Prompt-Caching (System + Aufgaben-Bild) |
 | Handschrift/Foto | **Claude Vision** (liest Stift-Eingabe und Fotos; ohne API-Key: einfacher lokaler Fallback) |
 | DB | **Supabase Postgres** (lokal SQLite) via SQLAlchemy |
 | Auth | **E-Mail + Passwort** (scrypt) + JWT; Mail-Link nur für «Passwort vergessen» |
@@ -50,6 +50,10 @@ gratis (gedrosselt).
   CHF 19 → 1900 (definiert in `backend/app/routers/pay.py`).
 - **Marge:** `BILLING_MARGIN=3.0` – Schüler zahlen das Dreifache der echten
   Anthropic-Kosten; du kannst nie draufzahlen.
+- **Qualitäts-Option:** `ANTHROPIC_MODEL_DEFAULT=claude-sonnet-5` im
+  `RUNTIME_ENV_JSON` hebt auch den Text-Chat aufs starke Modell (bis
+  31.08.2026 Einführungspreis ≈ 2× Haiku; dank Caching kaum Mehrkosten).
+  Jederzeit rückgängig – Wirkung unter Admin → Kosten vergleichen.
 - Admin- und Schul-Konten sind unbegrenzt und gratis.
 
 ## 🔧 Admin-Bereich (nur Betreiber-Konto)

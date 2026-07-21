@@ -29,6 +29,26 @@ router = APIRouter(prefix="/api/attempts", tags=["attempts"])
 CHAT_MAX_PER_MINUTE = 8
 
 
+def _shrink_for_tutor(data: bytes, mime: str) -> tuple[bytes, str]:
+    """Bild fuers LLM verkleinern (max. 1100 px): die praezise Text-Extraktion
+    hat schon das OCR in voller Aufloesung gemacht – fuers Mitschauen im Chat
+    reicht weniger, halbiert aber die Bild-Tokens pro Turn."""
+    try:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(data))
+        if max(img.size) <= 1100:
+            return data, mime
+        img.thumbnail((1100, 1100))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "JPEG", quality=85)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:
+        return data, mime
+
+
 def _load_owned(db: Session, attempt_id: int, user: User) -> Attempt:
     attempt = db.get(Attempt, attempt_id)
     if attempt is None or attempt.user_id != user.id:
@@ -99,7 +119,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         if img is None or img.user_id != user.id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bild nicht gefunden")
         msg_image_path = payload.image_path
-        msg_image = (img.content, img.mime_type)
+        msg_image = _shrink_for_tutor(img.content, img.mime_type)
 
     # 1) deterministische Pruefung
     verification = verify(ex.math_expression, text)
@@ -150,7 +170,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         token = ex.image_path.rsplit("/", 1)[-1]
         img = db.scalar(select(UploadedImage).where(UploadedImage.token == token))
         if img is not None:
-            image = (img.content, img.mime_type)
+            image = _shrink_for_tutor(img.content, img.mime_type)
     # Aggregate nur beim Uebergang zu «geloest» neu rechnen, nicht bei jedem Post-Solved-Chat
     solved_now = step.solved and not already_solved
 
