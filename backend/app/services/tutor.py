@@ -49,6 +49,9 @@ STIL:
 - FORMAT: schlichter, uebersichtlicher Text. Hoechstens **fett** fuer EIN Schluesselwort pro Antwort. KEIN anderes Markdown: keine Titel (#), keine Tabellen, keine Aufzaehlungen mit * – wenn du aufzaehlst, nutze einen Bindestrich am Zeilenanfang.
 - Wenn der Schueler richtig liegt: freu dich echt und bestaetige knapp, warum es stimmt.
 - Wenn etwas falsch ist: sag nicht einfach «falsch», sondern frag nach oder zeig, wo es harzt.
+- Reagiere IMMER zuerst auf das, was der Schueler TATSAECHLICH geschrieben oder gezeichnet hat – auch wenn es deine Frage nicht beantwortet. Weicht es ab, benenne das kurz und ehrlich («Du hast $5 \\cdot 3$ geschrieben – meine Frage war …»).
+- Bestaetige NIE eine Antwort als richtig, die der Schueler so nicht gegeben hat. Bist du unsicher, was gemeint ist, frag nach statt zu raten.
+- Haengt an der Schueler-Nachricht eine ZEICHNUNG (Bild), lies sie genau und beziehe dich auf ihren ECHTEN Inhalt – nicht auf das, was du erwartet hast.
 
 SKIZZEN (maechtiges Werkzeug – aber sparsam):
 Wenn eine Skizze WIRKLICH beim Verstehen hilft, fuege GENAU EINEN Skizzen-Block ein: der Marker [[FIGUR]], direkt gefolgt von EINEM JSON-Objekt, direkt gefolgt von [[/FIGUR]] – sonst NICHTS im Block. Beispiel einer Antwort mit Skizze:
@@ -216,6 +219,8 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
             lines.append(f"- Stufe: {grade_level} (Mittelstufe, ca. 4.-6. Klasse, 10-12 Jahre) – sehr einfache Sprache, ganz kleine Schritte, kleine Zahlen, viele Alltagsbilder; Stoff: Grundoperationen, Brueche, einfache Geometrie. KEINE Fachbegriffe ohne Erklaerung.")
         else:
             lines.append(f"- Stufe: {grade_level} (Oberstufe/Sek I) – einfach erklaeren, kleine Schritte, Alltagsbilder.")
+    if verification.status == "unknown":
+        lines.append("- Die Antwort konnte NICHT automatisch geprueft werden – beurteile selbst sorgfaeltig, was wirklich dasteht (oder auf der Zeichnung steht); im Zweifel nachfragen statt bestaetigen.")
     if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "simpler":

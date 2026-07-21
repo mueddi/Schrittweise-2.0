@@ -272,7 +272,8 @@ def _strip_figure_notes(text: str) -> str:
     """
     import re
 
-    cleaned = re.sub(r"\[(figur|graph)\s*:[\s\S]*?\]", "", text or "", flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[(figur|graph|zeichnung|skizze|bild|drawing|figure|sketch)\s*:[\s\S]*?\]",
+                     "", text or "", flags=re.IGNORECASE)
     return re.sub(r"\n{2,}", "\n", cleaned).strip()
 
 

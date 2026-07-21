@@ -245,3 +245,20 @@ def test_ocr_upload_accepts_heic(client):
     f = client.get(path)
     assert f.status_code == 200
     assert f.headers["content-type"] == "image/jpeg"  # konvertiert gespeichert
+
+
+def test_auch_zeichnung_label_wird_gestrippt(client):
+    """Alternative OCR-Labels ([Zeichnung:/Skizze:/Bild:]) werden wie
+    [Figur:] aus der Eroeffnung gefiltert."""
+    headers = register_pw(client, "label@test.ch")
+    up = client.post("/api/exercises/ocr", headers=headers,
+                     files={"file": ("z.png", tiny_png(), "image/png")})
+    image_path = up.json()["image_path"]
+
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "Berechne die Summe.\n[Zeichnung: zwei Zahlen mit Malzeichen]",
+                           "image_path": image_path}).json()
+    opener = client.post(f"/api/exercises/{ex['id']}/attempts",
+                         headers=headers).json()["messages"][0]["text"]
+    assert "Berechne die Summe." in opener
+    assert "[Zeichnung" not in opener

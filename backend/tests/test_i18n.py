@@ -119,3 +119,14 @@ def test_system_prompt_erzwingt_englisch():
     assert "Englisch" in en[1]["text"]
     de = _build_system(step, v, "3x + 5 = 20", None, "oberstufe", "de")
     assert "Englisch" not in de[1]["text"]
+
+
+def test_regie_warnt_bei_ungepruefter_antwort():
+    from app.services.tutor import LadderStep, _regie
+    from app.services.sympy_verifier import Verification
+
+    step = LadderStep("question", 1, 0, False, False)
+    unknown = _regie(step, Verification("unknown", "-", None), "2 + 4", None, "oberstufe")
+    assert "NICHT automatisch geprueft" in unknown
+    correct = _regie(step, Verification("correct", "-", None), "2 + 4", None, "oberstufe")
+    assert "NICHT automatisch geprueft" not in correct

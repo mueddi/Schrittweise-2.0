@@ -481,7 +481,7 @@ export default function Lernen() {
   // sieht es direkt. Nur der eigentliche Mathe-/Text-Inhalt bleibt.
   function stripFigureNotes(t) {
     return (t || "")
-      .replace(/\[(Figur|Graph)\s*:[\s\S]*?\]/gi, "")
+      .replace(/\[(Figur|Graph|Zeichnung|Skizze|Bild|Drawing|Figure|Sketch)\s*:[\s\S]*?\]/gi, "")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{2,}/g, "\n")
       .trim();
