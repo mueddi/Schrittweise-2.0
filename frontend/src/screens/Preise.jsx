@@ -21,6 +21,12 @@ export default function Preise() {
   const plan = shell.quota?.plan || "free";
   const [busyPkg, setBusyPkg] = useState(null); // Paket-Key waehrend des Checkouts
   const [note, setNote] = useState(null); // {type, text}
+  // Ist die Zahlung freigeschaltet (Stripe-Schluessel gesetzt)? Sonst Kauf-
+  // Knoepfe sperren statt die Schueler in eine Fehlermeldung laufen lassen.
+  const [zahlungAktiv, setZahlungAktiv] = useState(null); // null = noch unbekannt
+  useEffect(() => {
+    api.get("/api/health").then((h) => setZahlungAktiv(h?.zahlung !== false)).catch(() => setZahlungAktiv(true));
+  }, []);
 
   // Rückkehr von der Stripe-Bezahlseite (?zahlung=ok|abbruch)
   useEffect(() => {
@@ -62,6 +68,12 @@ export default function Preise() {
         <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" }}>{t("Preise & Tokens", "Prices & tokens")}</div>
         <span onClick={() => nav("/app/lernen")} style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("← zur App", "← back to the app")}</span>
       </div>
+      {zahlungAktiv === false && (
+        <div style={{ maxWidth: 920, margin: "0 auto 18px", fontSize: 13, borderRadius: 12, padding: "11px 16px", background: "#fdf3e6", color: "#a05c12", border: "1px solid #f2ddb8" }}>
+          {t("Der Token-Kauf wird gerade freigeschaltet – bis dahin kannst du mit den Gratis-Tokens weiterüben. Es wird nichts belastet.",
+             "Token purchase is being enabled right now – until then you can keep practicing with your free tokens. Nothing will be charged.")}
+        </div>
+      )}
       {shell.quota?.unlimited && (
         <div style={{ maxWidth: 920, margin: "0 auto 18px", fontSize: 13, borderRadius: 12, padding: "11px 16px", background: "#eef0fe", color: "#4f46e5", border: "1px solid #dfe1fb" }}>
           {t("∞ Dein Betreiber-Konto ist unbegrenzt und gratis – kaufen brauchst du nichts. Die Kauf-Knöpfe bleiben nur zum Testen der Zahlung aktiv.",
@@ -117,11 +129,12 @@ export default function Preise() {
                   </div>
                   <button
                     onClick={() => buy(p.key)}
-                    disabled={busyPkg !== null}
+                    disabled={busyPkg !== null || zahlungAktiv === false}
                     className="btn-primary"
-                    style={{ borderRadius: 10, padding: "9px 15px", fontSize: 13, opacity: busyPkg && busyPkg !== p.key ? 0.5 : 1 }}
+                    style={{ borderRadius: 10, padding: "9px 15px", fontSize: 13, opacity: (busyPkg && busyPkg !== p.key) || zahlungAktiv === false ? 0.5 : 1 }}
                   >
-                    {busyPkg === p.key ? t("Moment …", "One sec …") : t("Kaufen", "Buy")}
+                    {busyPkg === p.key ? t("Moment …", "One sec …")
+                      : zahlungAktiv === false ? t("bald", "soon") : t("Kaufen", "Buy")}
                   </button>
                 </div>
               </div>

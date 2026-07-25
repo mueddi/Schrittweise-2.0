@@ -164,3 +164,13 @@ def test_webhook_ignores_other_events(client, monkeypatch):
     r = client.post("/api/pay/webhook", content=payload, headers=signed_headers(payload))
     assert r.status_code == 200
     assert token_balance("mia@test.ch") == 0
+
+
+def test_health_zeigt_zahlungs_status(client):
+    """/api/health meldet, OB die Zahlung freigeschaltet ist – als Boolean,
+    niemals Schluessel oder Konfigurationsdetails (das Frontend sperrt
+    darueber die Kauf-Knoepfe)."""
+    body = client.get("/api/health").json()
+    assert "zahlung" in body
+    assert body["zahlung"] is False  # Test-Umgebung ohne Stripe-Schluessel
+    assert not any("sk_" in str(v) or "whsec" in str(v) for v in body.values())

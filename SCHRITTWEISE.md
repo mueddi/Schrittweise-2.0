@@ -181,11 +181,32 @@ npm run dev
 Rechtsseiten (Impressum/Datenschutz/AGB) sind ausgefüllt und decken das
 Token-Modell ab; Tests, Backups, Alarme und Härtung sind eingebaut. Offen:
 
-1. **Stripe scharfschalten:** Secret Key + Webhook-Signaturgeheimnis als
-   GitHub-Secrets `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` eintragen
-   (Webhook-URL: `https://schrittweise-2-0.vercel.app/api/pay/webhook`,
-   Event `checkout.session.completed`). Erst Test-Modus mit Karte
-   4242 4242 4242 4242, dann Live-Keys.
+1. **Stripe scharfschalten** (Reihenfolge einhalten, ~15 Minuten):
+   1. Stripe-Dashboard → **Entwickler → API-Schlüssel** → «Geheimer
+      Schlüssel» kopieren (Testmodus: beginnt mit `sk_test_`).
+   2. Stripe-Dashboard → **Entwickler → Webhooks → Endpunkt hinzufügen**:
+      URL `https://schrittweise-2-0.vercel.app/api/pay/webhook`, Event
+      **nur** `checkout.session.completed`. Danach das
+      **Signaturgeheimnis** des Endpunkts kopieren (`whsec_…`).
+   3. GitHub → Repo → **Settings → Secrets and variables → Actions →
+      New repository secret**: `STRIPE_SECRET_KEY` (Schritt 1) und
+      `STRIPE_WEBHOOK_SECRET` (Schritt 2). Beide Werte gehören **nur**
+      dorthin – nie in den Code, nie in einen Chat.
+   4. Deploy auslösen (beliebiger Push auf `main` oder Actions →
+      «Deploy (Vercel)» → «Run workflow»). Die Schlüssel landen über den
+      Sidecar in der Laufzeit-Konfiguration.
+   5. **Prüfen:** `https://schrittweise-2-0.vercel.app/api/health` muss
+      `"zahlung": true` zeigen. Dann auf der Preise-Seite mit der
+      Stripe-Testkarte `4242 4242 4242 4242` (beliebiges künftiges
+      Datum, CVC 123) kaufen → Tokens erscheinen innerhalb von Sekunden;
+      in Stripe steht der Webhook auf «Erfolgreich».
+   6. **TWINT** (die Preise-Seite bewirbt es): Stripe-Dashboard →
+      **Einstellungen → Zahlungsmethoden → TWINT aktivieren**. Braucht
+      ein Schweizer Stripe-Konto und CHF – beides ist gegeben.
+   7. Zum Echtbetrieb: Live-Modus einschalten, Schritte 1–3 mit den
+      Live-Werten (`sk_live_…`, neuer Webhook + neues `whsec_…`)
+      wiederholen. Solange Schlüssel fehlen, sind die Kauf-Knöpfe
+      automatisch gesperrt («bald») – niemand läuft in einen Fehler.
 2. **Backup aktivieren:** GitHub-Secrets `DATABASE_URL` + `BACKUP_PASSWORD`
    setzen, einmal manuell laufen lassen (`docs/BACKUP.md`).
 3. **Uptime-Monitor:** z. B. UptimeRobot auf `/api/health`.

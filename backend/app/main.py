@@ -104,11 +104,13 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, check_dir=False), name="
 @app.get("/api/health")
 def health() -> dict:
     # "mail": kann die App E-Mails verschicken (Passwort-vergessen /
-    # E-Mail-Bestaetigung)? Nur ein Boolean – keine Konfigurationsdetails.
+    # E-Mail-Bestaetigung)? "zahlung": sind beide Stripe-Schluessel gesetzt?
+    # Nur Booleans – niemals Konfigurationsdetails oder Schluessel selbst.
     return {
         "status": "ok",
         "app": "schrittweise",
         "mail": bool(settings.supabase_auth_enabled or settings.smtp_enabled),
+        "zahlung": settings.payments_enabled,
     }
 
 
