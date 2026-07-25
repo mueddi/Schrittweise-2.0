@@ -215,8 +215,17 @@ def extract_expression(text: str) -> str | None:
             lhs = None
         if lhs is not None:
             syms = lhs.free_symbols | rhs.free_symbols
-            if len(syms) == 1 and all(len(str(s)) == 1 for s in syms):
-                if _solutions(lhs, rhs, next(iter(syms))):
+            # Prosa-Woerter zerfallen beim Parsen in lauter Einzelbuchstaben
+            # («Berechne» -> B*e*r*e*c*h*n*e) und saehen sonst wie lauter
+            # gueltige Variablen aus – erst weiter unten werden sie abgeworfen.
+            prosa = any(re.fullmatch(r"[A-Za-zÀ-ÿ]{2,}", tok) for tok in lhs_tokens)
+            # Frueher war hier len(syms) == 1 Pflicht. Damit fiel jede Aufgabe
+            # mit zwei Unbekannten durch – z.B. «(2*x*5*y*8)/3 = y», die verify()
+            # einwandfrei nach x aufloest. Folge: kein Pruefausdruck gespeichert,
+            # der Tutor ohne jede Bodenhaftung. Jetzt genuegt es, wenn sich die
+            # Gleichung nach MINDESTENS EINER Variablen aufloesen laesst.
+            if not prosa and syms and all(len(str(s)) == 1 for s in syms):
+                if any(_solutions(lhs, rhs, s) for s in sorted(syms, key=str)):
                     return f"{' '.join(lhs_tokens)} = {' '.join(rhs_tokens)}"
         if not re.fullmatch(r"[A-Za-zÀ-ÿ]+", lhs_tokens[0]):
             return None  # Mathe-Token muesste fallen -> keine saubere Gleichung

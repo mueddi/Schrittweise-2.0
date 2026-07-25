@@ -157,3 +157,45 @@ def test_rechenaufgabe_wird_geloest_markiert(client):
     assert state["attempt"]["solved"] is True
     student = [m for m in state["messages"] if m["role"] == "student"][-1]
     assert student["verification_status"] == "correct"
+
+
+# --- Regressionen aus einem echten Verlauf (Attempt 41, 19 Nachrichten) ---
+
+def test_loesung_erwaehnen_ist_kein_betteln():
+    """«Ich verstehe die Lösung nicht» ist eine Bitte um Erklaerung.
+
+    Vorher schnappte sich das blosse Wort «Loesung» die Nachricht und der
+    Tutor lehnte ab, statt zu erklaeren – der Schueler fuehlte sich ignoriert.
+    """
+    assert detect_intent("Ich verstehe die Lösung nicht", _UNKNOWN) == "simpler"
+    assert detect_intent("wie kommst du auf diese Lösung?", _UNKNOWN) != "plea"
+    assert detect_intent("kannst du die Antwort nochmal erklären", _UNKNOWN) != "plea"
+    # echtes Betteln bleibt Betteln
+    assert detect_intent("Gib mir die Lösung", _UNKNOWN) == "plea"
+    assert detect_intent("sag mir einfach die antwort", _UNKNOWN) == "plea"
+    assert detect_intent("wie lautet das ergebnis", _UNKNOWN) == "plea"
+
+
+def test_normales_reden_treibt_die_leiter_nicht_hoch():
+    """Kommentare/Rueckfragen duerfen keine Hilfe-Stufe kosten."""
+    for satz in ("erkläre mir die theorie", "ok", "du hast nicht fertig geschrieben",
+                 "ich habe geteilt durch gemacht"):
+        assert detect_intent(satz, _UNKNOWN) == "talk", satz
+    vorher = 2
+    step = advance_ladder(vorher, 0, "talk")
+    assert step.allowed_stage == vorher
+    assert step.own_attempts == 0
+
+
+def test_leiter_friert_nicht_auf_stufe_drei_ein():
+    """Echter Produktionsfall: 19 Nachrichten, Stufe 3, own_attempts = 0.
+
+    Wer auf Stufe 3 weiter um Hilfe bittet, muss Stufe 4 erreichen koennen –
+    sonst gibt es die volle Loesung nie.
+    """
+    stage, attempts = 0, 0
+    for _ in range(6):
+        step = advance_ladder(stage, attempts, "stuck")
+        stage, attempts = step.allowed_stage, step.own_attempts
+    assert stage == 4, "Leiter haengt weiterhin fest"
+    assert step.permit_solution is True

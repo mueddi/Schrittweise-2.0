@@ -85,6 +85,16 @@ Du bekommst pro Nachricht eine REGIE-ANWEISUNG mit: erlaubter Stufe, SymPy-Pruef
 # "loesung" (oe), "lösung", "losung" alle abdecken
 _LOESUNG = r"l(?:oe|ö|o)sung"
 _ZIEL = rf"(?:{_LOESUNG}|antwort|ergebnis|resultat)"
+# Echte AUFFORDERUNG nach dem Ziel («gib mir die Loesung»), nicht blosse
+# Erwaehnung («ich verstehe die Loesung nicht», «wie kommst du auf das
+# Ergebnis?»). \b haelt «Antwort» von «beantworten» fern.
+_FORDERUNG = (
+    rf"\b(?:gib|gebt|sag|sags|zeig|zeigs|nenn|nenne|verrat|verrate|schreib|"
+    rf"schreibe|loes|loese|l[oö]s|l[oö]se)\b[^.?!]{{0,30}}\b{_ZIEL}\b"
+    rf"|\bwie\s+(?:lautet|heisst|hei[sß]t|ist)\s+(?:die|das|der)\s+{_ZIEL}\b"
+    rf"|\b(?:nur|einfach|bitte)\s+(?:die|das)\s+{_ZIEL}\b"
+    rf"|\b{_ZIEL}\s*(?:bitte|🙏)"
+)
 BETTEL_PATTERNS = [
     rf"gib (mir )?die {_LOESUNG}", rf"sag(?:s)? mir die {_LOESUNG}", rf"was ist die {_LOESUNG}",
     r"einfach die antwort", r"sag einfach", r"verrat", rf"{_LOESUNG} bitte", r"nur die antwort",
@@ -98,7 +108,9 @@ BETTEL_PATTERNS = [
 # neue Hilfestufe, sondern DIESELBE Erklaerung in einfacheren Worten. Diese
 # Muster duerfen die Leiter deshalb NICHT hochtreiben.
 SIMPLER_PATTERNS = [
-    r"einfacher", r"versteh(e)? ?(es |das |ich )?nicht", r"kapier", r"check(e)? (es |das )?nicht",
+    # bis zu ~4 Woerter zwischen «versteh…» und «nicht» zulassen, damit auch
+    # «ich verstehe die Loesung/den Schritt nicht» greift (vorher nur «es nicht»)
+    r"einfacher", r"versteh\w*\b[^.?!]{0,28}\bnicht", r"kapier", r"check(e)? (es |das )?nicht",
     r"nochmal erkl[aä]r", r"erkl[aä]r.{0,20}nochmal", r"zu schwierig", r"zu kompliziert",
     # «Erklaer's anders»-Chips: andere DARSTELLUNG derselben Stufe, kein Stufen-Anstieg
     r"skizze", r"zeichn", r"alltag", r"beispiel aus", r"konkreten zahlen", r"zahlen statt",
@@ -107,6 +119,9 @@ HILFE_PATTERNS = [
     r"weiss (es )?nicht", r"keine ahnung", r"komm(e)? nicht weiter", r"h[aä]nge", r"h[iä]lfe",
     r"tipp", r"hinweis", r"n[aä]chste stufe",
     r"wie (geht|mach|anfangen|weiter)", r"was (jetzt|nun|soll ich)", r"stecke fest",
+    # Ausdrueckliche Bitte um den naechsten Schritt – echter Hilferuf, der die
+    # Leiter hochtreiben darf (faellt sonst in den neuen "talk"-Zweig).
+    r"ersten schritt", r"n(ae|ä)chste[nrs]? schritt", r"zeig.{0,20}schritt", r"hilf mir",
 ]
 
 
@@ -128,15 +143,23 @@ def detect_intent(message: str, verification: Verification) -> str:
         return "attempt"
     if verification.extracted:  # eine Zahl/Antwort war drin, aber nicht pruefbar
         return "step"
-    # Fragt nach Loesung/Antwort/Ergebnis OHNE eigenen Rechenversuch -> Betteln,
-    # damit «zeig mir die antwort» die Leiter nicht hochtreibt.
-    if re.search(_ZIEL, low):
-        return "plea"
+    # «Ich verstehe die Loesung nicht» ist KEIN Betteln, sondern eine Bitte um
+    # eine andere Erklaerung – deshalb VOR dem Ziel-Wort-Fallback pruefen.
+    # Vorher schnappte sich das blosse Wort «Loesung» solche Nachrichten und
+    # der Tutor lehnte ab, statt zu erklaeren.
     if any(re.search(p, low) for p in SIMPLER_PATTERNS):
         return "simpler"
+    # Fragt nach Loesung/Antwort/Ergebnis OHNE eigenen Rechenversuch -> Betteln.
+    # Nur mit Wortgrenze UND nur als echte Aufforderung: das blosse Vorkommen
+    # des Wortes reicht nicht («wie kommst du auf diese Loesung?»).
+    if re.search(_FORDERUNG, low):
+        return "plea"
     if any(re.search(p, low) for p in HILFE_PATTERNS):
         return "stuck"
-    return "stuck"
+    # Alles Uebrige ist normales Reden (Rueckfrage, Kommentar, «ok»).
+    # Frueher lief das als "stuck" und trieb die Hilfe-Leiter bei JEDER
+    # unverstandenen Nachricht eine Sprosse hoch.
+    return "talk"
 
 
 @dataclass
@@ -164,9 +187,10 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
         stage = max(current_stage, 1)
         return LadderStep(intent, stage, own_attempts, False, False)
 
-    if intent == "simpler":
-        # «Verstehe es nicht» / «erklaer einfacher»: dieselbe Stufe, nur in
-        # einfacheren Worten – Nachfragen kostet keine Sprosse und keinen Versuch.
+    if intent in ("simpler", "talk"):
+        # «Verstehe es nicht» / «erklaer einfacher» / normales Reden: dieselbe
+        # Stufe, nur in einfacheren Worten – Nachfragen kostet keine Sprosse
+        # und keinen Versuch.
         return LadderStep(intent, max(current_stage, 1), own_attempts, False, False)
 
     if intent == "step":
@@ -176,6 +200,13 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
         return LadderStep(intent, max(current_stage, 1), own_attempts + 1, False, False)
 
     if intent == "attempt":
+        own_attempts += 1
+    elif intent == "stuck" and current_stage >= 3:
+        # Wer auf der hoechsten Hinweis-Stufe NOCHMAL um Hilfe bittet, hat sich
+        # erkennbar bemueht – das zaehlt als eigener Versuch. Sonst blockiert
+        # die Leiter fuer immer bei 3: Stufe 4 verlangt zwei Versuche, aber
+        # blosses Nachfragen zaehlte nie einen (real beobachtet: 19 Nachrichten
+        # auf Stufe 3, own_attempts = 0).
         own_attempts += 1
 
     # Mehr Hilfe noetig (Fehler oder Hilfe-Anfrage): eine Sprosse hoeher, Deckel bei 4
@@ -207,7 +238,12 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     lines = [
         "REGIE-ANWEISUNG (nicht an den Schueler weitergeben):",
         f"- Aufgabe: {exercise_text}" + (f"  [Ausdruck: {exercise_expr}]" if exercise_expr else ""),
-        f"- Erlaubte Stufe: {step.allowed_stage} – {STUFEN[step.allowed_stage]}",
+        # Bei geloester Aufgabe NICHT die eingefrorene Hinweis-Stufe nennen –
+        # sonst stand hier «Erlaubte Stufe: 1 – Aktivierende Frage» und weiter
+        # unten «Stufe 4 freigegeben», was den Tutor durcheinanderbrachte.
+        ("- Die Aufgabe ist geloest. Du darfst den vollen Loesungsweg erklaeren, wenn er danach fragt."
+         if step.solved else
+         f"- Erlaubte Stufe: {step.allowed_stage} – {STUFEN[step.allowed_stage]}"),
         f"- SymPy-Pruefung der letzten Antwort: {verification.status} ({verification.detail})",
         f"- Bisherige eigene Versuche: {step.own_attempts}",
     ]
@@ -231,11 +267,14 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")
     if step.intent == "post_solved":
         lines.append("- Die Aufgabe ist BEREITS GELOEST. Keine neue Leiter: beantworte Verstaendnisfragen kurz oder gratuliere; lade zu einer neuen Aufgabe ein.")
-    if step.permit_solution and verification.solution:
+    if step.intent == "talk":
+        lines.append("- Der Schueler REDET mit dir (Rueckfrage, Kommentar, Zwischenbemerkung) – das ist kein Hilferuf. Geh direkt auf seine Worte ein und antworte kurz. Stufe NICHT erhoehen, keine neue Hilfe anbieten, die er nicht verlangt hat.")
+    solution_ok = bool(verification.solution)
+    if step.permit_solution and (step.solved or step.allowed_stage >= 4) and solution_ok:
         lines.append(f"- Stufe 4 freigegeben. Interne Loesung (jetzt zeigbar): {verification.solution}")
-    elif verification.solution:
-        # Loesung IMMER als Orientierung mitgeben: der Tutor zielt damit in
-        # jedem Hinweis aufs verifizierte Resultat (weniger Rechen-Patzer) –
+    elif solution_ok:
+        # Loesung als Orientierung mitgeben: der Tutor zielt damit in jedem
+        # Hinweis aufs verifizierte Resultat (weniger Rechen-Patzer) –
         # verraten darf er sie weiterhin erst auf Stufe 4.
         lines.append("- Interne Loesung NUR ZU DEINER ORIENTIERUNG – dem Schueler NIEMALS nennen, "
                      f"Stufe 4 ist NICHT freigegeben: {verification.solution}")
@@ -272,6 +311,32 @@ def choose_model(step: LadderStep, exercise_text: str, exercise_expr: str | None
 # Kontext-/Kostendeckel: nur die juengsten Nachrichten gehen an die API.
 HISTORY_LIMIT = 12
 
+# Beschriftungen der Bild-Bloecke. Ohne sie stehen bei einer Zeichnung ZWEI
+# Bilder unkommentiert im Kontext und das Modell kann Aufgabe und Schueler-
+# Zeichnung nicht auseinanderhalten – es «sieht dann, was es will».
+# Sicherheitsnetz, kein Ziel: der Systemprompt verlangt weiterhin 1-2 kurze
+# Saetze. Bei 400 wurden laengere Antworten (Stufe 3/4, Theorie-Fragen) mitten
+# im Wort gekappt – verrechnet werden ohnehin nur erzeugte Tokens.
+MAX_TOKENS = 700
+
+BILD_AUFGABE = "BILD A – die AUFGABENSTELLUNG (unveraendert seit Beginn):"
+BILD_SCHUELER = "BILD B – das hat der Schueler GERADE eben gezeichnet/fotografiert. Lies NUR daraus ab, was wirklich draufsteht:"
+_BILD_LABELS = {BILD_AUFGABE, BILD_SCHUELER}
+
+
+def _schueler_block(text: str) -> dict:
+    """Der Schueler-Text als klar beschrifteter, letzter Block.
+
+    Vorher stand er als nackter Text direkt hinter der langen Regie-Anweisung
+    und war davon nicht zu unterscheiden – der Tutor ging deshalb oft gar
+    nicht darauf ein.
+    """
+    inhalt = (text or "").strip()
+    if not inhalt:
+        return {"type": "text", "text": "NACHRICHT DES SCHUELERS: (kein Text – nur das Bild)"}
+    return {"type": "text",
+            "text": f"NACHRICHT DES SCHUELERS (genau darauf antwortest du):\n«{inhalt}»"}
+
 
 def _image_block(image: tuple[bytes, str]) -> dict:
     import base64
@@ -302,10 +367,13 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
     if image is not None:
         # Aufgaben-Figur (Foto) in die erste User-Nachricht einbetten – das
         # Modell sieht sie damit in jedem Turn (wichtig fuer Geometrie).
+        # BESCHRIFTET, sonst weiss das Modell bei zwei Bildern nicht, welches
+        # die Aufgabe und welches die Zeichnung des Schuelers ist.
         # cache_control auf dem letzten Block: System + Aufgabe + Bild werden
         # ab dem 2. Turn zu 10 % des Preises aus dem Cache gelesen.
         first_text = msgs[0]["content"] if isinstance(msgs[0]["content"], str) else "(Aufgabe gestartet)"
-        msgs[0]["content"] = [_image_block(image),
+        msgs[0]["content"] = [{"type": "text", "text": BILD_AUFGABE},
+                              _image_block(image),
                               {"type": "text", "text": first_text,
                                "cache_control": {"type": "ephemeral"}}]
     if last_image is not None:
@@ -314,24 +382,29 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
         # Nachrichten-Bilder stehen als erkannter Text im Verlauf (Kostendeckel).
         for m in reversed(msgs):
             if m["role"] == "user":
+                block = [{"type": "text", "text": BILD_SCHUELER}, _image_block(last_image)]
                 if isinstance(m["content"], str):
-                    m["content"] = [_image_block(last_image), {"type": "text", "text": m["content"]}]
+                    m["content"] = block + [{"type": "text", "text": m["content"]}]
                 else:
-                    m["content"] = [_image_block(last_image)] + list(m["content"])
+                    m["content"] = block + list(m["content"])
                 break
     if regie:
         # Regie-Anweisung als Block VOR dem Schueler-Text der letzten
         # User-Nachricht (statt im System): haelt den Cache-Praefix stabil.
+        # Der Schueler-Text kommt ZULETZT und ausdruecklich beschriftet –
+        # sonst ist er von der Anweisung nicht zu unterscheiden und geht
+        # neben dem langen Regie-Block schlicht unter.
         last = msgs[-1]
         block = {"type": "text", "text": regie}
         if last["role"] != "user":
             msgs.append({"role": "user", "content": [block]})
         elif isinstance(last["content"], str):
-            last["content"] = [block, {"type": "text", "text": last["content"]}]
+            last["content"] = [block, _schueler_block(last["content"])]
         else:
-            imgs = [c for c in last["content"] if c.get("type") == "image"]
-            rest = [c for c in last["content"] if c.get("type") != "image"]
-            last["content"] = imgs + [block] + rest
+            head = [c for c in last["content"] if c.get("type") == "image" or c.get("text") in _BILD_LABELS]
+            rest = [c for c in last["content"] if c not in head]
+            texte = " ".join(c.get("text", "") for c in rest).strip()
+            last["content"] = head + [block, _schueler_block(texte)]
     return msgs
 
 
@@ -360,13 +433,23 @@ def stream_reply(history, step: LadderStep, verification: Verification,
     messages = _history_to_messages(history, image, last_image, regie=regie)
     produced = False
     try:
-        with client.messages.stream(model=model, max_tokens=400, system=system, messages=messages) as stream:
+        with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system, messages=messages) as stream:
             for text in stream.text_stream:
                 produced = True
                 yield text
+            final = stream.get_final_message()
             if usage_out is not None:
                 usage_out["model"] = model
-                usage_out["usage"] = stream.get_final_message().usage
+                usage_out["usage"] = final.usage
+            if getattr(final, "stop_reason", None) == "max_tokens":
+                # Antwort wurde mitten im Wort gekappt (real beobachtet). Der
+                # Schueler sieht einen Torso und muss nachfragen – das kostet
+                # doppelt. Sichtbar machen statt still hinnehmen.
+                from . import alert
+
+                alert.notify("ki-qualitaet",
+                             f"Antwort am Token-Limit abgeschnitten (Modell {model}, max_tokens={MAX_TOKENS}).",
+                             key="max_tokens")
     except Exception as exc:
         # KEIN stiller Mock mehr: der passte nicht zur Aufgabe und der Betreiber
         # erfuhr nie, dass die KI down ist. Ehrlich melden + Fehler ins Log.

@@ -36,12 +36,15 @@ def test_history_builder_embeds_task_image():
     plain = _history_to_messages(history)
     assert isinstance(plain[0]["content"], str)  # ohne Bild: unveraendert
 
+    from app.services.tutor import BILD_AUFGABE
+
     msgs = _history_to_messages(history, image=(b"PNGBYTES", "image/png"))
     first = msgs[0]
     assert first["role"] == "user"
-    assert first["content"][0]["type"] == "image"
-    assert first["content"][0]["source"]["media_type"] == "image/png"
-    assert first["content"][1]["type"] == "text"
+    assert first["content"][0]["text"] == BILD_AUFGABE  # Beschriftung vor dem Bild
+    assert first["content"][1]["type"] == "image"
+    assert first["content"][1]["source"]["media_type"] == "image/png"
+    assert first["content"][2]["type"] == "text"
 
 
 def test_chat_works_with_and_without_task_image(client):
@@ -153,20 +156,26 @@ def test_history_builder_embeds_last_message_image():
         {"role": "tutor", "text": "Guter Ansatz!"},
         {"role": "student", "text": "hier meine skizze"},
     ]
+    from app.services.tutor import BILD_AUFGABE, BILD_SCHUELER
+
     msgs = _history_to_messages(history, last_image=(b"PNGBYTES", "image/png"))
     last = msgs[-1]
     assert last["role"] == "user"
-    assert last["content"][0]["type"] == "image"
-    assert last["content"][1]["type"] == "text"
-    assert last["content"][1]["text"] == "hier meine skizze"
+    # Beschriftung VOR dem Bild, damit klar ist, was das Bild zeigt
+    assert last["content"][0]["text"] == BILD_SCHUELER
+    assert last["content"][1]["type"] == "image"
+    assert last["content"][2]["text"] == "hier meine skizze"
     # erste User-Nachricht bleibt ohne Bild (kein Aufgaben-Foto uebergeben)
     assert isinstance(msgs[0]["content"], str)
 
-    # Aufgaben-Bild UND Nachricht-Bild gleichzeitig
+    # Aufgaben-Bild UND Nachricht-Bild gleichzeitig: beide beschriftet, damit
+    # das Modell Aufgabe und Schueler-Zeichnung nicht verwechselt.
     both = _history_to_messages(history, image=(b"TASK", "image/jpeg"),
                                 last_image=(b"DRAW", "image/png"))
-    assert both[0]["content"][0]["type"] == "image"
-    assert both[-1]["content"][0]["type"] == "image"
+    assert both[0]["content"][0]["text"] == BILD_AUFGABE
+    assert both[0]["content"][1]["type"] == "image"
+    assert both[-1]["content"][0]["text"] == BILD_SCHUELER
+    assert both[-1]["content"][1]["type"] == "image"
 
 
 def test_eroeffnung_zitiert_keine_figurbeschreibung(client):

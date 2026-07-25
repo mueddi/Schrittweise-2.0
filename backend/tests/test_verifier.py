@@ -88,3 +88,14 @@ def test_check_reply_math_findet_nur_echte_zahlenfehler():
     assert "2" in raw and richtig == "6"
 
     assert check_reply_math(r"$$10 - 4 = 7$$")[0][1] == "6"
+
+
+def test_gleichung_mit_zwei_unbekannten_wird_hinterlegt():
+    """Regression: «(2*x*5*y*8)/3 = y» fiel durch, weil genau EINE Unbekannte
+    verlangt wurde – obwohl verify() die Aufgabe nach x aufloest. Folge: kein
+    Pruefausdruck, der Tutor ohne jede Bodenhaftung (real beobachtet)."""
+    assert extract_expression("(2*x*5*y*8)/3 = y") == "(2*x*5*y*8)/3 = y"
+    assert extract_expression("3x + 5 = 2y") == "3x + 5 = 2y"
+    # Prosa wird weiterhin sauber abgetrennt und NICHT mitgespeichert
+    assert extract_expression("Berechne x wenn 2x+4 = 10") == "2x+4 = 10"
+    assert extract_expression("Loese die Gleichung: 5x - 3 = 12") == "5x - 3 = 12"

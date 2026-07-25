@@ -154,7 +154,11 @@ def test_regie_landet_in_letzter_user_nachricht():
     last = msgs[-1]
     assert last["role"] == "user"
     assert last["content"][0]["text"].startswith("REGIE-ANWEISUNG")
-    assert last["content"][1]["text"] == "3x = 15"
+    # Der Schueler-Text steht ZULETZT und ausdruecklich beschriftet – sonst ist
+    # er neben dem langen Regie-Block nicht als seine Nachricht erkennbar.
+    schueler = last["content"][-1]["text"]
+    assert schueler.startswith("NACHRICHT DES SCHUELERS")
+    assert "«3x = 15»" in schueler
 
 
 def test_regie_warnt_bei_ungepruefter_antwort():

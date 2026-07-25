@@ -131,7 +131,10 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     if already_solved:
         intent = "correct" if verification.status == "correct" else "post_solved"
         # Aufgabe ist geloest -> Loesung darf der Tutor jetzt erklaeren (permit_solution=True),
-        # falls der Schueler nach dem ganzen Weg fragt.
+        # falls der Schueler nach dem ganzen Weg fragt. Stufe und Versuche
+        # bleiben bewusst eingefroren (sie sind die Kennzahl «wieviel Hilfe
+        # war noetig» im Eltern-Dashboard); den Widerspruch zwischen
+        # «Erlaubte Stufe 1» und «Stufe 4 freigegeben» loest _regie auf.
         step = tutor.LadderStep(intent, max(attempt.hint_level, 1), attempt.own_attempts, True, True)
     else:
         intent = tutor.detect_intent(text, verification)
