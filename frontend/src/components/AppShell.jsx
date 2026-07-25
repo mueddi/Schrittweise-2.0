@@ -109,6 +109,13 @@ export default function AppShell() {
     setNavOpen(false);
   }, [loc.pathname]);
 
+  // Abmelden immer mit eindeutigem Ziel: sonst haengt das Ergebnis davon ab,
+  // auf welcher Seite man gerade steht.
+  const doLogout = () => {
+    logout();
+    nav("/login", { replace: true });
+  };
+
   const isActive = (path) => loc.pathname.startsWith(`/app/${path}`);
   const initial = (user?.display_name || "?").charAt(0).toUpperCase();
   const quotaPct = quota ? quota.percent_used : 0;
@@ -141,7 +148,10 @@ export default function AppShell() {
         <div className={`sidebar-backdrop ${navOpen ? "show" : ""}`} onClick={() => setNavOpen(false)} />
         {/* SIDEBAR */}
         <div style={{ flex: "0 0 244px", background: "#fbfbfd", borderRight: "1px solid #eef0f3", display: "flex", flexDirection: "column" }} className={`sidebar ${navOpen ? "open" : ""}`}>
-          <Link to="/" style={{ display: "flex", alignItems: "center", gap: 9, padding: "16px 16px 12px" }}>
+          {/* Logo fuehrt INNERHALB der App nach Hause. Frueher zeigte es auf "/"
+              (Werbeseite) – man landete angemeldet auf der Startseite mit
+              «Anmelden»-Knopf und hielt sich fuer ausgeloggt. */}
+          <Link to="/app/lernen" style={{ display: "flex", alignItems: "center", gap: 9, padding: "16px 16px 12px" }}>
             <span style={{ width: 22, height: 22, borderRadius: 7, background: "#6366f1" }} />
             <span style={{ fontWeight: 800, fontSize: 16, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
           </Link>
@@ -205,7 +215,12 @@ export default function AppShell() {
                 </div>
               </div>
             )}
-            <div onClick={logout} style={{ fontSize: 11, color: "#b6bcc6", cursor: "pointer" }}>{t("Abmelden", "Sign out")}</div>
+            <button
+              onClick={doLogout}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: "100%", padding: "9px 12px", borderRadius: 10, border: "1px solid #e7e8ee", background: "#fff", color: "#6b7280", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+            >
+              <span aria-hidden="true">⏻</span> {t("Abmelden", "Sign out")}
+            </button>
           </div>
         </div>
 
@@ -213,8 +228,10 @@ export default function AppShell() {
         <div style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", flexDirection: "column" }}>
           <div className="mobile-topbar">
             <button onClick={() => setNavOpen(true)} aria-label={t("Menü", "Menu")} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid #e7e8ee", background: "#fff", fontSize: 16 }}>☰</button>
-            <span style={{ width: 20, height: 20, borderRadius: 6, background: "#6366f1" }} />
-            <span style={{ fontWeight: 800, fontSize: 15, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+            <Link to="/app/lernen" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 20, height: 20, borderRadius: 6, background: "#6366f1" }} />
+              <span style={{ fontWeight: 800, fontSize: 15, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+            </Link>
           </div>
           {user?.email_verified === false && mailOk && (
             <div style={{ background: "#fdf3e6", borderBottom: "1px solid #f2ddb8", padding: "8px 16px", fontSize: 12.5, color: "#a05c12", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

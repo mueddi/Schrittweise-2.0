@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { useLang, gradeLabel } from "../lib/i18n.jsx";
@@ -11,6 +11,7 @@ import { DeleteAccount, PasswordTab } from "./Einstellungen.jsx";
 // Übungsdaten (GET /api/parents/preview), zum Testen der Eltern-Sicht.
 export default function ParentDashboard({ preview = false }) {
   const { user, logout } = useAuth();
+  const nav = useNavigate();
   const { t, lang } = useLang();
   const [children, setChildren] = useState([]);
   const [code, setCode] = useState("");
@@ -57,7 +58,12 @@ export default function ParentDashboard({ preview = false }) {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontSize: 13, color: "#6b7280" }}>{user?.display_name}</span>
           <span onClick={() => setKontoOpen(!kontoOpen)} style={{ fontSize: 12, fontWeight: 600, color: kontoOpen ? "#1a1c22" : "#4f46e5", cursor: "pointer" }}>⚙ {t("Konto", "Account")}</span>
-          <span onClick={logout} style={{ fontSize: 12, fontWeight: 600, color: "#4f46e5", cursor: "pointer" }}>{t("Abmelden", "Log out")}</span>
+          <button
+            onClick={() => { logout(); nav("/login", { replace: true }); }}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 999, border: "1px solid #e7e8ee", background: "#fff", color: "#1a1c22", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          >
+            <span aria-hidden="true">⏻</span> {t("Abmelden", "Log out")}
+          </button>
         </div>
       </div>
       )}

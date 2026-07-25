@@ -6,7 +6,7 @@ import { useLang, GRADE_KEYS, gradeLabel } from "../lib/i18n.jsx";
 
 export default function Einstellungen() {
   const nav = useNavigate();
-  const { user, setUser } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const { t, lang, setLang } = useLang();
   const [tab, setTab] = useState("profil");
   const [name, setName] = useState(user?.display_name || "");
@@ -98,6 +98,20 @@ export default function Einstellungen() {
                 </select>
               </Field>
               <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
+
+              {/* Abmelden gehoert dorthin, wo man es sucht – nicht nur in die Seitenleiste. */}
+              <div style={{ borderTop: "1px solid #eef0f3", marginTop: 28, paddingTop: 20 }}>
+                <button
+                  onClick={() => { logout(); nav("/login", { replace: true }); }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 11, border: "1px solid #e7e8ee", background: "#fff", color: "#1a1c22", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}
+                >
+                  <span aria-hidden="true">⏻</span> {t("Abmelden", "Sign out")}
+                </button>
+                <div style={{ fontSize: 12, color: "#9aa0ab", marginTop: 8 }}>
+                  {t("Du wirst auf diesem Gerät abgemeldet. Deine Aufgaben und dein Fortschritt bleiben erhalten.",
+                     "You'll be signed out on this device. Your tasks and progress are kept.")}
+                </div>
+              </div>
             </div>
           </>
         )}
