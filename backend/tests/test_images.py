@@ -262,3 +262,82 @@ def test_auch_zeichnung_label_wird_gestrippt(client):
                          headers=headers).json()["messages"][0]["text"]
     assert "Berechne die Summe." in opener
     assert "[Zeichnung" not in opener
+
+
+def _png(size, boxes=(), bg="white"):
+    """Test-PNG: Hintergrund + optionale schwarze Rechtecke als «Tinte»."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", size, bg)
+    d = ImageDraw.Draw(img)
+    for b in boxes:
+        d.rectangle(b, fill="black")
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _dims(data):
+    import io
+
+    from PIL import Image
+
+    return Image.open(io.BytesIO(data)).size
+
+
+def test_trim_and_cap_schneidet_weissraum_weg():
+    """Stift-Zeichnung: die leere Blattfläche wird weggeschnitten (spart
+    Bild-Tokens), die Tinte bleibt vollständig erhalten."""
+    from app.services.ocr import _trim_and_cap
+
+    # Canvas wie im DrawPad (1360x680) mit Schrift oben links
+    data = _png((1360, 680), boxes=[(40, 40, 400, 200)])
+    w, h = _dims(_trim_and_cap(data))
+    assert w * h < 0.5 * 1360 * 680  # deutlich weniger Pixel = weniger Tokens
+    # Tinte + Rand vollstaendig drin (Box 360x160 + 2x24 Rand, Mindestkante 200)
+    assert w >= 360 + 40 and h >= 200
+
+
+def test_trim_and_cap_schneidet_auch_flache_rechenzeile(client):
+    """Regression: eine EINZELNE flache Rechenzeile ist der Normalfall im
+    DrawPad. Eine zu strenge Mindestkanten-Pruefung hatte den Zuschnitt hier
+    komplett verworfen (0 % Ersparnis) – jetzt wird die Kante erweitert."""
+    from app.services.ocr import _trim_and_cap
+
+    # 1360x680-Canvas, Schrift nur in einem flachen Streifen oben
+    data = _png((1360, 680), boxes=[(60, 90, 660, 150)])
+    w, h = _dims(_trim_and_cap(data))
+    assert w * h < 0.35 * 1360 * 680  # klar weniger Bild-Tokens
+    assert h >= 200  # Mindesthoehe wurde erweitert, nicht verworfen
+    assert w >= 600  # die Zeile selbst bleibt vollstaendig drin
+
+
+def test_trim_and_cap_laesst_dunkle_und_volle_bilder_unangetastet():
+    """Fotos mit dunklem Hintergrund oder randvoller Tinte werden NICHT
+    zugeschnitten – dort wäre ein Zuschnitt ein Risiko."""
+    from app.services.ocr import _trim_and_cap
+
+    dunkel = _png((900, 600), boxes=[(10, 10, 200, 100)], bg="#303030")
+    assert _trim_and_cap(dunkel) == dunkel
+
+    randvoll = _png((900, 600), boxes=[(5, 5, 895, 595)])
+    assert _trim_and_cap(randvoll) == randvoll
+
+
+def test_trim_and_cap_deckelt_grosse_bilder():
+    """Riesige Fotos werden auf 1400 px längste Kante begrenzt."""
+    from app.services.ocr import _trim_and_cap
+
+    gross = _png((2400, 1800), boxes=[(100, 100, 2300, 1700)])
+    assert max(_dims(_trim_and_cap(gross))) <= 1400
+
+
+def test_trim_and_cap_ist_robust():
+    """Kaputte Bytes oder leeres Blatt: Original zurück, niemals ein Fehler."""
+    from app.services.ocr import _trim_and_cap
+
+    assert _trim_and_cap(b"kein bild") == b"kein bild"
+    leer = _png((800, 400))
+    assert _trim_and_cap(leer) == leer

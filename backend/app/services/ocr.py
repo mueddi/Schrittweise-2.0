@@ -55,6 +55,71 @@ class PytesseractOcr:
             return OcrResult(text="", math_expression=None, confidence=0.0)
 
 
+def _trim_and_cap(image_bytes: bytes, max_edge: int = 1400) -> bytes:
+    """Weissraum wegschneiden und Abmessungen deckeln, VOR dem Vision-Aufruf.
+
+    Bezahlt werden Bild-Abmessungen, nicht Dateigroesse – eine
+    Stift-Zeichnung ist aber meist zu zwei Dritteln leeres Blatt. Der
+    Zuschnitt spart darum rund 40 % der Erkennungs-Kosten, ohne die
+    Auflösung der Schrift selbst anzutasten (im Gegenteil: sie belegt
+    danach einen groesseren Anteil der Pixel).
+
+    Konservativ: zugeschnitten wird nur bei klar dokumentartigen Bildern
+    (heller Hintergrund, wenig Tinte). Jeder Fehler -> Original zurueck,
+    die Erkennung darf daran nie scheitern.
+    """
+    try:
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(image_bytes))
+        img.load()
+        fmt = (img.format or "PNG").upper()
+        gray = img.convert("L")
+        w, h = gray.size
+
+        # Hintergrund = haeufigster Randwert; Tinte = deutlich dunkler
+        corners = [gray.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
+        bg = max(corners)
+        cropped = None
+        if bg >= 200:  # heller Hintergrund (Blatt/Canvas)
+            mask = gray.point(lambda v: 255 if v < bg - 40 else 0)
+            ink = mask.histogram()[255]  # Anzahl Tinte-Pixel
+            box = mask.getbbox()  # Bounding-Box der Tinte (Nicht-Null-Pixel)
+            if box and ink and ink < 0.30 * w * h:
+                bw, bh = box[2] - box[0], box[3] - box[1]
+                if bw * bh < 0.70 * w * h:
+                    pad = 24
+                    left = max(0, box[0] - pad)
+                    top = max(0, box[1] - pad)
+                    right = min(w, box[2] + pad)
+                    bottom = min(h, box[3] + pad)
+                    # Mindestkante 200 px: schmale Ausschnitte (eine flache
+                    # Rechenzeile ist der Normalfall!) werden ERWEITERT, nicht
+                    # verworfen – sonst greift der Zuschnitt fast nie.
+                    if right - left < 200:
+                        fehlt = (200 - (right - left) + 1) // 2
+                        left, right = max(0, left - fehlt), min(w, right + fehlt)
+                    if bottom - top < 200:
+                        fehlt = (200 - (bottom - top) + 1) // 2
+                        top, bottom = max(0, top - fehlt), min(h, bottom + fehlt)
+                    cropped = img.crop((left, top, right, bottom))
+        out = cropped if cropped is not None else img
+        if max(out.size) > max_edge:
+            out = out.copy()
+            out.thumbnail((max_edge, max_edge))
+        if out is img:
+            return image_bytes  # nichts zu tun
+        buf = io.BytesIO()
+        if fmt == "PNG":
+            out.save(buf, "PNG", optimize=True)
+        else:
+            out.convert("RGB").save(buf, "JPEG", quality=90)
+        return buf.getvalue()
+    except Exception:
+        log.debug("Bild-Zuschnitt uebersprungen", exc_info=True)
+        return image_bytes
+
+
 class ClaudeVisionOcr:
     """Erkennung über Claude Vision – liest auch Handschrift (Stift-Eingabe) zuverlässig."""
 
@@ -74,6 +139,8 @@ class ClaudeVisionOcr:
 
             from ..config import settings
 
+            # Weissraum weg + Abmessungen deckeln (spart Bild-Tokens)
+            image_bytes = _trim_and_cap(image_bytes)
             fmt = (Image.open(io.BytesIO(image_bytes)).format or "PNG").lower()
             if fmt in ("jpeg", "png", "webp"):
                 media_type = {"jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[fmt]
