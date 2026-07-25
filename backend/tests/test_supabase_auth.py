@@ -64,3 +64,46 @@ def test_supabase_rate_limit_maps_to_429(client, supabase_on, monkeypatch):
     monkeypatch.setattr(auth_router, "send_magic_link_via_supabase", fake_send)
     r = client.post("/api/auth/request-link", json={"email": "mia@test.ch"})
     assert r.status_code == 429
+
+
+def test_mail_failure_lands_in_admin_alerts(client, supabase_on, monkeypatch):
+    """Scheitert der Mailversand, muss der Grund im Admin-Bereich sichtbar sein."""
+    seen = []
+    monkeypatch.setattr(
+        auth_router.alert, "notify",
+        lambda kind, detail, key=None: seen.append((kind, detail)),
+    )
+
+    def fake_send(email, redirect_to):
+        raise auth_router.SupabaseMailFailed(
+            "Supabase-Mailversand HTTP 500: Error sending confirmation email"
+        )
+
+    register(client, "mia@test.ch", name="Mia")
+    monkeypatch.setattr(auth_router, "send_magic_link_via_supabase", fake_send)
+    r = client.post("/api/auth/request-link", json={"email": "mia@test.ch"})
+
+    assert r.status_code == 503
+    # Nutzer sieht die generische Meldung, der Betreiber den echten Grund.
+    assert "Mailversand momentan nicht möglich" in r.json()["detail"]
+    assert seen and seen[-1][0] == "mail"
+    assert "Error sending confirmation email" in seen[-1][1]
+    assert "mia@test.ch" in seen[-1][1]
+
+
+def test_supabase_reason_points_to_the_log(monkeypatch):
+    """Der Grund-Text nennt die Fundstelle des echten SMTP-Fehlers."""
+    import httpx
+
+    from app.services import supabase_auth
+
+    resp = httpx.Response(
+        500,
+        json={"code": 500, "error_code": "unexpected_failure",
+              "msg": "Error sending confirmation email"},
+        request=httpx.Request("POST", "https://example.supabase.co/auth/v1/otp"),
+    )
+    reason = supabase_auth._reason(resp)
+    assert "HTTP 500" in reason
+    assert "Error sending confirmation email" in reason
+    assert "Logs → Auth" in reason

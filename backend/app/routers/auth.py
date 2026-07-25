@@ -33,8 +33,10 @@ from ..security import (
     new_magic_token,
     verify_password,
 )
+from ..services import alert
 from ..services.mailer import send_magic_link
 from ..services.supabase_auth import (
+    SupabaseMailFailed,
     SupabaseRateLimited,
     get_verified_email,
     send_magic_link_via_supabase,
@@ -148,8 +150,10 @@ def register_password(payload: PasswordRegisterRequest, request: Request, db: Se
     if settings.supabase_auth_enabled or settings.smtp_enabled:
         try:
             _deliver_login_mail(db, email)
-        except Exception:
+        except Exception as exc:
             log.warning("Bestätigungs-Mail bei Registrierung fehlgeschlagen (%s)", email)
+            reason = getattr(exc, "reason", None) or f"{type(exc).__name__}: {exc}"
+            alert.notify("mail", f"Bestätigungs-Mail an {email} nicht verschickt. {reason}", key="register")
 
     access = create_access_token(user.id, user.role.value, token_version=user.token_version or 0)
     return TokenResponse(access_token=access, user=UserOut.model_validate(user))
@@ -275,7 +279,14 @@ def request_link(payload: MagicLinkRequest, db: Session = Depends(get_db)):
                 status.HTTP_429_TOO_MANY_REQUESTS,
                 "Zu viele Login-Mails in kurzer Zeit – warte ein paar Minuten und versuch es nochmal.",
             )
-        except Exception:
+        except SupabaseMailFailed as exc:
+            alert.notify("mail", f"Login-Mail an {email} nicht verschickt. {exc.reason}", key="supabase")
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Mailversand momentan nicht möglich – versuch es in ein paar Minuten nochmal.",
+            )
+        except Exception as exc:
+            alert.notify("mail", f"Login-Mail an {email} nicht verschickt: {type(exc).__name__}: {exc}", key="supabase")
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "Mailversand momentan nicht möglich – versuch es in ein paar Minuten nochmal.",
@@ -285,7 +296,8 @@ def request_link(payload: MagicLinkRequest, db: Session = Depends(get_db)):
         try:
             if send_magic_link(email, link):
                 return MagicLinkResponse(sent=True, message="Wir haben dir einen Link geschickt.")
-        except Exception:
+        except Exception as exc:
+            alert.notify("mail", f"Login-Mail an {email} nicht verschickt (SMTP): {type(exc).__name__}: {exc}", key="smtp")
             raise HTTPException(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "Mailversand momentan nicht möglich – versuch es in ein paar Minuten nochmal.",
