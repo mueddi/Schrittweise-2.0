@@ -174,3 +174,34 @@ def test_health_zeigt_zahlungs_status(client):
     assert "zahlung" in body
     assert body["zahlung"] is False  # Test-Umgebung ohne Stripe-Schluessel
     assert not any("sk_" in str(v) or "whsec" in str(v) for v in body.values())
+
+
+def test_return_base_bleibt_auf_der_startadresse():
+    """Nach der Zahlung zurueck auf DIE Adresse, von der aus gekauft wurde –
+    sonst gilt die Anmeldung dort nicht (scheinbarer Logout). Fremde Ziele
+    werden ignoriert (kein offener Redirect)."""
+    from app.config import settings
+    from app.routers.pay import _return_base
+
+    konfiguriert = settings.frontend_base_url.rstrip("/")
+
+    class Req:
+        def __init__(self, headers):
+            self.headers = headers
+
+    # kein Origin -> konfigurierte Adresse
+    assert _return_base(Req({})) == konfiguriert
+    assert _return_base(None) == konfiguriert
+
+    # Vercel-Vorschau-Adresse desselben Projekts -> wird uebernommen
+    slug = konfiguriert.split("://", 1)[1].split(".", 1)[0]
+    vorschau = f"https://{slug}-git-main-abc123.vercel.app"
+    assert _return_base(Req({"origin": vorschau})) == vorschau
+
+    # Referer als Fallback (manche Browser senden kein Origin)
+    assert _return_base(Req({"referer": f"{vorschau}/app/preise"})) == vorschau
+
+    # fremde Ziele und unverschluesselt -> immer die konfigurierte Adresse
+    for boese in ("https://boese.example", "https://schrittweise-2-0.boese.example",
+                  "http://schrittweise-2-0.vercel.app", "https://evil.vercel.app"):
+        assert _return_base(Req({"origin": boese})) == konfiguriert

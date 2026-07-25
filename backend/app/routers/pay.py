@@ -38,8 +38,42 @@ PACKAGES = {
 }
 
 
+def _return_base(request: Request | None) -> str:
+    """Wohin Stripe nach der Zahlung zurueckschickt.
+
+    Bevorzugt die Adresse, von der aus der Kauf gestartet wurde (Origin-
+    Header) – sonst landet man auf einer ANDEREN Herkunft, wo die
+    Anmeldung im Browser nicht gilt, und wird scheinbar ausgeloggt.
+    Erlaubt sind nur die konfigurierte Adresse und Vercel-Adressen
+    desselben Projekts – nie ein fremdes Ziel (kein offener Redirect).
+    """
+    configured = settings.frontend_base_url.rstrip("/")
+    origin = ""
+    if request is not None:
+        origin = (request.headers.get("origin") or "").rstrip("/")
+        if not origin:
+            ref = request.headers.get("referer") or ""
+            if "://" in ref:
+                scheme, _, rest = ref.partition("://")
+                origin = f"{scheme}://{rest.split('/', 1)[0]}"
+    if not origin or origin == configured:
+        return configured
+    try:
+        host = origin.split("://", 1)[1].split("/", 1)[0].lower()
+        conf_host = configured.split("://", 1)[1].split("/", 1)[0].lower()
+        slug = conf_host.split(".", 1)[0]  # z.B. "schrittweise-2-0"
+        if origin.startswith("https://") and (
+            host == conf_host or (host.startswith(slug) and host.endswith(".vercel.app"))
+        ):
+            return origin
+    except Exception:
+        pass
+    return configured
+
+
 @router.post("/checkout")
-def create_checkout(payload: CheckoutRequest | None = None, user: User = Depends(require_student)):
+def create_checkout(request: Request, payload: CheckoutRequest | None = None,
+                    user: User = Depends(require_student)):
     """Erstellt eine Stripe-Checkout-Session und gibt deren Bezahl-URL zurück."""
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
@@ -53,7 +87,7 @@ def create_checkout(payload: CheckoutRequest | None = None, user: User = Depends
     pkg = PACKAGES.get(pkg_key)
     if pkg is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, i18n.t(i18n.lang_of(user), "Unbekanntes Paket.", "Unknown package."))
-    base = settings.frontend_base_url.rstrip("/")
+    base = _return_base(request)
     data = {
         "mode": "payment",
         "success_url": f"{base}/app/preise?zahlung=ok",
