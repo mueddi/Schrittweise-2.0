@@ -234,7 +234,15 @@ def pick_model(exercise_text: str, exercise_expr: str | None) -> str:
 
 
 def _regie(step: LadderStep, verification: Verification, exercise_text: str, exercise_expr: str | None,
-           grade_level: str | None = None, language: str = "de") -> str:
+           grade_level: str | None = None, language: str = "de",
+           from_image: bool = False) -> str:
+    """Regie-Anweisung fuer EINEN Turn.
+
+    ``from_image``: die Aufgabe stammt von einem Foto/einer Zeichnung, der
+    Pruefausdruck also aus der Bild-Erkennung. Er kann dann falsch gelesen
+    sein – das wird beim Nennen der internen Loesung ausdruecklich dazugesagt,
+    damit der Tutor nicht jeden Hinweis auf eine falsche Zahl lenkt.
+    """
     lines = [
         "REGIE-ANWEISUNG (nicht an den Schueler weitergeben):",
         f"- Aufgabe: {exercise_text}" + (f"  [Ausdruck: {exercise_expr}]" if exercise_expr else ""),
@@ -270,14 +278,20 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     if step.intent == "talk":
         lines.append("- Der Schueler REDET mit dir (Rueckfrage, Kommentar, Zwischenbemerkung) – das ist kein Hilferuf. Geh direkt auf seine Worte ein und antworte kurz. Stufe NICHT erhoehen, keine neue Hilfe anbieten, die er nicht verlangt hat.")
     solution_ok = bool(verification.solution)
+    # Bei Foto-/Zeichnungs-Aufgaben steht der Pruefausdruck NICHT fest: er kommt
+    # aus der Bild-Erkennung. Ohne diesen Hinweis zielte der Tutor jeden Hinweis
+    # auf eine womoeglich falsch gelesene Zahl, die ihm als geprueft galt.
+    unsicher = ("  ACHTUNG: dieser Wert stammt aus der Bild-Erkennung und kann auf einer"
+                " falsch gelesenen Aufgabe beruhen. Widerspricht er dem BILD, gilt das BILD –"
+                " dann rechne neu und nenne den Wert nicht." if from_image else "")
     if step.permit_solution and (step.solved or step.allowed_stage >= 4) and solution_ok:
-        lines.append(f"- Stufe 4 freigegeben. Interne Loesung (jetzt zeigbar): {verification.solution}")
+        lines.append(f"- Stufe 4 freigegeben. Interne Loesung (jetzt zeigbar): {verification.solution}{unsicher}")
     elif solution_ok:
         # Loesung als Orientierung mitgeben: der Tutor zielt damit in jedem
         # Hinweis aufs verifizierte Resultat (weniger Rechen-Patzer) –
         # verraten darf er sie weiterhin erst auf Stufe 4.
         lines.append("- Interne Loesung NUR ZU DEINER ORIENTIERUNG – dem Schueler NIEMALS nennen, "
-                     f"Stufe 4 ist NICHT freigegeben: {verification.solution}")
+                     f"Stufe 4 ist NICHT freigegeben: {verification.solution}{unsicher}")
     if (language or "de").startswith("en"):
         lines.append("- WICHTIG: Der Schueler nutzt die App auf ENGLISCH. "
                      "Antworte IMMER auf Englisch (alle Erklaerungen, Fragen und Hinweise).")
@@ -354,7 +368,8 @@ def _image_block(image: tuple[bytes, str]) -> dict:
 
 def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = None,
                          last_image: tuple[bytes, str] | None = None,
-                         regie: str | None = None) -> list[dict]:
+                         regie: str | None = None,
+                         exercise_text: str | None = None) -> list[dict]:
     if len(history) > HISTORY_LIMIT:
         # Eroeffnungsnachricht (Aufgabenstellung) behalten + juengster Verlauf
         history = [history[0]] + history[-(HISTORY_LIMIT - 1):]
@@ -363,7 +378,12 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
         role = "assistant" if m["role"] == "tutor" else "user"
         msgs.append({"role": role, "content": m["text"]})
     if not msgs or msgs[0]["role"] != "user":
-        msgs.insert(0, {"role": "user", "content": "(Aufgabe gestartet)"})
+        # Statt der inhaltsleeren Fuellung «(Aufgabe gestartet)» den echten
+        # Aufgabentext: das Bild kam sonst ohne jeden Kontext an. Der Text
+        # liegt hier IM gecachten Praefix und kostet ab dem 2. Turn ~10 %.
+        aufgabe = (exercise_text or "").strip()
+        msgs.insert(0, {"role": "user",
+                        "content": f"AUFGABE:\n{aufgabe}" if aufgabe else "(Aufgabe gestartet)"})
     if image is not None:
         # Aufgaben-Figur (Foto) in die erste User-Nachricht einbetten – das
         # Modell sieht sie damit in jedem Turn (wichtig fuer Geometrie).
@@ -429,8 +449,10 @@ def stream_reply(history, step: LadderStep, verification: Verification,
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
     model = choose_model(step, exercise_text, exercise_expr, last_image)
     system = _build_system()
-    regie = _regie(step, verification, exercise_text, exercise_expr, grade_level, language)
-    messages = _history_to_messages(history, image, last_image, regie=regie)
+    regie = _regie(step, verification, exercise_text, exercise_expr, grade_level, language,
+                   from_image=image is not None)
+    messages = _history_to_messages(history, image, last_image, regie=regie,
+                                    exercise_text=exercise_text)
     produced = False
     try:
         with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system, messages=messages) as stream:

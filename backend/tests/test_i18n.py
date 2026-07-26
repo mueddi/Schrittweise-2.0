@@ -187,3 +187,53 @@ def test_modellwahl_sonnet_liest_haiku_unterrichtet_sonnet_loest():
     assert choose_model(final, "3x + 5 = 20", None) == settings.anthropic_model_smart
     # Gymi-Marker im Text bleiben stark
     assert choose_model(hint, "Bestimme die Ableitung von f(x)", None) == settings.anthropic_model_smart
+
+
+def test_aufgabentext_steht_beim_bild():
+    """Das Aufgabenfoto darf nicht ohne Kontext ankommen.
+
+    Vorher hing es an der inhaltsleeren Fuellung «(Aufgabe gestartet)» – das
+    Modell sah ein Bild ohne jede Aufgabenstellung und ergaenzte, was es
+    erwartete. Der Text liegt im gecachten Praefix, kostet also fast nichts.
+    """
+    from app.services.tutor import BILD_AUFGABE, _history_to_messages
+
+    history = [
+        {"role": "tutor", "text": "Los geht's!"},
+        {"role": "student", "text": "keine ahnung"},
+    ]
+    msgs = _history_to_messages(history, image=(b"TASK", "image/jpeg"),
+                                exercise_text="3x + 5 = 20")
+    bloecke = msgs[0]["content"]
+    assert bloecke[0]["text"] == BILD_AUFGABE
+    assert bloecke[1]["type"] == "image"
+    assert "3x + 5 = 20" in bloecke[2]["text"]
+    assert "(Aufgabe gestartet)" not in bloecke[2]["text"]
+    # Cache-Breakpoint bleibt auf dem letzten Block der Bild-Nachricht
+    assert bloecke[-1]["cache_control"] == {"type": "ephemeral"}
+
+    # ohne Aufgabentext bleibt die alte Fuellung (kein leerer Block)
+    ohne = _history_to_messages(history, image=(b"TASK", "image/jpeg"))
+    assert ohne[0]["content"][2]["text"] == "(Aufgabe gestartet)"
+
+
+def test_loesung_aus_bilderkennung_wird_als_unsicher_markiert():
+    """Bei Foto-Aufgaben stammt der Pruefausdruck aus der Erkennung.
+
+    Ohne Warnung zielte der Tutor JEDEN Hinweis auf eine womoeglich falsch
+    gelesene Zahl, die ihm als geprueft galt.
+    """
+    from app.services.sympy_verifier import Verification
+    from app.services.tutor import LadderStep, _regie
+
+    step = LadderStep("stuck", 2, 1, False, False)
+    v = Verification("incorrect", "Endwert stimmt nicht", solution="x = 5", extracted="9")
+
+    mit_bild = _regie(step, v, "3x+5=20", "3*x+5=20", "oberstufe", from_image=True)
+    assert "Bild-Erkennung" in mit_bild
+    assert "gilt das BILD" in mit_bild
+
+    ohne_bild = _regie(step, v, "3x+5=20", "3*x+5=20", "oberstufe", from_image=False)
+    assert "Bild-Erkennung" not in ohne_bild
+    # die Orientierung selbst bleibt in BEIDEN Faellen erhalten
+    assert "x = 5" in mit_bild and "x = 5" in ohne_bild
