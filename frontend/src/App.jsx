@@ -45,6 +45,21 @@ function RequireAuth({ children }) {
 export default function App() {
   const { logout } = useAuth();
   const nav = useNavigate();
+
+  // Supabase leitet nach dem Klick auf den Mail-Link auf seine «Site URL»
+  // zurueck, wenn die uebergebene Adresse nicht in seiner Freigabeliste steht.
+  // Das Token liegt dann im Fragment auf der STARTSEITE – wo es niemand
+  // einloest und der Besucher einfach die Werbeseite sieht, obwohl der Link
+  // gueltig war. Egal wo es ankommt: zur Verify-Seite weiterleiten und das
+  // Fragment mitnehmen. Auch Fehler-Fragmente ("abgelaufener Link") gehoeren
+  // dorthin, damit man eine Meldung sieht statt der Startseite.
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    if (!/[#&](access_token|error_description|error)=/.test(hash)) return;
+    if (window.location.pathname === "/login/verify") return;
+    nav(`/login/verify${hash}`, { replace: true });
+  }, [nav]);
+
   useEffect(() => {
     setUnauthorizedHandler(() => {
       logout();
