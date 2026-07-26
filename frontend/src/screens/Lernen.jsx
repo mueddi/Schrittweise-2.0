@@ -371,12 +371,26 @@ export default function Lernen() {
     // schickt das Kind dieselbe Nachricht ein zweites Mal – und zahlt doppelt.
     let gestreamt = false;
     try {
-      const res = await fetch(`${BASE}/api/attempts/${myAttempt}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ text: sendText, image_path: img || undefined }),
-        signal: controller.signal,
-      });
+      // Einmal automatisch nachfassen, statt das Kind zu bitten, die Nachricht
+      // nochmal zu schicken. NUR wenn die Anfrage gar nicht erst rausging
+      // (Funkloch, Tunnel) – dann ist nichts gespeichert und nichts verrechnet.
+      // Bei einer echten Absage des Servers (Guthaben, Sperre, Bremse) wird
+      // NICHT wiederholt, die käme nur nochmal genauso zurück.
+      let res;
+      for (let anlauf = 0; ; anlauf++) {
+        try {
+          res = await fetch(`${BASE}/api/attempts/${myAttempt}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+            body: JSON.stringify({ text: sendText, image_path: img || undefined }),
+            signal: controller.signal,
+          });
+          break;
+        } catch (netz) {
+          if (anlauf > 0 || controller.signal.aborted || myToken !== reqToken.current) throw netz;
+          await new Promise((r) => setTimeout(r, 3000));
+        }
+      }
       if (res.status === 401) {
         await api.get("/api/auth/me").catch(() => {}); // loest globalen Logout aus, falls Session weg
         if (myToken === reqToken.current) {

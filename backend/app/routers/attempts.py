@@ -164,8 +164,14 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     )
     db.add(student_msg)
 
-    # Attempt-Zustand fortschreiben
-    attempt.hint_level = step.allowed_stage
+    # Attempt-Zustand fortschreiben. Die HILFE-STUFE bleibt hier bewusst
+    # unangetastet: sie beschreibt, wieviel Hilfe der Tutor GEGEBEN hat, und
+    # der Aufruf kommt erst danach. Wurde sie hier hochgesetzt, schob ein
+    # KI-Ausfall das Kind eine Sprosse weiter, ohne dass je ein Hinweis kam –
+    # vier misslungene Nachrichten reichten von Stufe 1 auf 4. Sie wird unten
+    # im Generator gesetzt, sobald die Antwort wirklich da ist.
+    # own_attempts und solved beschreiben dagegen, was das KIND getan hat –
+    # die stimmen auch dann, wenn die Antwort nie ankommt.
     attempt.own_attempts = step.own_attempts
     if step.solved:
         attempt.solved = True
@@ -237,9 +243,18 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                 lang_local,
                 "Erzähl mir, wie du an die Aufgabe rangehst.",
                 "Tell me how you'd approach the task.")
+            # Hat der Tutor tatsaechlich geantwortet? Bei einem KI-Ausfall
+            # setzt stream_reply "fehler" – dann gab es keine Hilfe, also
+            # klettert die Stufe nicht und die Meldung bekommt auch kein
+            # Stufen-Etikett («👣 Teilschritt vorgemacht» ueber «technische
+            # Probleme» war schlicht falsch).
+            geantwortet = not usage_out.get("fehler")
             with SessionLocal() as s:
                 s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full,
-                              hint_level=reply_level))
+                              hint_level=reply_level if geantwortet else None))
+                if geantwortet and reply_level is not None:
+                    s.query(Attempt).filter(Attempt.id == attempt_id_local).update(
+                        {"hint_level": reply_level})
                 if usage_out.get("usage") is not None:
                     # Verrechnung + Erfassung im selben Commit wie die Tutor-Message,
                     # damit charged_tokens nie vom tatsaechlich Abgebuchten abweicht.

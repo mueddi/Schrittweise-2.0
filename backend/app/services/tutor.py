@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 
 from ..config import settings
@@ -350,6 +351,68 @@ def _build_system():
     ]
 
 
+# Zeitbudget eines Chat-Turns. Vercel bricht die Anfrage nach 60 s ab; damit
+# die App den Ausfall SELBST bemerkt (und die freundliche Meldung ueberhaupt
+# ausgeben kann), muss alles darunter bleiben.
+CLIENT_TIMEOUT = 20.0
+# Bis hierhin lohnt sich ein zweiter Anlauf mit dem anderen Modell; danach
+# reicht die Restzeit nicht mehr.
+AUSWEICH_DEADLINE = 28.0
+
+
+def _modell_kette(model: str) -> list[str]:
+    """Das gewaehlte Modell, dahinter das jeweils andere als Ausweichweg.
+
+    Der weitaus haeufigste echte Fehler ist kein Totalausfall, sondern «Modell
+    ueberlastet» (529) oder «zu viele Anfragen» (429) – und der trifft immer
+    nur EIN Modell. Die App hat zwei; das zweite kostet im Zweifel etwas mehr
+    oder erklaert etwas schlichter, aber der Schueler bekommt eine Antwort.
+    """
+    ausweich = (settings.anthropic_model_default
+                if model == settings.anthropic_model_smart
+                else settings.anthropic_model_smart)
+    return [model] if ausweich == model else [model, ausweich]
+
+
+def _ein_versuch(client, model: str, system, messages, usage_out: dict | None):
+    """EIN Anlauf bei einem Modell. Wirft weiter, damit der Aufrufer wechseln kann."""
+    kwargs = {}
+    denken = _thinking_param(model)
+    if denken is not None:
+        kwargs["thinking"] = denken
+    with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system,
+                                messages=messages, **kwargs) as stream:
+        try:
+            for text in stream.text_stream:
+                yield text
+        finally:
+            # Klickt der Schueler waehrend der Antwort weg, laeuft
+            # get_final_message() unten NIE: der Turn blieb unverrechnet und
+            # tauchte in keiner Statistik auf (beliebig wiederholbar).
+            # Der Zwischenstand kennt den Verbrauch bereits.
+            if usage_out is not None and "usage" not in usage_out:
+                try:
+                    snap = stream.current_message_snapshot
+                except Exception:
+                    snap = None
+                if getattr(snap, "usage", None) is not None:
+                    usage_out["model"] = model
+                    usage_out["usage"] = snap.usage
+        final = stream.get_final_message()
+        if usage_out is not None:
+            usage_out["model"] = model
+            usage_out["usage"] = final.usage
+        if getattr(final, "stop_reason", None) == "max_tokens":
+            # Antwort wurde mitten im Wort gekappt (real beobachtet). Der
+            # Schueler sieht einen Torso und muss nachfragen – das kostet
+            # doppelt. Sichtbar machen statt still hinnehmen.
+            from . import alert
+
+            alert.notify("ki-qualitaet",
+                         f"Antwort am Token-Limit abgeschnitten (Modell {model}, max_tokens={MAX_TOKENS}).",
+                         key="max_tokens")
+
+
 def choose_model(step: LadderStep, exercise_text: str, exercise_expr: str | None,
                  last_image: tuple[bytes, str] | None = None) -> str:
     """«Sonnet liest – Haiku unterrichtet – Sonnet loest»: das teure Modell
@@ -511,68 +574,66 @@ def stream_reply(history, step: LadderStep, verification: Verification,
         yield from _mock_reply(step, verification, exercise_text, language)
         return
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    # Zeitlimit BEWUSST unter dem Deckel der Hosting-Plattform (Vercel bricht
+    # nach 60 s ab). Vorher wartete der Client bis zu 600 s – bei einer
+    # haengenden KI wurde die Funktion also von aussen abgeschossen, bevor der
+    # eigene Aufraeum-Code lief, und der Schueler sah einen nackten Abbruch
+    # statt der freundlichen Meldung. Eine Wiederholung statt zwei, damit im
+    # Zeitbudget noch Platz fuer das Ausweich-Modell bleibt.
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key,
+                                 timeout=CLIENT_TIMEOUT, max_retries=1)
     model = choose_model(step, exercise_text, exercise_expr, last_image)
     system = _build_system()
     regie = _regie(step, verification, exercise_text, exercise_expr, grade_level, language,
                    from_image=image is not None)
     messages = _history_to_messages(history, image, last_image, regie=regie,
                                     exercise_text=exercise_text)
+
+    from . import alert
+
+    start = time.monotonic()
     produced = False
-    try:
-        kwargs = {}
-        denken = _thinking_param(model)
-        if denken is not None:
-            kwargs["thinking"] = denken
-        with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system,
-                                    messages=messages, **kwargs) as stream:
-            try:
-                for text in stream.text_stream:
-                    produced = True
-                    yield text
-            finally:
-                # Klickt der Schueler waehrend der Antwort weg, laeuft
-                # get_final_message() unten NIE: der Turn blieb unverrechnet
-                # und tauchte in keiner Statistik auf (beliebig wiederholbar).
-                # Der Zwischenstand kennt den Verbrauch bereits.
-                if usage_out is not None and "usage" not in usage_out:
-                    try:
-                        snap = stream.current_message_snapshot
-                    except Exception:
-                        snap = None
-                    if getattr(snap, "usage", None) is not None:
-                        usage_out["model"] = model
-                        usage_out["usage"] = snap.usage
-            final = stream.get_final_message()
-            if usage_out is not None:
-                usage_out["model"] = model
-                usage_out["usage"] = final.usage
-            if getattr(final, "stop_reason", None) == "max_tokens":
-                # Antwort wurde mitten im Wort gekappt (real beobachtet). Der
-                # Schueler sieht einen Torso und muss nachfragen – das kostet
-                # doppelt. Sichtbar machen statt still hinnehmen.
-                from . import alert
+    letzter_fehler: Exception | None = None
+    for versuch, aktuelles_modell in enumerate(_modell_kette(model)):
+        if versuch and (produced or time.monotonic() - start > AUSWEICH_DEADLINE):
+            # Steht schon Text beim Schueler, wird NICHT gewechselt – sonst
+            # bekaeme er zwei verschiedene Antworten durcheinander. Und ohne
+            # Restzeit hat ein zweiter Anlauf keinen Zweck mehr.
+            break
+        try:
+            for text in _ein_versuch(client, aktuelles_modell, system, messages, usage_out):
+                produced = True
+                yield text
+            if versuch:
+                log.warning("Modell %s nicht verfuegbar, mit %s beantwortet", model, aktuelles_modell)
+                alert.notify("ki",
+                             f"Modell {model} war nicht verfuegbar – automatisch auf "
+                             f"{aktuelles_modell} ausgewichen. Der Schueler hat eine "
+                             f"normale Antwort bekommen, es ist nichts ausgefallen.",
+                             key="ausweich")
+            return
+        except Exception as exc:
+            letzter_fehler = exc
+            log.exception("Anthropic-Stream mit %s fehlgeschlagen (Antwort begonnen: %s)",
+                          aktuelles_modell, produced)
 
-                alert.notify("ki-qualitaet",
-                             f"Antwort am Token-Limit abgeschnitten (Modell {model}, max_tokens={MAX_TOKENS}).",
-                             key="max_tokens")
-    except Exception as exc:
-        # KEIN stiller Mock mehr: der passte nicht zur Aufgabe und der Betreiber
-        # erfuhr nie, dass die KI down ist. Ehrlich melden + Fehler ins Log.
-        log.exception("Anthropic-Stream fehlgeschlagen (Antwort begonnen: %s)", produced)
-        from . import alert
-
-        alert.notify("ki", f"{type(exc).__name__}: {exc}")
-        if produced:
-            yield t(language,
-                    "\n\n⚠️ (Die Verbindung ist mittendrin abgebrochen – frag einfach nochmal, dann mache ich fertig.)",
-                    "\n\n⚠️ (The connection dropped mid-answer – just ask again and I'll finish.)")
-        else:
-            yield t(language,
-                    "⚠️ Ich habe gerade technische Probleme und kann dir nicht richtig antworten. "
-                    "Schick deine Nachricht in einem Moment einfach nochmal – dein Fortschritt bleibt erhalten.",
-                    "⚠️ I'm having technical trouble right now and can't answer properly. "
-                    "Please send your message again in a moment – your progress is saved.")
+    # Alle Anlaeufe gescheitert: KEIN stiller Mock (der passte nicht zur Aufgabe
+    # und der Betreiber erfuhr nie, dass die KI down ist). Ehrlich melden.
+    if usage_out is not None:
+        # Signal an den Aufrufer: dieser Turn hat KEINE Hilfe geliefert, die
+        # Hilfe-Stufe darf deshalb nicht weiterklettern.
+        usage_out["fehler"] = True
+    alert.notify("ki", f"{type(letzter_fehler).__name__}: {letzter_fehler}")
+    if produced:
+        yield t(language,
+                "\n\n⚠️ (Die Verbindung ist mittendrin abgebrochen – frag einfach nochmal, dann mache ich fertig.)",
+                "\n\n⚠️ (The connection dropped mid-answer – just ask again and I'll finish.)")
+    else:
+        yield t(language,
+                "⚠️ Ich habe gerade technische Probleme und kann dir nicht richtig antworten. "
+                "Schick deine Nachricht in einem Moment einfach nochmal – dein Fortschritt bleibt erhalten.",
+                "⚠️ I'm having technical trouble right now and can't answer properly. "
+                "Please send your message again in a moment – your progress is saved.")
 
 
 def _mock_reply(step: LadderStep, verification: Verification, exercise_text: str,
