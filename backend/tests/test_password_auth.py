@@ -242,7 +242,7 @@ def test_unverified_blocked_when_enforced(client, monkeypatch):
     body = _register(client)
     headers = {"Authorization": f"Bearer {body['access_token']}"}
 
-    # Ohne Erzwingung: alles offen (sicherer Default, solange Mail nicht steht)
+    # Ohne Erzwingung offen (in Produktion ist sie AN, in der Test-Env aus)
     assert client.post("/api/exercises", headers=headers, json={"text": "x=1"}).status_code == 201
 
     monkeypatch.setattr(cfg, "require_email_verification", True)

@@ -51,9 +51,13 @@ class Settings(BaseSettings):
     alert_email: str = "mahmmouds62@gmail.com"
 
     # E-Mail-Bestaetigung erzwingen: unbestaetigte Konten koennen weder KI
-    # nutzen noch kaufen. Erst aktivieren, wenn der Mailversand (Supabase/SMTP)
-    # nachweislich funktioniert – sonst sperrt es alle Neuregistrierungen aus.
-    require_email_verification: bool = False
+    # nutzen noch kaufen (Schutz gegen Konto-Farmen mit Wegwerf-Adressen).
+    # Standard AN, seit der Mailversand nachweislich laeuft: Versand ueber
+    # Brevo, Link erreichbar, Anmeldung setzt email_verified. Beide
+    # Bestaetigungswege (/verify und /verify-supabase) heben die Sperre auf.
+    # Per REQUIRE_EMAIL_VERIFICATION=false abschaltbar, falls der Mailversand
+    # einmal ausfaellt – dann sperrt sie sonst alle Neuregistrierungen aus.
+    require_email_verification: bool = True
 
     # Kontingent: 1 Token = 1 Rappen verrechnete KI-Leistung.
     # Jedes Konto bekommt monatlich Gratis-Tokens; danach zahlt das Guthaben.

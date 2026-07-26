@@ -7,6 +7,10 @@ import os
 os.environ["DATABASE_URL"] = "sqlite:///./test_schrittweise.db"
 os.environ["MAGIC_LINK_DEV_RETURN"] = "true"
 os.environ["ANTHROPIC_API_KEY"] = ""  # Mock-Tutor erzwingen
+# In Produktion ist die E-Mail-Bestaetigung Pflicht. Tests bestaetigen keine
+# Mails – hier also aus; der gezielte Test (test_unverified_blocked_when_enforced)
+# schaltet sie selbst ein und prueft die Sperre.
+os.environ["REQUIRE_EMAIL_VERIFICATION"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
