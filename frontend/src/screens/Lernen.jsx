@@ -262,10 +262,10 @@ export default function Lernen() {
   const reqToken = useRef(0);
   const abortRef = useRef(null);
 
-  const nearBottom = () => {
+  const nearBottom = (rand = 120) => {
     const el = chatRef.current;
     if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < rand;
   };
   const scrollDown = useCallback((force = true) => {
     requestAnimationFrame(() => {
@@ -311,7 +311,24 @@ export default function Lernen() {
     // Hin- und Herwechseln (A -> B -> A) konnte die spaeter eintreffende
     // Antwort von B das Gespraech von A auf dem Bildschirm ueberschreiben,
     // waehrend Senden weiterhin an A ging.
-    load(meins, true);
+    let nachschlag;
+    load(meins, true).then((s) => {
+      // Wer waehrend der Antwort woanders hinklickt, kommt zurueck und sieht
+      // seine Frage OHNE Antwort – der Server schreibt sie erst zu Ende. Das
+      // sah aus, als haette der Tutor das Kind ignoriert: es fragte nochmal
+      // (doppelte Kosten) oder gab auf. Steht zuletzt eine Schuelernachricht,
+      // laeuft die Antwort also noch: Punkte zeigen und kurz nachladen.
+      const letzte = s?.messages?.[s.messages.length - 1];
+      if (meins !== reqToken.current || letzte?.role !== "student") return;
+      setBusy(true);
+      nachschlag = setTimeout(() => {
+        if (meins !== reqToken.current) return;
+        load(meins).finally(() => {
+          if (meins === reqToken.current) setBusy(false);
+        });
+      }, 4000);
+    });
+    return () => clearTimeout(nachschlag);
   }, [load]);
 
   useEffect(() => {
@@ -716,6 +733,13 @@ export default function Lernen() {
                     alt={t("Angehängtes Bild", "Attached image")}
                     title={t("🔍 vergrössern", "🔍 zoom in")}
                     onClick={() => setLightbox(m.image_path)}
+                    // Nach dem Laden nochmal ans Ende scrollen: das Bild hat
+                    // beim ersten Scrollen noch keine Hoehe, deshalb ging ein
+                    // Gespraech mit Zeichnungen mitten im Verlauf auf und die
+                    // letzte Antwort stand unsichtbar darunter.
+                    // Grosszuegiger Rand: das Bild ist bis 180 px hoch und hat
+                    // die Ansicht gerade selbst nach unten geschoben.
+                    onLoad={() => { if (nearBottom(340)) scrollDown(); }}
                     style={{ display: "block", maxWidth: 220, maxHeight: 180, borderRadius: 10, background: "#fff", border: "1px solid rgba(255,255,255,.4)", cursor: "zoom-in", marginBottom: hideText ? 0 : 8 }}
                   />
                 )}
