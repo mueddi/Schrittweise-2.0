@@ -32,3 +32,17 @@ def test_feedback_requires_login_and_length_limits(client):
     headers = register_pw(client, "mia@test.ch")
     assert client.post("/api/feedback", headers=headers, json={"text": "ab"}).status_code == 422
     assert client.post("/api/feedback", headers=headers, json={"text": "x" * 2001}).status_code == 422
+
+
+def test_harmlose_browser_warnungen_loesen_keinen_alarm_aus(client):
+    """3 von 5 Alarmen der letzten 14 Tage waren die «ResizeObserver loop»-
+    Warnung, die jeder Browser beim Groesse-Aendern wirft. Eine verrauschte
+    Fehlerseite schaut irgendwann niemand mehr an."""
+    from app.routers.feedback import _harmlos
+
+    assert _harmlos("ResizeObserver loop completed with undelivered notifications.")
+    assert _harmlos("ResizeObserver loop limit exceeded")
+    assert _harmlos("Script error.")
+    # echte Fehler muessen weiterhin durch
+    assert not _harmlos("TypeError: Cannot read properties of undefined")
+    assert not _harmlos("Uncaught ReferenceError: api is not defined")

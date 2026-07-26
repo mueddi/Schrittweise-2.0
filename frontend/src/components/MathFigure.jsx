@@ -342,8 +342,13 @@ const RENDERERS = {
 
 export default function MathFigure({ spec }) {
   if (!spec || typeof spec !== "object") return null;
-  const R = RENDERERS[spec.typ];
-  if (!R) return null;
+  // hasOwnProperty statt direktem Zugriff: sonst liefert typ "constructor"
+  // oder "valueOf" eine GEERBTE Funktion, die React als Komponente aufruft und
+  // dabei abstuerzt. Das try/catch unten hilft nicht – React ruft die
+  // Komponente erst spaeter auf – und im Chat gibt es keine Fehlergrenze, also
+  // waere die ganze App bis zum Neuladen durch die Absturzseite ersetzt.
+  const R = Object.prototype.hasOwnProperty.call(RENDERERS, spec.typ) ? RENDERERS[spec.typ] : null;
+  if (typeof R !== "function") return null;
   try {
     return <R {...spec} />;
   } catch {

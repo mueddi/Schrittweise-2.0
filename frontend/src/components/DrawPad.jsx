@@ -12,6 +12,7 @@ export default function DrawPad({ onResult, onClose }) {
   const wrapRef = useRef(null);
   const strokes = useRef([]); // Array von Strichen (je Array von Punkten) für Rückgängig
   const current = useRef(null);
+  const aktiverZeiger = useRef(null); // nur dieser Zeiger zeichnet (Handballen-Schutz)
   const [hasInk, setHasInk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -48,6 +49,22 @@ export default function DrawPad({ onResult, onClose }) {
       // Nur bei echter Aenderung anfassen – sonst kann der ResizeObserver
       // sich selbst wieder auslösen («ResizeObserver loop»).
       if (!w || !h || (w === letzte.w && h === letzte.h)) return;
+      // Geschriebenes MITNEHMEN, wenn die Flaeche sich aendert. Die Striche
+      // liegen in Pixeln der Flaeche: dreht das Kind das Handy quer (oder
+      // drueckt ⤡), schrumpfte die Hoehe – und alles darunter war unsichtbar
+      // UND aus dem gesendeten Bild herausgeschnitten, ohne Rueckgaengig.
+      // Gleichmaessiger Massstab, damit die Schrift nicht verzerrt.
+      if (letzte.w && letzte.h && strokes.current.length) {
+        const f = Math.min(w / letzte.w, h / letzte.h);
+        if (f !== 1) {
+          for (const stroke of strokes.current) {
+            for (const p of stroke) {
+              p.x *= f;
+              p.y *= f;
+            }
+          }
+        }
+      }
       letzte = { w, h };
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
@@ -101,12 +118,17 @@ export default function DrawPad({ onResult, onClose }) {
   }
 
   function down(e) {
+    // Nur EIN Zeiger zeichnet. Ohne das zog die aufliegende Handflaeche (oder
+    // ein zweiter Finger) einen langen Strich quer durchs Bild, der zwischen
+    // Hand und Stift hin- und hersprang – und genau so an die Erkennung ging.
+    if (aktiverZeiger.current !== null) return;
     e.preventDefault();
+    aktiverZeiger.current = e.pointerId;
     canvasRef.current.setPointerCapture?.(e.pointerId);
     current.current = [pos(e)];
   }
   function move(e) {
-    if (!current.current) return;
+    if (!current.current || e.pointerId !== aktiverZeiger.current) return;
     e.preventDefault();
     current.current.push(pos(e));
     // Strich live zeichnen (voller Redraw erst beim Absetzen)
@@ -122,7 +144,11 @@ export default function DrawPad({ onResult, onClose }) {
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
-  function up() {
+  function up(e) {
+    // Der abgesetzte Finger muss der zeichnende sein – sonst beendet die
+    // Handflaeche den Strich des Stifts.
+    if (e && e.pointerId !== aktiverZeiger.current) return;
+    aktiverZeiger.current = null;
     if (!current.current) return;
     strokes.current.push(current.current);
     current.current = null;

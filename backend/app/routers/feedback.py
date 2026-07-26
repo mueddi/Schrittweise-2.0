@@ -22,6 +22,22 @@ def create_feedback(
     return {"ok": True}
 
 
+# Browser-Meldungen, die KEINE Stoerung sind. Bisher ging jede Meldung als
+# Alarm durch: 3 von 5 Alarmen der letzten 14 Tage waren die harmlose
+# «ResizeObserver loop»-Warnung, die jeder Browser beim Groesse-Aendern wirft.
+# Verrauschte Fehlerseiten schaut irgendwann niemand mehr an.
+_HARMLOS = (
+    "resizeobserver loop",
+    "script error",            # Fremd-Skript ohne CORS: keine Information drin
+    "non-error promise rejection captured",
+)
+
+
+def _harmlos(message: str) -> bool:
+    low = message.lower()
+    return any(m in low for m in _HARMLOS)
+
+
 @router.post("/app-fehler", status_code=201)
 def report_client_error(
     payload: dict,
@@ -36,7 +52,7 @@ def report_client_error(
 
     message = str((payload or {}).get("message") or "")[:300].strip()
     url = str((payload or {}).get("url") or "")[:300].strip()
-    if message:
+    if message and not _harmlos(message):
         alert.notify("client", f"{url} – {message}", key=message[:80])
     return {"ok": True}
 

@@ -9,6 +9,11 @@ import { useLang } from "../lib/i18n.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
+// Fehler MIT Begruendung vom Server. Ohne ihn wurde jede Absage ausser 401/402
+// zu «Ups, da ging etwas schief» eingedampft – auch die Frequenz-Bremse und
+// die E-Mail-Sperre, bei denen der Server genau sagt, was zu tun ist.
+class ServerFehler extends Error {}
+
 const STUFEN_LABEL = {
   1: ["Stufe 1: Aktivierende Frage", "Level 1: Activating question"],
   2: ["Stufe 2: Kleiner Tipp", "Level 2: Small hint"],
@@ -268,7 +273,11 @@ export default function Lernen() {
     });
   }, []);
 
-  const load = useCallback(async (token) => {
+  // ``erstesLaden``: nur beim OEFFNEN der Session darf ein Fehler zur Meldung
+  // «Diese Uebungssession gibt es nicht (mehr)» fuehren. Beim NACHLADEN nach
+  // einer Antwort reichte bisher ein einziger wackliger Aufruf (Tunnel, 502),
+  // um das ganze intakte Gespraech durch diese Sackgasse zu ersetzen.
+  const load = useCallback(async (token, erstesLaden = false) => {
     if (!attemptId) return null;
     try {
       const s = await api.get(`/api/attempts/${attemptId}`);
@@ -279,15 +288,17 @@ export default function Lernen() {
       return s;
     } catch {
       if (token !== undefined && token !== reqToken.current) return null;
-      setState(null);
-      setLoadError(true);
+      if (erstesLaden) {
+        setState(null);
+        setLoadError(true);
+      }
       return null;
     }
   }, [attemptId, scrollDown]);
 
   useEffect(() => {
     // Attempt gewechselt: laufenden Stream abbrechen, Token invalidieren, neu laden.
-    reqToken.current += 1;
+    const meins = ++reqToken.current;
     if (abortRef.current) abortRef.current.abort();
     setStreaming("");
     setBusy(false);
@@ -296,7 +307,11 @@ export default function Lernen() {
     setPendingImage(null); // Anhang gehoert zur alten Aufgabe
     setShowTaskImage(true); // neue Aufgabe: Bild wieder zeigen
     setShowTaskText(false);
-    load();
+    // MIT Token: sonst greift der Veraltet-Schutz nicht, und beim schnellen
+    // Hin- und Herwechseln (A -> B -> A) konnte die spaeter eintreffende
+    // Antwort von B das Gespraech von A auf dem Bildschirm ueberschreiben,
+    // waehrend Senden weiterhin an A ging.
+    load(meins, true);
   }, [load]);
 
   useEffect(() => {
@@ -323,10 +338,21 @@ export default function Lernen() {
     if (typeof overrideText !== "string") setInput(""); // getippten Entwurf nicht wegwerfen
     setPendingImage(null);
     setBusy(true);
+    // Nachricht kam NICHT durch: Entwurf und Anhang zurueck ins Formular, damit
+    // «Versuch es nochmal» auch wirklich moeglich ist. Bei einer Schnellantwort
+    // bleibt das Eingabefeld leer – dort stand nie ein Entwurf drin.
+    const zurueckgeben = () => {
+      if (typeof overrideText !== "string" && text) setInput(text);
+      if (img) setPendingImage(img);
+    };
     // Schüler-Bubble sofort optimistisch anzeigen
     setState((s) => (s ? { ...s, messages: [...s.messages, { id: `tmp-${Date.now()}`, role: "student", text: sendText, image_path: img }] } : s));
     setStreaming("");
     scrollDown();
+    // Kam schon Text an, IST der Turn passiert (der Server speichert auch eine
+    // abgebrochene Antwort). Dann darf der Entwurf nicht zurueck, sonst
+    // schickt das Kind dieselbe Nachricht ein zweites Mal – und zahlt doppelt.
+    let gestreamt = false;
     try {
       const res = await fetch(`${BASE}/api/attempts/${myAttempt}/chat`, {
         method: "POST",
@@ -338,7 +364,8 @@ export default function Lernen() {
         await api.get("/api/auth/me").catch(() => {}); // loest globalen Logout aus, falls Session weg
         if (myToken === reqToken.current) {
           // Session noch gueltig (Race) -> Fehlerhinweis statt stummer Nachricht
-          setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: t("Ups, das hat nicht geklappt. Versuch es nochmal.", "Oops, that didn't work. Please try again.") }] } : s));
+          zurueckgeben();
+          setState((s) => (s ? { ...s, messages: [...s.messages.filter((m) => !String(m.id).startsWith("tmp-")), { id: `err-${Date.now()}`, role: "tutor", text: t("Ups, das hat nicht geklappt. Versuch es nochmal.", "Oops, that didn't work. Please try again.") }] } : s));
         }
         return;
       }
@@ -347,13 +374,21 @@ export default function Lernen() {
         // entfernen, Entwurf zurueckgeben und freundlich zum Laden einladen.
         if (myToken === reqToken.current) {
           setState((s) => (s ? { ...s, messages: [...s.messages.filter((m) => !String(m.id).startsWith("tmp-")), { id: `quota-${Date.now()}`, role: "tutor", kind: "quota", text: "" }] } : s));
-          if (typeof overrideText !== "string") setInput(text);
-          setPendingImage(img); // Anhang zurueckgeben – Nachricht wurde nicht gesendet
+          zurueckgeben();
           shell.reloadQuota?.();
         }
         return;
       }
-      if (!res.ok || !res.body) throw new Error("Fehler beim Senden");
+      if (!res.ok || !res.body) {
+        // Der Server SAGT, was los ist («Langsam 🙂 – eine Nachricht nach der
+        // anderen», «Bitte bestätige zuerst deine E-Mail-Adresse»). Bisher
+        // wurde die Antwort nie gelesen und alles zu «Ups» eingedampft.
+        let grund = "";
+        try {
+          grund = (await res.json())?.detail || "";
+        } catch { /* kein JSON – dann bleibt der allgemeine Text */ }
+        throw new ServerFehler(grund);
+      }
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let acc = "";
@@ -362,13 +397,17 @@ export default function Lernen() {
         if (done) break;
         if (myToken !== reqToken.current) return; // Aufgabe gewechselt -> Antwort verwerfen
         acc += dec.decode(value, { stream: true });
+        gestreamt = true;
         setStreaming(acc);
         if (nearBottom()) scrollDown();
       }
       if (myToken !== reqToken.current) return;
-      setStreaming("");
       const wasSolved = state?.attempt?.solved;
       const fresh = await load(myToken); // echte Nachrichten + Leiter-Zustand nachladen
+      // ERST jetzt den Stream-Text loeschen: vorher verschwand die fertige
+      // Antwort fuer die Dauer des Nachladens und die Tipp-Punkte kamen
+      // zurueck – nach jeder einzelnen Nachricht ein sichtbares Flackern.
+      setStreaming("");
       if (myToken !== reqToken.current) return;
       shell.reloadQuota?.();
       if (!wasSolved) {
@@ -382,7 +421,22 @@ export default function Lernen() {
     } catch (e) {
       if (controller.signal.aborted || myToken !== reqToken.current) return; // bewusst abgebrochen
       setStreaming("");
-      setState((s) => (s ? { ...s, messages: [...s.messages, { id: `err-${Date.now()}`, role: "tutor", text: t("Ups, da ging etwas schief. Versuch es nochmal.", "Oops, something went wrong. Please try again.") }] } : s));
+      // Entwurf UND Zeichnung zurueckgeben: sonst stand «Versuch es nochmal»
+      // da, waehrend beides geloescht war – erneutes Druecken tat gar nichts,
+      // und eine mit dem Stift geschriebene Rechnung war unwiederbringlich weg.
+      // Nur solange nichts gestreamt wurde (siehe oben).
+      if (!gestreamt) zurueckgeben();
+      const meldung = (e instanceof ServerFehler && e.message)
+        ? e.message
+        : t("Ups, da ging etwas schief. Versuch es nochmal.", "Oops, something went wrong. Please try again.");
+      setState((s) => (s ? {
+        ...s,
+        // Die eigene Bubble nur wegnehmen, wenn die Nachricht wirklich nicht
+        // ankam – sonst verschwindet sie vor den Augen des Kindes, obwohl sie
+        // beim naechsten Laden wieder da ist.
+        messages: [...(gestreamt ? s.messages : s.messages.filter((m) => !String(m.id).startsWith("tmp-"))),
+                   { id: `err-${Date.now()}`, role: "tutor", text: meldung }],
+      } : s));
     } finally {
       if (myToken === reqToken.current) setBusy(false);
     }
@@ -642,7 +696,9 @@ export default function Lernen() {
                 <div key={m.id} style={{ alignSelf: "flex-start", maxWidth: 420, background: "#fffaf0", border: "1px solid #f0e2c4", borderRadius: 16, padding: "14px 16px" }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 4 }}>{t("⚡ Dein Guthaben ist aufgebraucht", "⚡ Your balance is used up")}</div>
                   <div style={{ fontSize: 13, color: "#6b7280", lineHeight: 1.5, marginBottom: 10 }}>
-                    {t("Deine Nachricht wurde nicht gesendet – sie steht noch im Eingabefeld. Lad Tokens oder warte auf die Gratis-Tokens vom nächsten Monat.", "Your message was not sent – it's still in the input field. Top up tokens or wait for next month's free tokens.")}
+                    {/* Bei einer Schnellantwort war das Eingabefeld nie gefuellt –
+                        die alte Formulierung schickte einen auf die Suche. */}
+                    {t("Deine Nachricht wurde nicht gesendet. Lad Tokens oder warte auf die Gratis-Tokens vom nächsten Monat.", "Your message was not sent. Top up tokens or wait for next month's free tokens.")}
                   </div>
                   <button onClick={() => nav("/app/preise")} className="btn-primary" style={{ border: "none", borderRadius: 10, padding: "9px 14px", fontSize: 13 }}>
                     {t("Tokens laden →", "Top up tokens →")}
