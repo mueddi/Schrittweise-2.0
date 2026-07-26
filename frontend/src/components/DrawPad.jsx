@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { useLang } from "../lib/i18n.jsx";
 
+const GROSS_KEY = "schrittweise:stift-gross";
+
 // Zeichenfläche für Stift-/Finger-Eingabe: Striche werden als Bild an die
 // OCR-Erkennung geschickt; das Ergebnis landet editierbar im Chat-Eingabefeld.
 export default function DrawPad({ onResult, onClose }) {
@@ -13,24 +15,52 @@ export default function DrawPad({ onResult, onClose }) {
   const [hasInk, setHasInk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Grosses Fenster: mehr Platz zum Schreiben (und mehr Pixel fuer die
+  // Erkennung). Die Wahl wird gemerkt – wer gross schreibt, will das immer.
+  const [gross, setGross] = useState(() => {
+    try {
+      return localStorage.getItem(GROSS_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
 
-  // Canvas an Containergrösse anpassen (einmalig + bei Resize), Striche neu zeichnen
+  function toggleGross() {
+    setGross((g) => {
+      try {
+        localStorage.setItem(GROSS_KEY, g ? "0" : "1");
+      } catch { /* privater Modus o.ae. – dann halt nicht gemerkt */ }
+      return !g;
+    });
+  }
+
+  // Canvas an Containergrösse anpassen, Striche neu zeichnen.
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
+    let letzte = { w: 0, h: 0 };
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const { width, height } = wrap.getBoundingClientRect();
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      const w = Math.round(width);
+      const h = Math.round(height);
+      // Nur bei echter Aenderung anfassen – sonst kann der ResizeObserver
+      // sich selbst wieder auslösen («ResizeObserver loop»).
+      if (!w || !h || (w === letzte.w && h === letzte.h)) return;
+      letzte = { w, h };
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
       redraw();
     };
     resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
+    // ResizeObserver statt window-resize: erfasst auch das Vergroessern per
+    // Knopf, nicht nur eine Aenderung der Browserfenster-Groesse.
+    const ro = new ResizeObserver(resize);
+    ro.observe(wrap);
+    return () => ro.disconnect();
   }, []);
 
   function ctx2d() {
@@ -116,7 +146,11 @@ export default function DrawPad({ onResult, onClose }) {
   // (der sichtbare Canvas hat nur Bildschirmaufloesung).
   function exportBlob() {
     const { width, height } = wrapRef.current.getBoundingClientRect();
-    const scale = Math.max(window.devicePixelRatio || 1, 2);
+    // Mindestens 2x fuer die Erkennung, aber die lange Kante bei 2600 px
+    // deckeln: beim grossen Fenster waere das Bild sonst unnoetig schwer
+    // (der Server verkleinert fuer die Erkennung ohnehin auf max. 1400 px).
+    const deckel = 2600 / Math.max(width, height, 1);
+    const scale = Math.max(Math.min(Math.max(window.devicePixelRatio || 1, 2), deckel), 1);
     const out = document.createElement("canvas");
     out.width = Math.round(width * scale);
     out.height = Math.round(height * scale);
@@ -182,16 +216,45 @@ export default function DrawPad({ onResult, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(20,22,30,.45)", zIndex: 60, display: "grid", placeItems: "center", padding: 14 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, width: "min(680px, 100%)", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 60px rgba(20,22,30,.25)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", borderBottom: "1px solid #eef0f3" }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 18, display: "flex", flexDirection: "column",
+          overflow: "hidden", boxShadow: "0 20px 60px rgba(20,22,30,.25)",
+          width: gross ? "min(1180px, 100%)" : "min(680px, 100%)",
+          // Gross: Fenster fuellt den Bildschirm, die Flaeche waechst mit (unten flex:1)
+          height: gross ? "calc(100vh - 28px)" : undefined,
+          maxHeight: "calc(100vh - 28px)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", borderBottom: "1px solid #eef0f3" }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800 }}>✍️ {t("Mit dem Stift schreiben", "Write with a pen")}</div>
             <div style={{ fontSize: 12, color: "#9aa0ab" }}>{t("Schreib oder zeichne – ich lese es, und deine Zeichnung hängt als Bild an der Nachricht.", "Write or draw – I'll read it, and your drawing is attached to the message as an image.")}</div>
           </div>
-          <button onClick={onClose} style={{ border: "none", background: "transparent", fontSize: 18, color: "#9aa0ab", cursor: "pointer" }}>✕</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+            <button
+              onClick={toggleGross}
+              title={gross ? t("Kleiner", "Smaller") : t("Grösser", "Bigger")}
+              aria-label={gross ? t("Fenster verkleinern", "Shrink window") : t("Fenster vergrössern", "Enlarge window")}
+              style={{ border: "1px solid #e7e8ee", background: "#fff", borderRadius: 9, padding: "6px 10px", fontSize: 14, color: "#6b7280", cursor: "pointer", lineHeight: 1 }}
+            >
+              {gross ? "⤡" : "⤢"}
+            </button>
+            <button onClick={onClose} aria-label={t("Schliessen", "Close")} style={{ border: "none", background: "transparent", fontSize: 18, color: "#9aa0ab", cursor: "pointer" }}>✕</button>
+          </div>
         </div>
 
-        <div ref={wrapRef} style={{ height: "min(46vh, 340px)", background: "#fff", touchAction: "none", cursor: "crosshair", borderBottom: "1px solid #eef0f3", backgroundImage: "repeating-linear-gradient(#fff, #fff 34px, #f0f1f6 35px)" }}>
+        <div
+          ref={wrapRef}
+          style={{
+            background: "#fff", touchAction: "none", cursor: "crosshair",
+            borderBottom: "1px solid #eef0f3",
+            backgroundImage: "repeating-linear-gradient(#fff, #fff 34px, #f0f1f6 35px)",
+            // Gross: den ganzen freien Platz nehmen; sonst feste Hoehe wie bisher
+            ...(gross ? { flex: 1, minHeight: 0 } : { height: "min(46vh, 340px)" }),
+          }}
+        >
           <canvas
             ref={canvasRef}
             onPointerDown={down}
