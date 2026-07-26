@@ -92,7 +92,17 @@ def _insert_explicit_mult(s: str) -> str:
     return s
 
 
+# Rechen-Bomben: «9^9^9^9» beschaeftigt SymPy praktisch endlos (nachgestellt:
+# nach 8 Sekunden noch nicht zurueck, mit wachsendem Speicher) und blockiert
+# damit eine Anfrage. Ein Potenzturm oder ein vierstelliger Exponent kommt in
+# einer Schuelerantwort nicht vor – abweisen kostet nichts.
+_POTENZ_TURM = re.compile(r"(?:\^|\*\*)\s*\(?\s*[0-9A-Za-z.]+\s*(?:\^|\*\*)")
+_GROSSER_EXPONENT = re.compile(r"(?:\^|\*\*)\s*\(?\s*-?\d{4,}")
+
+
 def _parse(expr: str):
+    if _POTENZ_TURM.search(expr) or _GROSSER_EXPONENT.search(expr):
+        raise ValueError("Ausdruck zu aufwaendig")
     out = parse_expr(_insert_explicit_mult(_normalize(expr)),
                      transformations=_TRANSFORMS, evaluate=True)
     if not isinstance(out, sp.Basic):

@@ -29,6 +29,20 @@ router = APIRouter(prefix="/api/attempts", tags=["attempts"])
 CHAT_MAX_PER_MINUTE = 8
 
 
+def _ohne_offenen_figur_block(text: str) -> str:
+    """Unfertigen [[FIGUR]]-Block am Ende abschneiden.
+
+    Bricht die Antwort mitten in einer Skizze ab (Client weg, Timeout), wird
+    der Torso gespeichert. Die Anzeige blendet unfertige Bloecke nur WAEHREND
+    des Streams aus – im gespeicherten Verlauf stand danach fuer immer rohes
+    JSON: «[[FIGUR]]{"typ":"waage","links":"3x + 5».
+    """
+    auf = text.rfind("[[FIGUR]]")
+    if auf != -1 and text.find("[[/FIGUR]]", auf) == -1:
+        return text[:auf].rstrip()
+    return text
+
+
 def _shrink_for_tutor(data: bytes, mime: str) -> tuple[bytes, str]:
     """Bild fuers LLM verkleinern (max. 1100 px): die praezise Text-Extraktion
     hat schon das OCR in voller Aufloesung gemacht – fuers Mitschauen im Chat
@@ -216,7 +230,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         finally:
             # Auch bei Client-Abbruch (GeneratorExit) die bisherige Tutor-Antwort
             # und ggf. die Aggregate persistieren, damit kein Turn verloren geht.
-            full = "".join(parts).strip() or i18n.t(
+            full = _ohne_offenen_figur_block("".join(parts).strip()) or i18n.t(
                 lang_local,
                 "Erzähl mir, wie du an die Aufgabe rangehst.",
                 "Tell me how you'd approach the task.")
@@ -234,15 +248,26 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                     usage.record(s, "chat", usage_out.get("model", ""), usage_out["usage"],
                                  user_id=user_id_local, exercise_id=exercise_id_local,
                                  charged=charged)
-                if solved_now:
-                    try:
-                        aggregates.recompute_week(s, user_id_local)
-                    except Exception:
-                        # Aggregat-Fehler darf Tutor-Message + Abbuchung nicht wegrollen
-                        import logging
-
-                        logging.getLogger("schrittweise.attempts").exception(
-                            "recompute_week fehlgeschlagen (User %s)", user_id_local)
                 s.commit()
+            if solved_now:
+                # BEWUSST in einer EIGENEN Sitzung und NACH dem Commit oben:
+                # scheitert recompute_week (es endet mit db.flush()), ist die
+                # Sitzung vergiftet – das «except» heilt sie nicht, und der
+                # anschliessende commit() riss Tutor-Antwort, Abbuchung und
+                # Nutzungs-Erfassung mit weg. Lautlos, denn hier laeuft schon
+                # die Antwort, der globale Fehler-Handler greift nicht mehr.
+                try:
+                    with SessionLocal() as s2:
+                        aggregates.recompute_week(s2, user_id_local)
+                        s2.commit()
+                except Exception as exc:
+                    import logging
+
+                    logging.getLogger("schrittweise.attempts").exception(
+                        "recompute_week fehlgeschlagen (User %s)", user_id_local)
+                    alert.notify("server",
+                                 f"Wochen-Aggregat fehlgeschlagen (User {user_id_local}): "
+                                 f"{type(exc).__name__}: {exc}",
+                                 key="recompute_week")
 
     return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")

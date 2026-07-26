@@ -173,3 +173,16 @@ def test_keine_korrektur_bei_gerundeten_zahlen():
     assert check_reply_math(r"$1/0 = 5$") == []  # sonst stuende «zoo» im Chat
     # echte Fehler in ganzen Zahlen werden weiterhin gefunden
     assert check_reply_math(r"Damit $2 + 2 = 5$") == [("2 + 2 = 5", "4")]
+
+
+def test_rechenbombe_haengt_die_anfrage_nicht_auf():
+    """«x = 9^9^9^9» beschaeftigte SymPy praktisch endlos und blockierte damit
+    eine Anfrage (nachgestellt: nach 8 s noch nicht zurueck). Normale Potenzen
+    muessen weiter geprueft werden."""
+    assert verify("3x = 15", "x = 9^9^9^9").status == "incorrect"
+    assert extract_expression("Berechne 9^9^9^9") is None
+    assert verify("3x = 15", "x = 2^1000000").status == "incorrect"
+    # normale Potenzen bleiben pruefbar
+    assert verify("x^2 = 4", "2").status == "correct"
+    assert verify("2^10", "1024").status == "correct"
+    assert extract_expression("Berechne 2^3 + 3^2") == "2^3 + 3^2"

@@ -483,9 +483,23 @@ def stream_reply(history, step: LadderStep, verification: Verification,
             kwargs["thinking"] = denken
         with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system,
                                     messages=messages, **kwargs) as stream:
-            for text in stream.text_stream:
-                produced = True
-                yield text
+            try:
+                for text in stream.text_stream:
+                    produced = True
+                    yield text
+            finally:
+                # Klickt der Schueler waehrend der Antwort weg, laeuft
+                # get_final_message() unten NIE: der Turn blieb unverrechnet
+                # und tauchte in keiner Statistik auf (beliebig wiederholbar).
+                # Der Zwischenstand kennt den Verbrauch bereits.
+                if usage_out is not None and "usage" not in usage_out:
+                    try:
+                        snap = stream.current_message_snapshot
+                    except Exception:
+                        snap = None
+                    if getattr(snap, "usage", None) is not None:
+                        usage_out["model"] = model
+                        usage_out["usage"] = snap.usage
             final = stream.get_final_message()
             if usage_out is not None:
                 usage_out["model"] = model

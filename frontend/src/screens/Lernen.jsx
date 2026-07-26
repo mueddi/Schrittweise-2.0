@@ -69,13 +69,14 @@ function TutorContent({ text, streaming = false }) {
   const { t } = useLang();
   let src = text || "";
   let drawing = false;
-  if (streaming) {
-    // unvollstaendiger Block am Ende: ausblenden statt rohes JSON zu zeigen
-    const open = src.lastIndexOf("[[FIGUR]]");
-    if (open !== -1 && src.indexOf("[[/FIGUR]]", open) === -1) {
-      src = src.slice(0, open);
-      drawing = true;
-    }
+  // Unvollstaendiger Block am Ende: ausblenden statt rohes JSON zu zeigen.
+  // Gilt AUCH fuer gespeicherte Nachrichten – eine abgebrochene Antwort
+  // (Client weg, Timeout) wird mit Torso gespeichert und zeigte danach bei
+  // jedem Laden «[[FIGUR]]{"typ":"waage","links":"3x + 5» als Text.
+  const open = src.lastIndexOf("[[FIGUR]]");
+  if (open !== -1 && src.indexOf("[[/FIGUR]]", open) === -1) {
+    src = src.slice(0, open);
+    drawing = streaming; // nur live heisst das «zeichnet gerade»
   }
   const parts = [];
   let last = 0;
