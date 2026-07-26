@@ -51,6 +51,10 @@ def _normalize(s: str) -> str:
 # nicht» galt sonst als die Antwort «5» – und damit die Aufgabe als geloest.
 _ABLEHNUNG = re.compile(r"(?:\bnicht\b|\bnöd\b|\bnoed\b|\bnid\b|\bfalsch\b|\bkein\w*\b|\bnein\b|\bnei\b)",
                         re.IGNORECASE)
+# Zahlen in einer HILFE-Bitte sind keine Antwort: «1 tipp bitte» wurde als
+# Antwort «1» gewertet, also falsch – Stufe hoch und ein Fake-Versuch gezaehlt.
+_HILFE_WORT = re.compile(r"\b(?:tipp\w*|hinweis\w*|stufe|frage\w*|schritt\w*|hilfe|hilf)\b",
+                         re.IGNORECASE)
 # «minus 5» ist -5: das Vorzeichen steht als WORT da, das Zeichen fehlt.
 _MINUS_WORT = re.compile(r"\bminus\s+(?=[0-9])", re.IGNORECASE)
 _PLUS_WORT = re.compile(r"\bplus\s+(?=[0-9])", re.IGNORECASE)
@@ -183,7 +187,10 @@ def _extract_candidates(message: str) -> list[str]:
     if (len(nums) == 1 and not cands and len(msg.split()) <= 3
             # «5 stimmt nicht» / «nicht 5» / «ist 5 falsch?» nennen die Zahl,
             # um sie ABZULEHNEN. Ohne diese Sperre galt die Aufgabe als geloest.
-            and not _ABLEHNUNG.search(msg)):
+            and not _ABLEHNUNG.search(msg)
+            # «1 tipp bitte» / «stufe 2 bitte» nennen die Zahl als Anzahl,
+            # nicht als Antwort – galt sonst als falscher Rechenversuch.
+            and not _HILFE_WORT.search(msg)):
         cands.append(nums[0])
     return cands
 

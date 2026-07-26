@@ -152,7 +152,10 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
         step = tutor.LadderStep(intent, max(attempt.hint_level, 1), attempt.own_attempts, True, True)
     else:
         intent = tutor.detect_intent(text, verification)
-        step = tutor.advance_ladder(attempt.hint_level, attempt.own_attempts, intent)
+        # Laenge des Gespraechs als Notausgang gegen eine festgefahrene Leiter
+        turns = db.scalar(
+            select(func.count(Message.id)).where(Message.attempt_id == attempt.id)) or 0
+        step = tutor.advance_ladder(attempt.hint_level, attempt.own_attempts, intent, turns=turns)
 
     # 3) Schuelernachricht speichern (mit interner Verifikation)
     student_msg = Message(

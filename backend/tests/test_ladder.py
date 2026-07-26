@@ -81,14 +81,25 @@ def test_plea_unlocks_solution_after_earned_attempts():
 
 
 def test_plea_stays_locked_without_enough_attempts():
-    # Stufe 3, aber erst 1 Versuch -> weiterhin gesperrt
+    """Massgeblich sind die EIGENEN VERSUCHE, nicht die Hilfe-Stufe.
+
+    Die frueher zusaetzlich verlangte Mindeststufe 3 ist bewusst weg: eigene
+    Schritte erhoehen die Stufe absichtlich nicht, also blieb ein Kind, das
+    brav selber rechnete, auf Stufe 1 – und wurde beim Nachfragen fuer immer
+    abgewiesen. Die Zusage lautet «nach 2 eigenen Versuchen», nicht «nach
+    genug Hilfe».
+    """
+    # Erst 1 Versuch -> weiterhin gesperrt
     step = advance_ladder(3, 1, "plea")
     assert step.allowed_stage == 3
     assert not step.permit_solution
-    # genug Versuche, aber Stufe noch tief -> weiterhin gesperrt
-    step = advance_ladder(1, 2, "plea")
-    assert step.allowed_stage == 1
+    # gar kein Versuch, egal wie hoch die Stufe -> gesperrt
+    step = advance_ladder(3, 0, "plea")
     assert not step.permit_solution
+    # genug eigene Versuche -> freigegeben, auch auf tiefer Stufe
+    step = advance_ladder(1, 2, "plea")
+    assert step.allowed_stage == 4
+    assert step.permit_solution
 
 
 def test_correct_marks_solved():
@@ -187,15 +198,91 @@ def test_normales_reden_treibt_die_leiter_nicht_hoch():
     assert step.own_attempts == 0
 
 
-def test_leiter_friert_nicht_auf_stufe_drei_ein():
+def test_leiter_friert_nicht_ein_aber_hilfe_bitten_zaehlen_nicht_als_versuch():
     """Echter Produktionsfall: 19 Nachrichten, Stufe 3, own_attempts = 0.
 
-    Wer auf Stufe 3 weiter um Hilfe bittet, muss Stufe 4 erreichen koennen –
-    sonst gibt es die volle Loesung nie.
+    Der erste Anlauf dagegen zaehlte eine Hilfe-Bitte ab Stufe 3 als eigenen
+    Versuch – damit gaben fuenf Knopfdruecke («Tipp») die volle Loesung frei,
+    ohne dass das Kind je gerechnet hatte. Die Zusage «erst nach 2 eigenen
+    Versuchen» war ausgehoehlt. Das Einfrieren loest jetzt die plea-Regel:
+    sie verlangt keine Mindeststufe mehr, aber echte eigene Versuche.
     """
     stage, attempts = 0, 0
     for _ in range(6):
         step = advance_ladder(stage, attempts, "stuck")
         stage, attempts = step.allowed_stage, step.own_attempts
-    assert stage == 4, "Leiter haengt weiterhin fest"
-    assert step.permit_solution is True
+    assert (stage, attempts) == (3, 0), "Nachfragen darf keine Versuche erfinden"
+    assert advance_ladder(stage, attempts, "plea").permit_solution is False
+
+    # Wer selbst rechnet, kommt an die Loesung – auch auf Stufe 1, denn
+    # eigene Schritte erhoehen die Stufe absichtlich nicht.
+    stage, attempts = 0, 0
+    for _ in range(2):
+        step = advance_ladder(stage, attempts, "step")
+        stage, attempts = step.allowed_stage, step.own_attempts
+    frei = advance_ladder(stage, attempts, "plea")
+    assert frei.permit_solution is True and frei.allowed_stage == 4
+
+    # Notausgang: langes Gespraech mit mindestens einem eigenen Versuch
+    assert advance_ladder(3, 1, "plea", turns=12).permit_solution is True
+    assert advance_ladder(3, 0, "plea", turns=30).permit_solution is False
+
+
+def test_mundart_wird_verstanden():
+    """Die App richtet sich an Schweizer Kinder. Die Muster kannten nur
+    Hochdeutsch, also fiel JEDE Mundart-Nachricht in den "talk"-Zweig – und
+    dort steht in der Regie ausdruecklich «das ist kein Hilferuf, keine neue
+    Hilfe anbieten». Ein Kind, das Mundart schreibt, kam nie ueber Stufe 1."""
+    assert detect_intent("nei ich verstahs nöd", _UNKNOWN) == "simpler"
+    assert detect_intent("ich verstahne die lösig nöd", _UNKNOWN) == "simpler"
+    assert detect_intent("chasch mir helfe", _UNKNOWN) == "stuck"
+    assert detect_intent("ich weiss nöd wie", _UNKNOWN) == "stuck"
+    assert detect_intent("wie gaht das", _UNKNOWN) == "stuck"
+    assert detect_intent("ich cha das nid", _UNKNOWN) == "stuck"
+    assert detect_intent("zeig mer d lösig", _UNKNOWN) == "plea"
+    assert detect_intent("was isch d antwort", _UNKNOWN) == "plea"
+
+
+def test_hoefliche_formen_werden_erkannt():
+    """«zeige/sage» fielen an der Wortgrenze durch, «ich will die lösung» und
+    «löse die aufgabe für mich» hatten gar kein Muster – alles wurde "talk"."""
+    for msg in ["zeige mir die lösung", "sage mir die lösung", "ich will die lösung",
+                "ich brauche die lösung", "löse die aufgabe für mich"]:
+        assert detect_intent(msg, _UNKNOWN) == "plea", msg
+    assert detect_intent("ich kann das nicht", _UNKNOWN) == "stuck"
+    assert detect_intent("wie fange ich an", _UNKNOWN) == "stuck"
+
+
+def test_verneinung_ist_kein_betteln():
+    """«zeig mir NICHT die Lösung» loeste das Abfuhr-Skript aus – ebenso die
+    Rueckfrage «wie kommst du auf die Lösung?», die der Kommentar im Code
+    ausdruecklich ausschliessen wollte."""
+    for msg in ["zeig mir nicht die lösung", "sag mir nicht die antwort",
+                "verrate mir die lösung nicht", "sag mal, wie kommst du auf die lösung?",
+                "ich verrate dir nichts", "wie chum i uf die lösig"]:
+        assert detect_intent(msg, _UNKNOWN) != "plea", msg
+    for msg in ["gib mir die lösung", "zeig mir die lösung bitte", "lösung bitte"]:
+        assert detect_intent(msg, _UNKNOWN) == "plea", msg
+
+
+def test_zahl_in_hilfe_bitte_ist_kein_rechenversuch():
+    """«1 tipp bitte» wurde als Antwort «1» gewertet: falsch, Stufe hoch, und
+    ein Fake-Versuch gezaehlt, der auf die Stufe-4-Freigabe einzahlte."""
+    from app.services.sympy_verifier import verify
+
+    for msg in ["1 tipp bitte", "nur 1 tipp", "stufe 2 bitte", "tipp 1"]:
+        v = verify("3x = 15", msg)
+        assert v.status == "unknown", msg
+        assert detect_intent(msg, v) == "stuck", msg
+
+
+def test_regie_widerspricht_sich_beim_loesen_nicht():
+    """In genau dem Moment, in dem das Kind loest, stand beides in der Regie:
+    «Die Aufgabe ist geloest, du darfst den vollen Loesungsweg erklaeren» UND
+    «dem Schueler NIEMALS nennen, Stufe 4 ist NICHT freigegeben»."""
+    from app.services.tutor import _regie
+
+    v = Verification("correct", "Endwert stimmt", solution="x = 5")
+    text = _regie(advance_ladder(2, 1, "correct"), v, "3x = 15", "3x = 15")
+    assert "NIEMALS nennen" not in text
+    assert "geloest" in text

@@ -166,25 +166,31 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
 }
 
 // Schnell-Antworten: ein Tipp genuegt – junge Schueler muessen nicht tippen.
+//
+// Die Beschriftung ist uebersetzt, der GESENDETE Text bleibt immer deutsch:
+// die Absichts-Erkennung im Backend kennt nur deutsche Muster, weshalb jeder
+// englische Knopf als blosses Reden ankam. Sichtbare Folge: der Knopf «Show me
+// the full solution» erschien – und die Loesung wurde dann verweigert. Der
+// Tutor antwortet trotzdem auf Englisch, das steuert die Regie-Anweisung.
 function QuickReplies({ solved, unlocked, onSend, onNew, onVariant }) {
   const { t } = useLang();
   const items = solved
     ? [
         ...(onVariant ? [{ label: t("🔁 Nochmal so eine", "🔁 Another one like this"), act: onVariant, accent: true }] : []),
-        { label: t("🎯 Erklär mir den Weg nochmal", "🎯 Explain the path again"), act: () => onSend(t("Erklär mir den Lösungsweg nochmal Schritt für Schritt.", "Explain the solution path to me again step by step.")) },
+        { label: t("🎯 Erklär mir den Weg nochmal", "🎯 Explain the path again"), act: () => onSend("Erklär mir den Lösungsweg nochmal Schritt für Schritt.") },
         { label: t("➕ Neue Aufgabe", "➕ New task"), act: onNew },
       ]
     : [
         // verdient nach 2 eigenen Versuchen: die Loesung ist jetzt abholbar
-        ...(unlocked ? [{ label: t("🔓 Zeig mir die ganze Lösung", "🔓 Show me the full solution"), act: () => onSend(t("Zeig mir die Lösung bitte.", "Please show me the solution.")), accent: true }] : []),
-        { label: t("🤔 Ich verstehe es nicht", "🤔 I don't get it"), act: () => onSend(t("Ich verstehe es nicht.", "I don't understand it.")) },
-        { label: t("💡 Gib mir einen Tipp", "💡 Give me a hint"), act: () => onSend(t("Gib mir bitte einen Tipp.", "Please give me a hint.")) },
-        { label: t("👣 Zeig mir den ersten Schritt", "👣 Show me the first step"), act: () => onSend(t("Zeig mir bitte den ersten Schritt.", "Please show me the first step.")) },
+        ...(unlocked ? [{ label: t("🔓 Zeig mir die ganze Lösung", "🔓 Show me the full solution"), act: () => onSend("Zeig mir die Lösung bitte."), accent: true }] : []),
+        { label: t("🤔 Ich verstehe es nicht", "🤔 I don't get it"), act: () => onSend("Ich verstehe es nicht.") },
+        { label: t("💡 Gib mir einen Tipp", "💡 Give me a hint"), act: () => onSend("Gib mir bitte einen Tipp.") },
+        { label: t("👣 Zeig mir den ersten Schritt", "👣 Show me the first step"), act: () => onSend("Zeig mir bitte den ersten Schritt.") },
         // andere DARSTELLUNG derselben Stufe – Hilfe-Stufe steigt dabei nicht
-        { label: t("🎨 Mit Skizze", "🎨 With a sketch"), act: () => onSend(t("Kannst du es mir mit einer Skizze zeigen?", "Can you show it to me with a sketch?")) },
-        { label: t("🍕 Mit Alltagsbeispiel", "🍕 With an everyday example"), act: () => onSend(t("Erklär es mir mit einem Beispiel aus dem Alltag.", "Explain it to me with an everyday example.")) },
-        { label: t("🔢 Mit Zahlen statt x", "🔢 With numbers instead of x"), act: () => onSend(t("Erklär es mir mit konkreten Zahlen statt mit x.", "Explain it to me with concrete numbers instead of x.")) },
-        { label: t("🐢 Erklär es einfacher", "🐢 Explain it more simply"), act: () => onSend(t("Kannst du es mir einfacher erklären?", "Can you explain it to me more simply?")) },
+        { label: t("🎨 Mit Skizze", "🎨 With a sketch"), act: () => onSend("Kannst du es mir mit einer Skizze zeigen?") },
+        { label: t("🍕 Mit Alltagsbeispiel", "🍕 With an everyday example"), act: () => onSend("Erklär es mir mit einem Beispiel aus dem Alltag.") },
+        { label: t("🔢 Mit Zahlen statt x", "🔢 With numbers instead of x"), act: () => onSend("Erklär es mir mit konkreten Zahlen statt mit x.") },
+        { label: t("🐢 Erklär es einfacher", "🐢 Explain it more simply"), act: () => onSend("Kannst du es mir einfacher erklären?") },
       ];
   return (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 2px 9px", WebkitOverflowScrolling: "touch" }}>

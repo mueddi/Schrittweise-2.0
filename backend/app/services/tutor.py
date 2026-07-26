@@ -82,46 +82,74 @@ SO ERKLAERST DU (SEHR WICHTIG):
 Du bekommst pro Nachricht eine REGIE-ANWEISUNG mit: erlaubter Stufe, SymPy-Pruefergebnis und Anzahl eigener Versuche. Halte dich strikt daran. Die interne Loesung, falls mitgegeben, verwendest du HOECHSTENS auf Stufe 4."""
 
 
-# "loesung" (oe), "lösung", "losung" alle abdecken
-_LOESUNG = r"l(?:oe|ö|o)sung"
+# Die App richtet sich an Schweizer Kinder – viele schreiben Mundart. Fruehere
+# Muster kannten nur Hochdeutsch, also fiel JEDE Mundart-Nachricht in den
+# "talk"-Zweig («das ist kein Hilferuf»): «nei ich verstahs nöd», «chasch mir
+# helfe», «zeig mer d lösig» blieben ohne jede Wirkung, und die Hilfe-Leiter
+# stand fuer solche Kinder still. Darum ueberall die Mundart-Varianten dazu.
+_NICHT = r"(?:nichts?|nöd|noed|nid|ned)"
+# "loesung" (oe), "lösung", "losung", Mundart "lösig" alle abdecken
+_LOESUNG = r"l(?:oe|ö|o)s(?:un|i)?g"
 _ZIEL = rf"(?:{_LOESUNG}|antwort|ergebnis|resultat)"
+# Verneintes oder rueckfragendes Reden UEBER die Loesung ist kein Betteln:
+# «zeig mir nicht die Loesung», «verrate mir die Loesung nicht», «sag mal, wie
+# kommst du auf die Loesung?» loesten bisher das Abfuhr-Skript aus.
+_KEIN_BETTELN = re.compile(
+    rf"\b{_NICHT}\b\s*(?:die|das|der|den|d)?\s*{_ZIEL}"
+    rf"|{_ZIEL}[^.?!]{{0,20}}\b{_NICHT}\b"
+    rf"|\bwie\s+(?:kommst|kommt|komme|komm|chunnsch|chunt|chum)\b"
+)
 # Echte AUFFORDERUNG nach dem Ziel («gib mir die Loesung»), nicht blosse
 # Erwaehnung («ich verstehe die Loesung nicht», «wie kommst du auf das
 # Ergebnis?»). \b haelt «Antwort» von «beantworten» fern.
+# Verb-Stamm + \w*, damit auch die hoefliche Form greift: «zeige/sage/löse»
+# fielen an der Wortgrenze durch und landeten in "talk".
 _FORDERUNG = (
-    rf"\b(?:gib|gebt|sag|sags|zeig|zeigs|nenn|nenne|verrat|verrate|schreib|"
-    rf"schreibe|loes|loese|l[oö]s|l[oö]se)\b[^.?!]{{0,30}}\b{_ZIEL}\b"
-    rf"|\bwie\s+(?:lautet|heisst|hei[sß]t|ist)\s+(?:die|das|der)\s+{_ZIEL}\b"
-    rf"|\b(?:nur|einfach|bitte)\s+(?:die|das)\s+{_ZIEL}\b"
+    rf"\b(?:gib|gebt|gimme|sag|zeig|nenn|verrat|schreib|l[oö]se?|zeis)\w*"
+    rf"\b[^.?!]{{0,30}}\b{_ZIEL}\b"
+    rf"|\bwie\s+(?:lautet|heisst|hei[sß]t|ist|isch)\s+(?:die|das|der|d)\s*{_ZIEL}\b"
+    rf"|\b(?:nur|einfach|bitte)\s+(?:die|das|d)\s+{_ZIEL}\b"
+    rf"|\bich\s+(?:will|wott|möcht\w*|moecht\w*|brauch\w*)\b[^.?!]{{0,20}}\b{_ZIEL}\b"
     rf"|\b{_ZIEL}\s*(?:bitte|🙏)"
 )
 BETTEL_PATTERNS = [
-    rf"gib (mir )?die {_LOESUNG}", rf"sag(?:s)? mir die {_LOESUNG}", rf"was ist die {_LOESUNG}",
-    r"einfach die antwort", r"sag einfach", r"verrat", rf"{_LOESUNG} bitte", r"nur die antwort",
+    rf"gib (mir |mer )?die {_LOESUNG}", rf"sag(?:s)? (mir|mer) die {_LOESUNG}",
+    rf"was (ist|isch) die {_LOESUNG}",
+    r"einfach die antwort", r"sag einfach", rf"{_LOESUNG} bitte", r"nur die antwort",
     r"gib die antwort", r"sag mir das ergebnis", rf"{_LOESUNG}\s*🙏", r"bitte die antwort",
+    # «verrat» allein traf auch «ich verrate dir nichts» – nur mit Ziel-Wort
+    rf"verrat\w*\s+(?:mir\s+|mer\s+|uns\s+)?(?:die|das|den|d)?\s*{_ZIEL}",
     # generischer: «zeig/nenn/sag mir … Loesung/Antwort/Ergebnis», «wie lautet die Antwort»
-    rf"zeig (mir )?(die|den|das)? ?{_ZIEL}", rf"nenn(e)? (mir )?(die|das)? ?{_ZIEL}",
-    rf"wie (lautet|heisst|ist) (die|das) {_ZIEL}", rf"sag (mir )?(die|das) {_ZIEL}",
-    rf"gib (mir )?(die|das) {_ZIEL}", rf"was ist (die|das) {_ZIEL}", rf"loes(e)? (es |die aufgabe )?fuer mich",
+    rf"zeig\w* (mir |mer )?(die|den|das|d)? ?{_ZIEL}", rf"nenn(e)? (mir |mer )?(die|das)? ?{_ZIEL}",
+    rf"wie (lautet|heisst|ist|isch) (die|das|d) ?{_ZIEL}", rf"sag\w* (mir |mer )?(die|das) {_ZIEL}",
+    rf"gib\w* (mir |mer )?(die|das) {_ZIEL}", rf"was (ist|isch) (die|das|d) ?{_ZIEL}",
+    r"l[oö]se?\w*\s+(?:es\s+|die\s+aufgabe\s+)?f[üu](?:e)?r\s+mich",
 ]
 # «Ich verstehe es nicht» / «erklär es einfacher»: der Schueler braucht KEINE
 # neue Hilfestufe, sondern DIESELBE Erklaerung in einfacheren Worten. Diese
 # Muster duerfen die Leiter deshalb NICHT hochtreiben.
 SIMPLER_PATTERNS = [
     # bis zu ~4 Woerter zwischen «versteh…» und «nicht» zulassen, damit auch
-    # «ich verstehe die Loesung/den Schritt nicht» greift (vorher nur «es nicht»)
-    r"einfacher", r"versteh\w*\b[^.?!]{0,28}\bnicht", r"kapier", r"check(e)? (es |das )?nicht",
+    # «ich verstehe die Loesung/den Schritt nicht» greift (vorher nur «es nicht»);
+    # «verstah…» ist die Mundart-Form («ich verstahs nöd»)
+    r"einfacher", rf"(?:versteh|verstah)\w*\b[^.?!]{{0,28}}\b{_NICHT}\b", r"kapier",
+    rf"check(e)? (es |das )?{_NICHT}",
     r"nochmal erkl[aä]r", r"erkl[aä]r.{0,20}nochmal", r"zu schwierig", r"zu kompliziert",
     # «Erklaer's anders»-Chips: andere DARSTELLUNG derselben Stufe, kein Stufen-Anstieg
     r"skizze", r"zeichn", r"alltag", r"beispiel aus", r"konkreten zahlen", r"zahlen statt",
 ]
 HILFE_PATTERNS = [
-    r"weiss (es )?nicht", r"keine ahnung", r"komm(e)? nicht weiter", r"h[aä]nge", r"h[iä]lfe",
-    r"tipp", r"hinweis", r"n[aä]chste stufe",
-    r"wie (geht|mach|anfangen|weiter)", r"was (jetzt|nun|soll ich)", r"stecke fest",
+    rf"weiss (es )?{_NICHT}", r"keine ahnung", rf"komm(e)? {_NICHT} weiter", r"h[aä]nge",
+    r"h[iää]lfe", r"h[aä]lf", r"helfe", r"tipp", r"hinweis", r"n[aä]chste stufe", r"\bstufe \d",
+    r"wie (geht|gaht|mach|machi|anfangen|weiter)", r"was (jetzt|nun|soll ich)", r"stecke fest",
     # Ausdrueckliche Bitte um den naechsten Schritt – echter Hilferuf, der die
     # Leiter hochtreiben darf (faellt sonst in den neuen "talk"-Zweig).
     r"ersten schritt", r"n(ae|ä)chste[nrs]? schritt", r"zeig.{0,20}schritt", r"hilf mir",
+    # Mundart + fehlende hochdeutsche Formen (vorher alle "talk"):
+    # «chasch mir helfe», «ich cha das nid», «ich kann das nicht»,
+    # «wie fange ich an», «was muss ich zuerst machen»
+    r"\bchasch\b", rf"\bcha\w*\b[^.?!]{{0,20}}\b{_NICHT}\b", rf"kann (das |es |ich )?{_NICHT}",
+    r"wo (fange|fang) ich an", r"wie (fange|fang) ich an", r"(muss|soll) ich zuerst",
 ]
 
 
@@ -133,9 +161,12 @@ def detect_intent(message: str, verification: Verification) -> str:
     hoch – mehr Hilfe gibt es nur bei Fehlern ('attempt') oder auf Anfrage.
     """
     low = message.lower()
+    # «zeig mir NICHT die Loesung» / «wie kommst du auf die Loesung?» sind kein
+    # Betteln – vorher liefen beide ins Abfuhr-Skript.
+    bettelt = not _KEIN_BETTELN.search(low)
     if verification.status == "correct":
         return "correct"
-    if any(re.search(p, low) for p in BETTEL_PATTERNS):
+    if bettelt and any(re.search(p, low) for p in BETTEL_PATTERNS):
         return "plea"
     if verification.status == "partial":
         return "step"
@@ -152,7 +183,7 @@ def detect_intent(message: str, verification: Verification) -> str:
     # Fragt nach Loesung/Antwort/Ergebnis OHNE eigenen Rechenversuch -> Betteln.
     # Nur mit Wortgrenze UND nur als echte Aufforderung: das blosse Vorkommen
     # des Wortes reicht nicht («wie kommst du auf diese Loesung?»).
-    if re.search(_FORDERUNG, low):
+    if bettelt and re.search(_FORDERUNG, low):
         return "plea"
     if any(re.search(p, low) for p in HILFE_PATTERNS):
         return "stuck"
@@ -171,17 +202,26 @@ class LadderStep:
     permit_solution: bool
 
 
-def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attempts: int = 2) -> LadderStep:
-    """Deterministische Zustandsmaschine der Hinweis-Leiter."""
+def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attempts: int = 2,
+                   turns: int = 0) -> LadderStep:
+    """Deterministische Zustandsmaschine der Hinweis-Leiter.
+
+    ``turns``: bisherige Nachrichten in dieser Aufgabe – nur als Notausgang,
+    damit ein sichtlich festgefahrenes Gespraech nicht ewig blockiert.
+    """
     solved = intent == "correct"
     if solved:
         return LadderStep(intent, max(current_stage, 1), own_attempts, True, False)
 
     if intent == "plea":
-        # Verdiente Freigabe: wer auf hoher Stufe schon genug eigene Versuche
-        # gemacht hat, bekommt die Loesung auf Nachfrage WIRKLICH – sonst
-        # waere die Regel «nach 2 Versuchen» nie aktiv nutzbar.
-        if current_stage >= 3 and own_attempts >= min_attempts:
+        # Verdiente Freigabe: wer genug eigene Versuche gemacht hat, bekommt die
+        # Loesung auf Nachfrage WIRKLICH – sonst waere die Regel «nach 2 eigenen
+        # Versuchen» nie aktiv nutzbar.
+        # Die zusaetzliche Bedingung «Stufe >= 3» ist bewusst weg: wer selbst
+        # rechnet, bleibt auf Stufe 1 (eigene Schritte erhoehen sie nicht) und
+        # wurde deshalb FUER IMMER abgewiesen – gerade die fleissigen Kinder.
+        # Notausgang: langes Gespraech mit mindestens einem eigenen Versuch.
+        if own_attempts >= min_attempts or (own_attempts >= 1 and turns >= 12):
             return LadderStep(intent, 4, own_attempts, False, True)
         # Betteln davor: Stufe bleibt, kein Versuch gezaehlt
         stage = max(current_stage, 1)
@@ -201,13 +241,10 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
 
     if intent == "attempt":
         own_attempts += 1
-    elif intent == "stuck" and current_stage >= 3:
-        # Wer auf der hoechsten Hinweis-Stufe NOCHMAL um Hilfe bittet, hat sich
-        # erkennbar bemueht – das zaehlt als eigener Versuch. Sonst blockiert
-        # die Leiter fuer immer bei 3: Stufe 4 verlangt zwei Versuche, aber
-        # blosses Nachfragen zaehlte nie einen (real beobachtet: 19 Nachrichten
-        # auf Stufe 3, own_attempts = 0).
-        own_attempts += 1
+    # Frueher zaehlte hier eine Hilfe-Bitte ab Stufe 3 als eigener Versuch,
+    # damit die Leiter nicht bei 3 einfriert. Das hoehlte die Zusage aus:
+    # fuenfmal «Tipp» druecken gab die volle Loesung frei, ohne dass das Kind
+    # je gerechnet hatte. Das Einfrieren loest jetzt die plea-Regel oben.
 
     # Mehr Hilfe noetig (Fehler oder Hilfe-Anfrage): eine Sprosse hoeher, Deckel bei 4
     stage = min(max(current_stage, 0) + 1, 4)
@@ -284,7 +321,13 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     unsicher = ("  ACHTUNG: dieser Wert stammt aus der Bild-Erkennung und kann auf einer"
                 " falsch gelesenen Aufgabe beruhen. Widerspricht er dem BILD, gilt das BILD –"
                 " dann rechne neu und nenne den Wert nicht." if from_image else "")
-    if step.permit_solution and (step.solved or step.allowed_stage >= 4) and solution_ok:
+    # Zeigen darf der Tutor, wenn die Aufgabe geloest ist ODER Stufe 4 erreicht
+    # ist ODER diese Runde ausdruecklich freigegeben wurde. Vorher stand in
+    # genau dem Moment, in dem das Kind loeste, beides gleichzeitig da: «Die
+    # Aufgabe ist geloest, du darfst den vollen Loesungsweg erklaeren» UND
+    # «dem Schueler NIEMALS nennen, Stufe 4 ist NICHT freigegeben».
+    darf_zeigen = step.solved or step.allowed_stage >= 4 or step.permit_solution
+    if darf_zeigen and solution_ok:
         lines.append(f"- Stufe 4 freigegeben. Interne Loesung (jetzt zeigbar): {verification.solution}{unsicher}")
     elif solution_ok:
         # Loesung als Orientierung mitgeben: der Tutor zielt damit in jedem
