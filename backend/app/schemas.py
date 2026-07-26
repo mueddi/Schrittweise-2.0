@@ -120,6 +120,10 @@ class TopicUpdate(BaseModel):
     name: str | None = None
     category: str | None = None
     color: str | None = None
+    # Lernziele (eine pro Zeile) – Grundlage der Probepruefung.
+    # ``archived_at`` steht BEWUSST nicht hier: archivieren/wiederherstellen
+    # laeuft ueber die eigenen Endpunkte, nicht als Nebeneffekt eines PATCH.
+    learning_goals: str | None = None
 
 
 class TopicOut(BaseModel):
@@ -128,12 +132,59 @@ class TopicOut(BaseModel):
     name: str
     category: str
     color: str
+    learning_goals: str = ""
+    archived_at: datetime | None = None
     created_at: datetime
     # abgeleitete Felder (grober Trend):
     exercise_count: int = 0
     solved_count: int = 0
     progress_label: str = "Neu"
     progress_pct: int = 0
+    # Noten des Themas (nur im Detail gefuellt, in der Liste 0/None)
+    grade_count: int = 0
+    grade_avg: float | None = None
+
+
+# ---------- Noten ----------
+class GradeIn(BaseModel):
+    """Note, die der Schueler selbst erfasst.
+
+    Schweizer Skala 1.0–6.0. Die Grenzen stehen hier und nicht nur im Router,
+    damit eine ungueltige Note gar nicht erst ankommt (422 statt 400).
+    """
+    value: float = Field(ge=1.0, le=6.0)
+    taken_on: date
+    topic_id: int | None = None
+    label: str = Field(default="", max_length=120)
+
+
+class GradeUpdate(BaseModel):
+    value: float | None = Field(default=None, ge=1.0, le=6.0)
+    taken_on: date | None = None
+    topic_id: int | None = None
+    label: str | None = Field(default=None, max_length=120)
+
+
+class GradeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    value: float
+    taken_on: date
+    topic_id: int | None
+    label: str
+    source: str
+    exam_id: int | None
+    created_at: datetime
+
+
+class GradeVerlauf(BaseModel):
+    """Zeitreihe plus die zwei Zahlen, die Eltern wirklich lesen."""
+    noten: list[GradeOut]
+    schnitt: float | None = None
+    # Schnitt der jeweils letzten/vorletzten Haelfte – gleiche Idee wie der
+    # Wochen-Trend im Eltern-Dashboard (aggregates.build_summary)
+    trend: str = "gleich"  # "besser" | "gleich" | "schlechter"
+    bestanden_anteil: float | None = None  # Anteil Noten >= 4.0
 
 
 # ---------- Exercises ----------

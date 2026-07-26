@@ -1,11 +1,13 @@
 """Themen-CRUD (manuelle Container) + grober Fortschritt pro Thema."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import require_student
-from ..models import Attempt, Exercise, Topic, User
+from ..models import Attempt, Exercise, Grade, Topic, User
 from ..schemas import ExerciseListItem, TopicCreate, TopicOut, TopicUpdate
 
 router = APIRouter(prefix="/api/topics", tags=["topics"])
@@ -35,12 +37,24 @@ def _to_out(db: Session, topic: Topic) -> TopicOut:
     out.solved_count = solved
     out.progress_pct = pct
     out.progress_label = _progress(pct, ex_count > 0)
+    # Noten des Themas: der Schnitt ist die Zahl, nach der Eltern zuerst schauen
+    noten = list(db.scalars(select(Grade.value).where(Grade.topic_id == topic.id)))
+    out.grade_count = len(noten)
+    out.grade_avg = round(sum(noten) / len(noten), 2) if noten else None
     return out
 
 
 @router.get("", response_model=list[TopicOut])
-def list_topics(user: User = Depends(require_student), db: Session = Depends(get_db)):
-    topics = db.scalars(select(Topic).where(Topic.user_id == user.id).order_by(Topic.created_at)).all()
+def list_topics(archiviert: bool = Query(default=False),
+                user: User = Depends(require_student), db: Session = Depends(get_db)):
+    """Standardmaessig nur AKTIVE Themen.
+
+    Archivierte gehoeren nicht in die Seitenleiste und nicht ins Raster – sonst
+    waere Archivieren wirkungslos. Mit ``?archiviert=true`` kommt das Archiv.
+    """
+    q = select(Topic).where(Topic.user_id == user.id)
+    q = q.where(Topic.archived_at.is_not(None) if archiviert else Topic.archived_at.is_(None))
+    topics = db.scalars(q.order_by(Topic.created_at)).all()
     return [_to_out(db, t) for t in topics]
 
 
@@ -90,13 +104,61 @@ def topic_exercises(topic_id: int, user: User = Depends(require_student), db: Se
     return items
 
 
-@router.delete("/{topic_id}", status_code=204)
-def delete_topic(topic_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
+def _eigenes(db: Session, topic_id: int, user: User) -> Topic:
     topic = db.get(Topic, topic_id)
     if topic is None or topic.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Thema nicht gefunden")
+    return topic
+
+
+@router.post("/{topic_id}/archivieren", response_model=TopicOut)
+def archive_topic(topic_id: int, user: User = Depends(require_student),
+                  db: Session = Depends(get_db)):
+    """Thema aus dem Weg raeumen, ohne etwas zu verlieren.
+
+    Der Normalfall fuer ein abgeschlossenes Thema: Aufgaben, Verlauf und
+    besonders die NOTEN bleiben unangetastet und jederzeit einsehbar.
+    """
+    topic = _eigenes(db, topic_id, user)
+    if topic.archived_at is None:
+        topic.archived_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(topic)
+    return _to_out(db, topic)
+
+
+@router.post("/{topic_id}/wiederherstellen", response_model=TopicOut)
+def unarchive_topic(topic_id: int, user: User = Depends(require_student),
+                    db: Session = Depends(get_db)):
+    topic = _eigenes(db, topic_id, user)
+    topic.archived_at = None
+    db.commit()
+    db.refresh(topic)
+    return _to_out(db, topic)
+
+
+@router.delete("/{topic_id}", status_code=204)
+def delete_topic(topic_id: int, trotzdem: bool = Query(default=False),
+                 user: User = Depends(require_student), db: Session = Depends(get_db)):
+    """Thema wirklich loeschen.
+
+    Haengen Noten daran, wird zuerst abgelehnt (409) und auf Archivieren
+    verwiesen: eine Notenhistorie ist nicht wiederherstellbar, ein Klick aus
+    Versehen soll sie nicht vernichten. Mit ``?trotzdem=true`` loescht es
+    wirklich – die Noten bleiben aber erhalten und verlieren nur das Thema.
+    """
+    topic = _eigenes(db, topic_id, user)
+    noten = db.scalars(select(Grade).where(Grade.topic_id == topic.id)).all()
+    if noten and not trotzdem:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"An diesem Thema hängen {len(noten)} Noten. Archiviere es besser – "
+            "dann bleibt der Verlauf erhalten.")
     # Aufgaben nicht loeschen, nur Zuordnung entfernen
     for ex in db.scalars(select(Exercise).where(Exercise.topic_id == topic.id)):
         ex.topic_id = None
+    # Noten ebenfalls NICHT loeschen: die Note gehoert dem Kind, nicht dem Thema
+    for note in noten:
+        note.topic_id = None
     db.delete(topic)
     db.commit()

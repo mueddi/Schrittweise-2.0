@@ -141,6 +141,12 @@ class Topic(Base):
     # grobe Kategorie fuer die Filter-Chips (vom Schueler gewaehlt)
     category: Mapped[str] = mapped_column(String(40), default="andere", nullable=False)
     color: Mapped[str] = mapped_column(String(16), default="#6366f1", nullable=False)
+    # Lernziele, eine pro Zeile – Grundlage der Probepruefung. Frei formuliert,
+    # denn ein Kind schreibt hier ab, was auf dem Arbeitsblatt steht.
+    learning_goals: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    # Archiviert statt geloescht: ein fertiges Thema soll aus dem Weg, die
+    # Noten-Historie muss aber bleiben. NULL = aktiv.
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="topics")
@@ -364,3 +370,79 @@ class Payment(Base):
     amount_rappen: Mapped[int] = mapped_column(Integer, nullable=False)
     tokens: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class Grade(Base):
+    """Schulnote, die der Schueler selbst erfasst – oder die geschaetzte Note
+    aus einer Probepruefung (``source='probe'``).
+
+    Bewusst am Schueler UND optional am Thema: eine Note ohne Thema («Mathe-
+    Prüfung») soll nicht verloren gehen, und ein geloeschtes Thema darf die
+    Note nicht mitnehmen (``topic_id`` wird dann auf NULL gesetzt).
+    """
+
+    __tablename__ = "grades"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    topic_id: Mapped[int | None] = mapped_column(ForeignKey("topics.id"), index=True, nullable=True)
+    # Schweizer Skala 1.0–6.0, eine Dezimalstelle. Float genuegt: es wird nie
+    # damit gerechnet, nur gemittelt und angezeigt.
+    value: Mapped[float] = mapped_column(Float, nullable=False)
+    # Datum der PRUEFUNG, nicht der Erfassung – sonst stimmt der Verlauf nicht.
+    taken_on: Mapped[date] = mapped_column(Date, nullable=False)
+    label: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    # "selbst" = vom Schueler eingetragen, "probe" = aus einer Probepruefung
+    source: Mapped[str] = mapped_column(String(16), default="selbst", nullable=False)
+    exam_id: Mapped[int | None] = mapped_column(ForeignKey("exams.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class ExamStatus(str, enum.Enum):
+    offen = "offen"        # erzeugt, noch nicht abgegeben
+    bewertet = "bewertet"  # abgegeben und korrigiert
+
+
+class Exam(Base):
+    """Eine generierte Probepruefung zu einem Thema."""
+
+    __tablename__ = "exams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"), index=True, nullable=False)
+    status: Mapped[ExamStatus] = mapped_column(Enum(ExamStatus), default=ExamStatus.offen,
+                                               nullable=False)
+    model: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+    # Kopie der Lernziele beim Erzeugen: aendert der Schueler sie spaeter,
+    # bleibt nachvollziehbar, worauf DIESE Pruefung beruhte.
+    learning_goals: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    grade_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+    items: Mapped[list[ExamItem]] = relationship(back_populates="exam",
+                                                 cascade="all, delete-orphan")
+
+
+class ExamItem(Base):
+    """Eine Aufgabe innerhalb einer Probepruefung."""
+
+    __tablename__ = "exam_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id"), index=True, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    # Pruefausdruck fuer SymPy – leer, wenn keiner gewonnen werden konnte.
+    # Dann und NUR dann muss das Modell die Antwort bewerten.
+    math_expression: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    # Welches Lernziel diese Aufgabe abdeckt (Klartext, fuer die Auswertung)
+    goal: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+    student_answer: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # "correct" | "incorrect" | "unknown" (noch nicht bewertet: "")
+    verdict: Mapped[str] = mapped_column(String(16), default="", nullable=False)
+    # Wer hat bewertet: "sympy" (gratis, deterministisch) oder "ki"
+    judged_by: Mapped[str] = mapped_column(String(8), default="", nullable=False)
+
+    exam: Mapped[Exam] = relationship(back_populates="items")

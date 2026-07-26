@@ -4,10 +4,15 @@ import { api } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
 import { useAuth } from "../lib/auth.jsx";
 import { useLang, gradeLabel } from "../lib/i18n.jsx";
+import Noten from "../components/Noten.jsx";
 
 // Themen sind persoenliche Container: Name + Farbe (keine fixen Kategorien).
 const TOPIC_COLORS = ["#6366f1", "#1a7f3c", "#c26a1f", "#d6558e", "#0e8f83", "#6b7280"];
 const LABEL_COLOR = { Sitzt: "#1a7f3c", "Wird besser": "#4f46e5", "Noch üben": "#c0392b", Neu: "#6b7280" };
+const MENU_ITEM = {
+  display: "block", width: "100%", textAlign: "left", border: "none", background: "none",
+  padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#3b3f4a", cursor: "pointer",
+};
 
 function TopicGrid() {
   const shell = useShell();
@@ -24,8 +29,22 @@ function TopicGrid() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState(TOPIC_COLORS[0]);
+  const [imArchiv, setImArchiv] = useState(false);
+  const [archiv, setArchiv] = useState([]);
+  const [menu, setMenu] = useState(null); // id des Themas mit offenem ⋯-Menü
 
-  const topics = shell.topics || [];
+  // Aktive Themen kommen aus der Shell (die lädt sie ohne archivierte);
+  // das Archiv holen wir nur, wenn der Reiter offen ist.
+  const ladeArchiv = useCallback(async () => {
+    try {
+      setArchiv(await api.get("/api/topics?archiviert=true"));
+    } catch {
+      setArchiv([]);
+    }
+  }, []);
+  useEffect(() => { if (imArchiv) ladeArchiv(); }, [imArchiv, ladeArchiv]);
+
+  const topics = imArchiv ? archiv : (shell.topics || []);
 
   async function createTopic() {
     if (!name.trim()) return;
@@ -33,6 +52,44 @@ function TopicGrid() {
     setName("");
     setAdding(false);
     shell.reloadTopics?.();
+  }
+
+  async function archivieren(id) {
+    setMenu(null);
+    await api.post(`/api/topics/${id}/archivieren`);
+    shell.reloadTopics?.();
+    if (imArchiv) ladeArchiv();
+  }
+
+  async function wiederherstellen(id) {
+    setMenu(null);
+    await api.post(`/api/topics/${id}/wiederherstellen`);
+    shell.reloadTopics?.();
+    ladeArchiv();
+  }
+
+  async function loeschen(k) {
+    setMenu(null);
+    if (!window.confirm(t(`«${k.name}» wirklich löschen? Die Aufgaben bleiben erhalten.`,
+                          `Really delete “${k.name}”? The tasks will be kept.`))) return;
+    try {
+      await api.del(`/api/topics/${k.id}`);
+    } catch (e) {
+      // 409: am Thema hängen Noten. Der Server sagt, warum – und Archivieren
+      // ist hier fast immer das Richtige, deshalb direkt anbieten.
+      if (e?.status === 409) {
+        if (window.confirm(`${e.message}\n\n${t("Jetzt stattdessen archivieren?", "Archive it instead?")}`)) {
+          return archivieren(k.id);
+        }
+        if (!window.confirm(t("Trotzdem löschen? Die Noten bleiben erhalten, verlieren aber das Thema.",
+                              "Delete anyway? The grades are kept but lose their topic."))) return;
+        await api.del(`/api/topics/${k.id}?trotzdem=true`);
+      } else {
+        return;
+      }
+    }
+    shell.reloadTopics?.();
+    if (imArchiv) ladeArchiv();
   }
 
   return (
@@ -44,6 +101,19 @@ function TopicGrid() {
             <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 18 }}>{gradeLabel(user?.grade_level, lang)} · Lehrplan 21</div>
           </div>
           <button onClick={() => setAdding((v) => !v)} className="btn-primary" style={{ padding: "10px 16px", borderRadius: 11, fontSize: 13, border: "none" }}>{t("+ Neues Thema", "+ New topic")}</button>
+        </div>
+        {/* Reiter: aktive Themen / Archiv. Der Reiter erscheint erst, wenn es
+            wirklich etwas Archiviertes gibt – sonst ist er nur Ballast. */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {[[false, t("Aktive Themen", "Active topics")], [true, t("Archiv", "Archive")]].map(([wert, beschriftung]) => (
+            <button key={String(wert)} onClick={() => setImArchiv(wert)}
+                    style={{ border: "1px solid", borderColor: imArchiv === wert ? "#c9ccf6" : "#e7e8ee",
+                             background: imArchiv === wert ? "#eef0fe" : "#fff",
+                             color: imArchiv === wert ? "#4f46e5" : "#6b7280",
+                             borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+              {beschriftung}
+            </button>
+          ))}
         </div>
         {adding && (
           <div className="popin" style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, background: "#fff", border: "1px solid #e7e8ee", borderRadius: 14, padding: 12, flexWrap: "wrap" }}>
@@ -73,13 +143,36 @@ function TopicGrid() {
           const fg = k.color || "#6366f1";
           const bg = `${fg}1f`; // Themen-Farbe mit leichter Deckkraft als Hintergrund
           return (
-            <div key={k.id} onClick={() => nav(`/app/themen/${k.id}`)} style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 18, boxShadow: "0 1px 2px rgba(40,40,90,.04)", cursor: "pointer" }}>
+            <div key={k.id} onClick={() => nav(`/app/themen/${k.id}`)} style={{ position: "relative", background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 18, boxShadow: "0 1px 2px rgba(40,40,90,.04)", cursor: "pointer", opacity: imArchiv ? 0.75 : 1 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <span style={{ width: 36, height: 36, borderRadius: 11, fontWeight: 800, fontSize: 15, display: "grid", placeItems: "center", background: bg, color: fg }}>{k.name.charAt(0).toUpperCase()}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px", background: bg, color: LABEL_COLOR[k.progress_label] || fg }}>{LABEL_TEXT[k.progress_label] || k.progress_label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px", background: bg, color: LABEL_COLOR[k.progress_label] || fg }}>{LABEL_TEXT[k.progress_label] || k.progress_label}</span>
+                  <button onClick={(e) => { e.stopPropagation(); setMenu(menu === k.id ? null : k.id); }}
+                          aria-label={t("Mehr", "More")} title={t("Mehr", "More")}
+                          style={{ border: "none", background: "none", color: "#b6bcc6", cursor: "pointer", fontSize: 17, lineHeight: 1, padding: "0 2px" }}>⋯</button>
+                </div>
               </div>
+              {menu === k.id && (
+                <div onClick={(e) => e.stopPropagation()} className="popin"
+                     style={{ position: "absolute", top: 52, right: 14, zIndex: 5, background: "#fff", border: "1px solid #e7e8ee", borderRadius: 12, boxShadow: "0 6px 20px rgba(40,40,90,.12)", overflow: "hidden", minWidth: 168 }}>
+                  {imArchiv ? (
+                    <button onClick={() => wiederherstellen(k.id)} style={MENU_ITEM}>{t("↩ Wiederherstellen", "↩ Restore")}</button>
+                  ) : (
+                    <button onClick={() => archivieren(k.id)} style={MENU_ITEM}>{t("📦 Archivieren", "📦 Archive")}</button>
+                  )}
+                  <button onClick={() => loeschen(k)} style={{ ...MENU_ITEM, color: "#c0392b" }}>{t("🗑 Löschen", "🗑 Delete")}</button>
+                </div>
+              )}
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{k.name}</div>
-              <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>{k.solved_count}/{k.exercise_count} {t("gelöst", "solved")}</div>
+              <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>
+                {k.solved_count}/{k.exercise_count} {t("gelöst", "solved")}
+                {k.grade_avg != null && (
+                  <> · <span style={{ fontWeight: 700, color: k.grade_avg >= 4 ? "#1a7f3c" : "#c0392b" }}>
+                    ⌀ {k.grade_avg.toFixed(1)}
+                  </span></>
+                )}
+              </div>
               <div style={{ height: 6, borderRadius: 999, background: "#eef0f3", overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${k.progress_pct}%`, background: k.progress_pct >= 90 ? "#1a7f3c" : "#6366f1" }} />
               </div>
@@ -87,6 +180,62 @@ function TopicGrid() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// Lernziele: die Grundlage der Probeprüfung. Frei formuliert, eine pro Zeile –
+// ein Kind schreibt hier ab, was auf dem Arbeitsblatt oder an der Tafel steht.
+function Lernziele({ topicId, start, onSaved }) {
+  const { t } = useLang();
+  const [text, setText] = useState(start);
+  const [offen, setOffen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Wechselt das Thema (oder kommen die Themen erst nach), Feld nachziehen
+  useEffect(() => { setText(start); }, [start, topicId]);
+
+  async function speichern() {
+    setBusy(true);
+    try {
+      await api.patch(`/api/topics/${topicId}`, { learning_goals: text });
+      onSaved?.();
+      setOffen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const zeilen = text.split("\n").map((z) => z.trim()).filter(Boolean);
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 18, marginBottom: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{t("Lernziele", "Learning goals")}</div>
+        <button onClick={() => setOffen((v) => !v)}
+                style={{ border: "1px solid #dcdff5", background: "#f8f8ff", color: "#4f46e5", borderRadius: 999, padding: "6px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+          {offen ? t("Abbrechen", "Cancel") : zeilen.length ? t("Bearbeiten", "Edit") : t("+ Ziele erfassen", "+ Add goals")}
+        </button>
+      </div>
+      {offen ? (
+        <div className="popin" style={{ marginTop: 12 }}>
+          <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={4}
+                    placeholder={t("Was sollst du am Ende können? Ein Ziel pro Zeile, z.B.:\nBrüche kürzen\nBrüche addieren",
+                                   "What should you be able to do? One goal per line, e.g.:\nreduce fractions\nadd fractions")}
+                    style={{ width: "100%", boxSizing: "border-box", border: "1px solid #d2d4dd", borderRadius: 10, padding: "10px 12px", fontSize: 14, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+          <button onClick={speichern} disabled={busy} className="btn-primary"
+                  style={{ marginTop: 8, padding: "9px 16px", borderRadius: 10, fontSize: 13, border: "none", opacity: busy ? 0.6 : 1 }}>
+            {t("Speichern", "Save")}
+          </button>
+        </div>
+      ) : zeilen.length === 0 ? (
+        <div style={{ fontSize: 13, color: "#6b7280", marginTop: 10 }}>
+          {t("Noch keine Lernziele. Sie sind die Grundlage für die Probeprüfung.",
+             "No learning goals yet. They're the basis for the practice test.")}
+        </div>
+      ) : (
+        <ul style={{ margin: "10px 0 0", paddingLeft: 20, fontSize: 13.5, color: "#3b3f4a", lineHeight: 1.7 }}>
+          {zeilen.map((z, i) => <li key={i}>{z}</li>)}
+        </ul>
+      )}
     </div>
   );
 }
@@ -133,6 +282,11 @@ function TopicDetail({ topicId }) {
           <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em" }}>{topic?.name || t("Thema", "Topic")}</div>
           <button onClick={() => shell.openNewTask(Number(topicId))} className="btn-primary" style={{ padding: "10px 16px", borderRadius: 11, fontSize: 13, border: "none" }}>{t("+ Neue Aufgabe", "+ New task")}</button>
         </div>
+
+        <Noten topicId={topicId} />
+        <Lernziele topicId={topicId} start={topic?.learning_goals || ""} onSaved={shell.reloadTopics} />
+
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{t("Aufgaben", "Tasks")}</div>
         {exercises.length === 0 && (
           <div style={{ background: "#fff", border: "1px dashed #d2d4dd", borderRadius: 16, padding: 30, textAlign: "center", color: "#6b7280" }}>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "#1a1c22" }}>{t("Noch keine Aufgaben", "No tasks yet")}</div>

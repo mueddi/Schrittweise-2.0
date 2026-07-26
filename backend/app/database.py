@@ -76,6 +76,11 @@ def init_db() -> None:
         # gelten als bestaetigt; NEUE Konten setzt die App explizit auf FALSE.
         ("users", "email_verified", "ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT TRUE NOT NULL"),
         ("messages", "image_path", "ALTER TABLE messages ADD COLUMN image_path VARCHAR(255)"),
+        # Lernziele je Thema (Grundlage der Probepruefung) + Archiv statt Loeschen.
+        # DEFAULT '' NOT NULL, damit Bestands-Themen gueltig bleiben.
+        ("topics", "learning_goals",
+         "ALTER TABLE topics ADD COLUMN learning_goals TEXT DEFAULT '' NOT NULL"),
+        ("topics", "archived_at", "ALTER TABLE topics ADD COLUMN archived_at TIMESTAMP"),
     ]
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
