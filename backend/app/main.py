@@ -106,11 +106,17 @@ def health() -> dict:
     # "mail": kann die App E-Mails verschicken (Passwort-vergessen /
     # E-Mail-Bestaetigung)? "zahlung": sind beide Stripe-Schluessel gesetzt?
     # Nur Booleans – niemals Konfigurationsdetails oder Schluessel selbst.
+    # "rueckkehr_adresse": die oeffentliche Adresse der App, auf die Mail-Links
+    # zurueckfuehren. Kein Geheimnis (sie steht in jeder URL-Zeile), aber der
+    # haeufigste Konfigurationsfehler: steht sie falsch – oder fehlt sie in der
+    # Freigabeliste von Supabase – landet der Klick im Mail auf einer
+    # unerreichbaren Seite. Sichtbar machen erspart das Raten.
     return {
         "status": "ok",
         "app": "schrittweise",
         "mail": bool(settings.supabase_auth_enabled or settings.smtp_enabled),
         "zahlung": settings.payments_enabled,
+        "rueckkehr_adresse": settings.frontend_base_url,
     }
 
 
