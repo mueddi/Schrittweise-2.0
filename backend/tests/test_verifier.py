@@ -1,7 +1,7 @@
 """SymPy-Verifier: Endwerte, Umformungsschritte, Prosa-Robustheit."""
 import pytest
 
-from app.services.sympy_verifier import extract_expression, verify
+from app.services.sympy_verifier import check_reply_math, extract_expression, verify
 
 
 @pytest.mark.parametrize(
@@ -90,12 +90,86 @@ def test_check_reply_math_findet_nur_echte_zahlenfehler():
     assert check_reply_math(r"$$10 - 4 = 7$$")[0][1] == "6"
 
 
-def test_gleichung_mit_zwei_unbekannten_wird_hinterlegt():
+def test_gleichung_mit_zwei_unbekannten_nur_wenn_sie_zu_einer_zahl_aufloest():
     """Regression: «(2*x*5*y*8)/3 = y» fiel durch, weil genau EINE Unbekannte
     verlangt wurde – obwohl verify() die Aufgabe nach x aufloest. Folge: kein
-    Pruefausdruck, der Tutor ohne jede Bodenhaftung (real beobachtet)."""
+    Pruefausdruck, der Tutor ohne jede Bodenhaftung (real beobachtet).
+
+    Die Lockerung darf aber nicht ins Gegenteil kippen: eine Gleichung, die
+    nur SYMBOLISCH aufloest, hat keine eindeutige Antwort. Wird sie trotzdem
+    als Aufgabe hinterlegt, misst verify() jede Schuelerantwort an einem
+    Term wie «(2y-5)/3» und erklaert sie fuer falsch. Lieber keine Pruefung.
+    """
     assert extract_expression("(2*x*5*y*8)/3 = y") == "(2*x*5*y*8)/3 = y"
-    assert extract_expression("3x + 5 = 2y") == "3x + 5 = 2y"
+    assert extract_expression("3x + 5 = 2y") is None  # loest nur symbolisch auf
     # Prosa wird weiterhin sauber abgetrennt und NICHT mitgespeichert
     assert extract_expression("Berechne x wenn 2x+4 = 10") == "2x+4 = 10"
     assert extract_expression("Loese die Gleichung: 5x - 3 = 12") == "5x - 3 = 12"
+
+
+def test_aufgabentext_mit_mehreren_gleichungen_wird_verworfen():
+    """«a = 5, b = 3. Berechne a + b» speicherte «a = 5» als DIE Aufgabe –
+    die richtige Antwort 8 galt danach als falsch. Mehrere Gleichungen in
+    einer Zeile heisst: die erste ist eine Angabe, nicht die Frage."""
+    assert extract_expression("a = 5, b = 3. Berechne a + b") is None
+    assert extract_expression("Loese das Gleichungssystem: x + y = 10 und x - y = 2") is None
+    assert extract_expression("Gegeben ist y = 2x + 1. Wo schneidet sie die x-Achse?") is None
+    # Eine einzelne Gleichung bleibt unberuehrt
+    assert extract_expression("Loese 3x = 15") == "3x = 15"
+
+
+def test_aufgabe_abschreiben_macht_falsches_ergebnis_nicht_richtig():
+    """«2+4 = 7» galt als richtig, weil die LINKE Seite (die abgeschriebene
+    Aufgabe) verglichen wurde. Genau so schreiben Primarschueler ihre Antwort."""
+    assert verify("2 + 4", "2+4 = 7").status == "incorrect"
+    assert verify("348 + 267", "348+267=515").status == "incorrect"
+    # richtig hingeschrieben bleibt richtig
+    assert verify("2 + 4", "2+4 = 6").status == "correct"
+    assert verify("2 + 4", "6").status == "correct"
+    assert verify("2 + 4", "x = 6").status == "correct"
+
+
+def test_zahl_in_einer_ablehnung_ist_keine_antwort():
+    """«5 stimmt nicht» setzte die Aufgabe auf GELOEST, weil nur die Zahl
+    gesehen wurde und kein Wort drumherum."""
+    for msg in ["5 stimmt nicht", "nicht 5", "ist 5 falsch?", "nöd 5", "nei 5"]:
+        assert verify("3x = 15", msg).status == "unknown", msg
+    # die blosse Zahl bleibt eine Antwort
+    assert verify("3x = 15", "5").status == "correct"
+
+
+def test_vorzeichen_als_wort():
+    """«minus 5» wurde als +5 gewertet – das Wort stand da, das Zeichen nicht."""
+    assert verify("3x = 15", "minus 5").status == "incorrect"
+    assert verify("x + 5 = 3", "minus 2").status == "correct"
+
+
+def test_rechenkette_wird_am_ende_bewertet():
+    """«x = 30/2 = 14» galt als richtig, weil der Zwischenwert 30/2 stimmt.
+    Bewertet werden muss die letzte Zahl – die Antwort des Kindes."""
+    assert verify("2x = 30", "x = 30/2 = 14").status == "incorrect"
+    assert verify("2x = 30", "x = 30/2 = 15").status == "correct"
+
+
+def test_antwort_hinter_der_aufgabe_geht_nicht_verloren():
+    """«3x=15 also x=5» und die Schweizer Schreibweise «3x = 15 | :3  x = 5»
+    endeten in «nur die Aufgabe wiederholt» – die Antwort dahinter fiel weg.
+    Ebenso das Komma davor: «3x=15, x=5»."""
+    assert verify("3x = 15", "3x=15 also x=5").status == "correct"
+    assert verify("3x = 15", "3x = 15 | :3  x = 5").status == "correct"
+    assert verify("3x = 15", "3x=15, x=5").status == "correct"
+    assert verify("3x = 15", "ich teile beide seiten durch 3, x = 5").status == "correct"
+    # reines Abschreiben zaehlt weiterhin NICHT als eigener Schritt
+    assert verify("3x = 15", "3x = 15").status == "unknown"
+
+
+def test_keine_korrektur_bei_gerundeten_zahlen():
+    """Unter einer voellig richtigen Tutor-Antwort stand «⚠️ Korrektur»:
+    gerundete Dezimalzahlen sind im Unterricht Absicht, kein Rechenfehler."""
+    assert check_reply_math(r"Ein Drittel ist $\frac{1}{3} = 0.33$") == []
+    assert check_reply_math(r"Also $0.1 + 0.2 = 0.3$") == []
+    assert check_reply_math(r"Das sind $1.000 + 500 = 1.500$ Franken") == []
+    assert check_reply_math(r"Zeit $1:30 = 1.5$ Stunden") == []
+    assert check_reply_math(r"$1/0 = 5$") == []  # sonst stuende «zoo» im Chat
+    # echte Fehler in ganzen Zahlen werden weiterhin gefunden
+    assert check_reply_math(r"Damit $2 + 2 = 5$") == [("2 + 2 = 5", "4")]
