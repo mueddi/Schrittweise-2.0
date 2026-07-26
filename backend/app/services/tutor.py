@@ -333,6 +333,28 @@ HISTORY_LIMIT = 12
 # im Wort gekappt – verrechnet werden ohnehin nur erzeugte Tokens.
 MAX_TOKENS = 700
 
+
+def _thinking_param(model: str) -> dict | None:
+    """Vordenken bewusst ABSCHALTEN – nur fuer Modelle, die den Schalter kennen.
+
+    Sonnet 5 denkt standardmaessig vor, wenn der Parameter fehlt (Sonnet 4.6
+    tat das nicht). Diese Denk-Tokens zaehlen gegen dasselbe max_tokens wie der
+    Antworttext. Real gemessen: 700 Output-Tokens verbraucht, NULL Zeichen Text
+    beim Schueler – die Antwort war komplett Vordenken, das niemand sieht.
+    Beim Turn davor blieben nach dem Denken nur 323 Zeichen, mitten in der
+    Formel abgeschnitten.
+
+    Fuer diesen Tutor ist Vordenken ohnehin verschwendet: er soll in 1-2 kurzen
+    Saetzen auf den Schueler reagieren und bekommt die von SymPy verifizierte
+    Loesung schon als Orientierung mitgeliefert – er muss die Mathematik nicht
+    selbst herleiten. Abschalten macht die Antworten vollstaendig UND spart auf
+    einem Sonnet-Turn rund zwei Drittel der Kosten.
+
+    Haiku 4.5 kennt den Schalter nicht (dort bedeutet «Parameter weglassen»
+    bereits: kein Vordenken) – ein explizites disabled koennte 400 geben.
+    """
+    return {"type": "disabled"} if model == settings.anthropic_model_smart else None
+
 BILD_AUFGABE = "BILD A – die AUFGABENSTELLUNG (unveraendert seit Beginn):"
 BILD_SCHUELER = "BILD B – das hat der Schueler GERADE eben gezeichnet/fotografiert. Lies NUR daraus ab, was wirklich draufsteht:"
 _BILD_LABELS = {BILD_AUFGABE, BILD_SCHUELER}
@@ -455,7 +477,12 @@ def stream_reply(history, step: LadderStep, verification: Verification,
                                     exercise_text=exercise_text)
     produced = False
     try:
-        with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system, messages=messages) as stream:
+        kwargs = {}
+        denken = _thinking_param(model)
+        if denken is not None:
+            kwargs["thinking"] = denken
+        with client.messages.stream(model=model, max_tokens=MAX_TOKENS, system=system,
+                                    messages=messages, **kwargs) as stream:
             for text in stream.text_stream:
                 produced = True
                 yield text

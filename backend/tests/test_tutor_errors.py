@@ -125,3 +125,17 @@ def test_rechenfehler_in_tutorantwort_wird_korrigiert(client, monkeypatch):
 
     with SessionLocal() as db:
         assert any(a.kind == "ki-qualitaet" for a in db.query(Alert).all())
+
+
+def test_vordenken_wird_beim_starken_modell_abgeschaltet():
+    """Sonnet 5 denkt sonst vor – und diese Tokens zaehlen gegen max_tokens.
+
+    Real gemessen: 700 Output-Tokens verbraucht, null Zeichen Text beim
+    Schueler (Nachricht 344), davor 323 Zeichen mitten in der Formel
+    abgeschnitten (Nachricht 342). Haiku kennt den Schalter nicht.
+    """
+    from app.config import settings
+    from app.services.tutor import _thinking_param
+
+    assert _thinking_param(settings.anthropic_model_smart) == {"type": "disabled"}
+    assert _thinking_param(settings.anthropic_model_default) is None
