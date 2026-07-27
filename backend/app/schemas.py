@@ -388,3 +388,68 @@ class LibraryDocUpdate(BaseModel):
 
 
 TokenResponse.model_rebuild()
+
+
+# ---------- Probeprüfung ----------
+class ExamVorschau(BaseModel):
+    """Was eine Probeprüfung kosten würde – VOR dem Klick, ohne einen Rappen."""
+    moeglich: bool
+    grund: str = ""              # falls nicht möglich: warum (Klartext)
+    lernziele: int = 0
+    vorhandene_aufgaben: int = 0
+    kosten_rappen: int = 0       # Schätzung, bewusst der obere Wert
+    guthaben: int = 0            # verbleibende Tokens des Kontos
+
+
+class ExamItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    position: int
+    question: str
+    goal: str
+    student_answer: str
+    image_path: str | None
+    verdict: str
+    judged_by: str
+
+
+class ExamItemAnswer(BaseModel):
+    id: int
+    answer: str = ""
+    image_path: str | None = None
+
+
+class ExamSubmit(BaseModel):
+    antworten: list[ExamItemAnswer]
+
+
+class ExamZiel(BaseModel):
+    """Ein Lernziel mit seiner Trefferquote.
+
+    Nur «sitzt / sitzt nicht» waere entmutigend und zu wenig: 2 von 3 richtig
+    ist etwas ganz anderes als 0 von 3, und das Kind soll das sehen.
+    """
+    name: str
+    richtig: int
+    total: int
+
+
+class ExamOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    topic_id: int
+    status: str
+    learning_goals: str
+    grade_value: float | None
+    created_at: datetime
+    items: list[ExamItemOut] = []
+    # Auswertung (erst nach der Abgabe gefüllt)
+    richtig: int = 0
+    total: int = 0
+    ziele: list[ExamZiel] = []
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _status_wert(cls, v):
+        # Enum -> String, damit die API einen schlichten Wert liefert
+        return getattr(v, "value", v)

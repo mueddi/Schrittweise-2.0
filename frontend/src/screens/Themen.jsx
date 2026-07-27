@@ -5,6 +5,7 @@ import { useShell } from "../components/AppShell.jsx";
 import { useAuth } from "../lib/auth.jsx";
 import { useLang, gradeLabel } from "../lib/i18n.jsx";
 import Noten from "../components/Noten.jsx";
+import PruefungStart from "../components/PruefungStart.jsx";
 
 // Themen sind persoenliche Container: Name + Farbe (keine fixen Kategorien).
 const TOPIC_COLORS = ["#6366f1", "#1a7f3c", "#c26a1f", "#d6558e", "#0e8f83", "#6b7280"];
@@ -285,6 +286,7 @@ function TopicDetail({ topicId }) {
 
         <Noten topicId={topicId} />
         <Lernziele topicId={topicId} start={topic?.learning_goals || ""} onSaved={shell.reloadTopics} />
+        <PruefungStart topicId={topicId} />
 
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{t("Aufgaben", "Tasks")}</div>
         {exercises.length === 0 && (

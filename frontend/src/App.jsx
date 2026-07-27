@@ -7,6 +7,7 @@ import Login from "./screens/Login.jsx";
 import LoginVerify from "./screens/LoginVerify.jsx";
 import AppShell from "./components/AppShell.jsx";
 import Lernen from "./screens/Lernen.jsx";
+import Pruefung from "./screens/Pruefung.jsx";
 import Themen from "./screens/Themen.jsx";
 import Bibliothek from "./screens/Bibliothek.jsx";
 import Eltern from "./screens/Eltern.jsx";
@@ -101,6 +102,7 @@ export default function App() {
         <Route path="lernen/:attemptId" element={<Lernen />} />
         <Route path="themen" element={<Themen />} />
         <Route path="themen/:topicId" element={<Themen />} />
+        <Route path="pruefung/:examId" element={<Pruefung />} />
         <Route path="bibliothek" element={<Bibliothek />} />
         <Route path="eltern" element={<Eltern />} />
         <Route path="preise" element={<Preise />} />
