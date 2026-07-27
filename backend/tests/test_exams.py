@@ -22,11 +22,13 @@ MODELL_ANTWORT = json.dumps([
 ], ensure_ascii=False)
 
 
-def _fake_anthropic(text=MODELL_ANTWORT, fehler=None, aufrufe=None):
+def _fake_anthropic(text=MODELL_ANTWORT, fehler=None, aufrufe=None, calls=None):
     class _Messages:
         def create(self, **kwargs):
             if aufrufe is not None:
                 aufrufe.append(kwargs.get("model"))
+            if calls is not None:
+                calls.append(kwargs)          # vollstaendige Parameter mitschneiden
             if fehler:
                 raise fehler
             return types.SimpleNamespace(
@@ -366,3 +368,93 @@ def test_nur_ein_teil_beantwortet(client, monkeypatch):
     nach_pos = {i["position"]: i for i in e["items"]}
     assert nach_pos[1]["verdict"] == "correct"
     assert nach_pos[2]["verdict"] == "leer"
+
+
+# ---- Warum die Pruefung live nie zustande kam ----
+
+def test_vordenken_wird_beim_starken_modell_abgeschaltet(client, monkeypatch):
+    """DER Fehler, der die Pruefung live lahmgelegt hat.
+
+    Sonnet 5 denkt standardmaessig vor, wenn der Parameter FEHLT (Sonnet 4.6
+    tat das nicht), und die Denk-Tokens zaehlen gegen max_tokens. Im Chat war
+    das schon behoben – hier hatte ich es vergessen, und der Aufruf lief so
+    lange, dass die Plattform die Funktion abschoss: null Pruefungen, null
+    Nutzung, null Alarm. Haiku kennt den Schalter NICHT und wuerde einen
+    Fehler werfen, deshalb darf er dort nicht mitgehen.
+    """
+    calls = []
+    headers = register(client, "denken@test.ch")
+    tid = _thema_mit_zielen(client, headers)
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
+    monkeypatch.setattr(exam_service, "anthropic", _fake_anthropic(calls=calls))
+
+    assert client.post(f"/api/topics/{tid}/pruefung", headers=headers).status_code == 201
+    assert len(calls) == 1
+    assert calls[0]["model"] == settings.anthropic_model_smart
+    assert calls[0].get("thinking") == {"type": "disabled"}
+
+
+def test_kein_vordenk_schalter_fuer_das_standardmodell(client, monkeypatch):
+    """Haiku kennt den Schalter nicht – er darf dort nicht mitgeschickt werden."""
+    calls = []
+    headers = register(client, "denken2@test.ch")
+    tid = _thema_mit_zielen(client, headers)
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
+
+    class _Messages:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RuntimeError("overloaded")   # erzwingt den Wechsel auf Haiku
+            return types.SimpleNamespace(
+                content=[types.SimpleNamespace(type="text", text=MODELL_ANTWORT)],
+                usage=types.SimpleNamespace(input_tokens=1500, output_tokens=1300,
+                                            cache_read_input_tokens=0,
+                                            cache_creation_input_tokens=0))
+
+    class _Client:
+        def __init__(self, api_key, **kwargs):
+            self.messages = _Messages()
+
+    monkeypatch.setattr(exam_service, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    assert client.post(f"/api/topics/{tid}/pruefung", headers=headers).status_code == 201
+    assert calls[1]["model"] == settings.anthropic_model_default
+    assert "thinking" not in calls[1]
+
+
+def test_zeitbudget_passt_unter_den_deckel_der_plattform():
+    """Vercel bricht nach 60 s ab. Es muessen ZWEI Modellversuche hineinpassen.
+
+    Vorher: 20 s Zeitlimit MIT einer SDK-Wiederholung waeren 2x20 pro Modell,
+    also 80 s fuer beide – die Funktion wird abgeschossen, bevor irgendetwas
+    gespeichert oder ein Alarm geschrieben ist.
+    """
+    assert exam_service.CLIENT_TIMEOUT * 2 + 10 < 60
+    assert exam_service.AUSWEICH_DEADLINE + exam_service.CLIENT_TIMEOUT < 60
+
+
+def test_keine_sdk_wiederholung(client, monkeypatch):
+    """max_retries muss 0 sein: die Wiederholung leistet der Modellwechsel.
+    Zwei SDK-Versuche ZUSAETZLICH sprengen das Zeitbudget."""
+    gesehen = {}
+    headers = register(client, "retry@test.ch")
+    tid = _thema_mit_zielen(client, headers)
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
+
+    class _Messages:
+        def create(self, **kwargs):
+            return types.SimpleNamespace(
+                content=[types.SimpleNamespace(type="text", text=MODELL_ANTWORT)],
+                usage=types.SimpleNamespace(input_tokens=1500, output_tokens=1300,
+                                            cache_read_input_tokens=0,
+                                            cache_creation_input_tokens=0))
+
+    class _Client:
+        def __init__(self, api_key, **kwargs):
+            gesehen.update(kwargs)
+            self.messages = _Messages()
+
+    monkeypatch.setattr(exam_service, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    client.post(f"/api/topics/{tid}/pruefung", headers=headers)
+    assert gesehen["max_retries"] == 0
+    assert gesehen["timeout"] == exam_service.CLIENT_TIMEOUT

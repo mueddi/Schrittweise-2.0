@@ -75,7 +75,19 @@ export default function PruefungStart({ topicId }) {
           </button>
         ) : null}
       </div>
-      {fehler && <div style={{ fontSize: 12.5, color: "#c0392b", marginTop: 10 }}>{fehler}</div>}
+      {/* Ohne diesen Satz sieht ein Wartevorgang wie «tut nichts» aus – die
+          KI schreibt acht Aufgaben, das dauert ein paar Sekunden. */}
+      {busy && (
+        <div style={{ fontSize: 12.5, color: "#6b7280", marginTop: 10 }}>
+          {t("Die Aufgaben werden gerade geschrieben – das dauert ein paar Sekunden. Bitte die Seite nicht neu laden.",
+             "Your tasks are being written – this takes a few seconds. Please don't reload the page.")}
+        </div>
+      )}
+      {fehler && (
+        <div style={{ marginTop: 10, background: "#fdecec", border: "1px solid #f3c1bc", borderRadius: 10, padding: "9px 12px", fontSize: 13, color: "#c0392b" }}>
+          {fehler}
+        </div>
+      )}
 
       {alte.filter((p) => p.status === "bewertet").length > 0 && (
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>

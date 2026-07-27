@@ -14,6 +14,7 @@ Zwei Entscheidungen prägen diesen Dienst:
 from __future__ import annotations
 
 import json
+import time
 import logging
 
 from ..config import settings
@@ -29,9 +30,16 @@ except Exception:  # pragma: no cover – Paket fehlt nur in Minimal-Installatio
 AUFGABEN_ZIEL = 8      # so viele Aufgaben werden angefragt
 AUFGABEN_MIN = 3       # darunter ist es keine Prüfung
 MAX_TOKENS = 2000
-# Zeitlimit unter dem Deckel der Hosting-Plattform (Vercel bricht nach 60 s ab),
-# damit die App den Ausfall selbst bemerkt statt abgeschossen zu werden.
-CLIENT_TIMEOUT = 30.0
+# Zeitbudget: Vercel bricht die Anfrage nach 60 s ab. Es müssen ZWEI Modelle
+# hineinpassen (das gewählte und das Ausweich-Modell), plus Reserve für den
+# Rest der Anfrage. Vorher stand hier 30 s MIT einer SDK-Wiederholung – also
+# bis zu 2×30 s allein fürs erste Modell und nochmal so viel fürs zweite,
+# zusammen 120 s gegen eine harte Grenze von 60. Die Funktion wurde
+# abgeschossen, bevor irgendetwas gespeichert oder ein Alarm geschrieben war:
+# in der Datenbank blieb null zurück, und der Knopf «tat nichts».
+CLIENT_TIMEOUT = 20.0
+# Bis hierhin lohnt sich der zweite Anlauf mit dem anderen Modell.
+AUSWEICH_DEADLINE = 25.0
 
 # Geschätzte Kosten in Rappen, die dem Schüler VOR dem Start gezeigt werden.
 # Bewusst der obere Wert: eine Überraschung nach unten ist harmlos, eine nach
@@ -126,20 +134,33 @@ def erzeuge(thema: str, learning_goals: str, aufgaben_texte: list[str],
     if not (settings.anthropic_api_key and anthropic):
         raise RuntimeError("KI nicht konfiguriert")
 
+    # max_retries=0: die Wiederholung leistet der Modellwechsel unten, und der
+    # ist besser (ein ueberlastetes Modell bleibt ueberlastet). Zwei SDK-
+    # Wiederholungen ZUSAETZLICH sprengen das Zeitbudget der Plattform.
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key,
-                                 timeout=CLIENT_TIMEOUT, max_retries=1)
+                                 timeout=CLIENT_TIMEOUT, max_retries=0)
     prompt = _prompt(thema, ziele, aufgaben_texte, grade_level)
 
     # Dieselbe Ausweich-Kette wie im Chat: eine Prüfung darf nicht an einem
-    # ueberlasteten Modell scheitern.
-    from .tutor import _modell_kette
+    # ueberlasteten Modell scheitern. Und derselbe Vordenk-Schalter: Sonnet 5
+    # denkt standardmaessig vor, wenn der Parameter FEHLT, und die Denk-Tokens
+    # zaehlen gegen max_tokens. Genau das hat die Pruefung nie zustande kommen
+    # lassen – im Chat war es schon behoben, hier hatte ich es vergessen.
+    from .tutor import _modell_kette, _thinking_param
 
+    start = time.monotonic()
     letzter: Exception | None = None
-    for modell in _modell_kette(settings.anthropic_model_smart):
+    for versuch, modell in enumerate(_modell_kette(settings.anthropic_model_smart)):
+        if versuch and time.monotonic() - start > AUSWEICH_DEADLINE:
+            break  # ohne Restzeit hat ein zweiter Anlauf keinen Zweck mehr
         try:
+            kwargs = {}
+            denken = _thinking_param(modell)
+            if denken is not None:
+                kwargs["thinking"] = denken
             resp = client.messages.create(
                 model=modell, max_tokens=MAX_TOKENS,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "user", "content": prompt}], **kwargs,
             )
             roh = "".join(b.text for b in resp.content if b.type == "text")
             fertig = _saeubere(roh)
