@@ -4,6 +4,7 @@ import { BrowserRouter, HashRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./lib/auth.jsx";
 import { LanguageProvider } from "./lib/i18n.jsx";
+import { DialogProvider } from "./lib/dialog.jsx";
 import "./styles/theme.css";
 
 // Demo-Build (VITE_DEMO=1): Mock-Backend im Browser + HashRouter (kein Server-Rewrite noetig)
@@ -84,7 +85,12 @@ async function boot() {
         <Router>
           <LanguageProvider>
             <AuthProvider>
-              <App />
+              {/* Rueckfragen und Meldungen im Design der App – statt der
+                  Fenster des Browsers. Bewusst hier oben: so steht der Dialog
+                  JEDER Seite offen, auch Login und Eltern-Ansicht. */}
+              <DialogProvider>
+                <App />
+              </DialogProvider>
             </AuthProvider>
           </LanguageProvider>
         </Router>

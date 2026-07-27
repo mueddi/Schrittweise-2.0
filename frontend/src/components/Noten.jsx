@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { useLang } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 
 // Schweizer Skala: 4.0 ist bestanden. Farben bewusst zurückhaltend – eine
 // schlechte Note soll informieren, nicht bestrafen.
@@ -50,6 +51,7 @@ function Verlaufslinie({ noten }) {
 /** Noten eines Themas (oder alle, wenn topicId fehlt): Liste, Verlauf, Erfassen. */
 export default function Noten({ topicId = null }) {
   const { t, lang } = useLang();
+  const dialog = useDialog();
   const li = lang === "en" ? 1 : 0;
   const [verlauf, setVerlauf] = useState(null);
   const [offen, setOffen] = useState(false);
@@ -93,7 +95,14 @@ export default function Noten({ topicId = null }) {
   }
 
   async function loeschen(id) {
-    if (!window.confirm(t("Diese Note wirklich löschen?", "Really delete this grade?"))) return;
+    const ja = await dialog.bestaetigen({
+      titel: t("Diese Note löschen?", "Delete this grade?"),
+      text: t("Sie verschwindet aus dem Verlauf und aus dem Durchschnitt.",
+              "It disappears from the history and from the average."),
+      bestaetigen: t("Löschen", "Delete"),
+      gefahr: true,
+    });
+    if (!ja) return;
     try {
       await api.del(`/api/grades/${id}`);
       await laden();

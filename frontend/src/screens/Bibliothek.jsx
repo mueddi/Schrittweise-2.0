@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, getToken } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { useLang, GRADE_KEYS, gradeLabel, gradeShort } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
@@ -43,6 +44,7 @@ function ChipRow({ label, options, value, onChange }) {
 export default function Bibliothek() {
   const { user } = useAuth();
   const { t, lang } = useLang();
+  const dialog = useDialog();
   const [q, setQ] = useState("");
   const [activeQ, setActiveQ] = useState(""); // zuletzt wirklich gesuchter Begriff
   const [grade, setGrade] = useState("");
@@ -119,7 +121,13 @@ export default function Bibliothek() {
   }
 
   async function removeDoc(doc) {
-    if (!window.confirm(t(`«${doc.title}» wirklich löschen?`, `Really delete "${doc.title}"?`))) return;
+    const ja = await dialog.bestaetigen({
+      titel: t(`«${doc.title}» löschen?`, `Delete “${doc.title}”?`),
+      text: t("Das Arbeitsblatt verschwindet aus der Bibliothek.", "The worksheet disappears from the library."),
+      bestaetigen: t("Löschen", "Delete"),
+      gefahr: true,
+    });
+    if (!ja) return;
     try {
       await api.del(`/api/library/${doc.id}`);
       load(activeQ);
@@ -338,6 +346,7 @@ function AdminUpload({ topics, onDone }) {
 
 function TopicManager({ topics, onChanged }) {
   const { t, lang } = useLang();
+  const dialog = useDialog();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
@@ -365,14 +374,26 @@ function TopicManager({ topics, onChanged }) {
     });
   }
 
-  function rename(tp) {
-    const n = window.prompt(t("Neuer Titel für das Thema:", "New title for the topic:"), tp.name);
-    if (!n || !n.trim() || n.trim() === tp.name) return;
-    run(() => api.patch(`/api/library/topics/${tp.id}`, { name: n.trim() }));
+  async function rename(tp) {
+    const n = await dialog.eingabe({
+      titel: t("Thema umbenennen", "Rename topic"),
+      text: t("Der Titel erscheint als Filter für die Schüler:innen.", "The title appears as a filter for students."),
+      wert: tp.name,
+      bestaetigen: t("Speichern", "Save"),
+    });
+    if (!n || n === tp.name) return;
+    run(() => api.patch(`/api/library/topics/${tp.id}`, { name: n }));
   }
 
-  function remove(tp) {
-    if (!window.confirm(t(`Thema «${tp.name}» löschen?`, `Delete topic "${tp.name}"?`))) return;
+  async function remove(tp) {
+    const ja = await dialog.bestaetigen({
+      titel: t(`Thema «${tp.name}» löschen?`, `Delete topic “${tp.name}”?`),
+      text: t("Die Arbeitsblätter bleiben – sie verlieren nur diesen Filter.",
+              "The worksheets stay – they just lose this filter."),
+      bestaetigen: t("Löschen", "Delete"),
+      gefahr: true,
+    });
+    if (!ja) return;
     run(() => api.del(`/api/library/topics/${tp.id}`));
   }
 

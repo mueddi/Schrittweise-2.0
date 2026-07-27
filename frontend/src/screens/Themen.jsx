@@ -4,6 +4,7 @@ import { api } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
 import { useAuth } from "../lib/auth.jsx";
 import { useLang, gradeLabel } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 import Noten from "../components/Noten.jsx";
 import PruefungStart from "../components/PruefungStart.jsx";
 
@@ -19,6 +20,7 @@ function TopicGrid() {
   const shell = useShell();
   const { user } = useAuth();
   const { t, lang } = useLang();
+  const dialog = useDialog();
   // Anzeige-Uebersetzung der Backend-Keys (Keys selbst bleiben unveraendert)
   const LABEL_TEXT = {
     Sitzt: t("Sitzt", "Nailed it"),
@@ -55,38 +57,75 @@ function TopicGrid() {
     shell.reloadTopics?.();
   }
 
+  // Geht etwas schief, muss das Kind es SEHEN. Ohne diesen Fang blieb der
+  // Fehler unbehandelt: die Karte stand einfach weiter da, ohne ein Wort.
+  async function melden(fehler) {
+    await dialog.hinweis({
+      titel: t("Das hat nicht geklappt", "That didn't work"),
+      text: fehler?.message || t("Versuch es gleich nochmal.", "Please try again in a moment."),
+    });
+  }
+
   async function archivieren(id) {
     setMenu(null);
-    await api.post(`/api/topics/${id}/archivieren`);
+    try {
+      await api.post(`/api/topics/${id}/archivieren`);
+    } catch (e) {
+      return melden(e);
+    }
     shell.reloadTopics?.();
     if (imArchiv) ladeArchiv();
   }
 
   async function wiederherstellen(id) {
     setMenu(null);
-    await api.post(`/api/topics/${id}/wiederherstellen`);
+    try {
+      await api.post(`/api/topics/${id}/wiederherstellen`);
+    } catch (e) {
+      return melden(e);
+    }
     shell.reloadTopics?.();
     ladeArchiv();
   }
 
   async function loeschen(k) {
     setMenu(null);
-    if (!window.confirm(t(`«${k.name}» wirklich löschen? Die Aufgaben bleiben erhalten.`,
-                          `Really delete “${k.name}”? The tasks will be kept.`))) return;
+    // Archivieren ist hier fast immer das Richtige – deshalb steht es gleich
+    // im ERSTEN Fenster als empfohlener Weg. Frueher kamen hier bis zu drei
+    // Browser-Fenster nacheinander, weil so eines nur «OK/Abbrechen» kann.
+    const weg = await dialog.wahl({
+      titel: t(`«${k.name}» löschen?`, `Delete “${k.name}”?`),
+      text: t("Die Aufgaben bleiben erhalten – sie verlieren nur ihr Thema.",
+              "The tasks are kept – they just lose their topic."),
+      optionen: [
+        { id: "archivieren", label: t("Archivieren", "Archive"), art: "primaer",
+          hinweis: t("legt das Thema weg, behält aber alles", "puts the topic away but keeps everything") },
+        { id: "loeschen", label: t("Löschen", "Delete"), art: "gefahr",
+          hinweis: t("weg für immer", "gone for good") },
+      ],
+    });
+    if (weg === "archivieren") return archivieren(k.id);
+    if (weg !== "loeschen") return;
     try {
       await api.del(`/api/topics/${k.id}`);
     } catch (e) {
-      // 409: am Thema hängen Noten. Der Server sagt, warum – und Archivieren
-      // ist hier fast immer das Richtige, deshalb direkt anbieten.
-      if (e?.status === 409) {
-        if (window.confirm(`${e.message}\n\n${t("Jetzt stattdessen archivieren?", "Archive it instead?")}`)) {
-          return archivieren(k.id);
-        }
-        if (!window.confirm(t("Trotzdem löschen? Die Noten bleiben erhalten, verlieren aber das Thema.",
-                              "Delete anyway? The grades are kept but lose their topic."))) return;
+      // 409: am Thema hängen Noten. Der Server sagt, warum.
+      if (e?.status !== 409) return melden(e);
+      const trotzdem = await dialog.wahl({
+        titel: t("Am Thema hängen Noten", "This topic has grades"),
+        text: e.message,
+        optionen: [
+          { id: "archivieren", label: t("Archivieren", "Archive"), art: "primaer" },
+          { id: "loeschen", label: t("Trotzdem löschen", "Delete anyway"), art: "gefahr",
+            hinweis: t("die Noten bleiben, verlieren aber das Thema", "the grades are kept but lose their topic") },
+        ],
+      });
+      if (trotzdem === "archivieren") return archivieren(k.id);
+      if (trotzdem !== "loeschen") return;
+      try {
         await api.del(`/api/topics/${k.id}?trotzdem=true`);
-      } else {
-        return;
+      } catch (e2) {
+        return melden(e2);
       }
     }
     shell.reloadTopics?.();

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
 import { useLang, GRADE_KEYS, gradeLabel } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 
 export default function Einstellungen() {
   const nav = useNavigate();
@@ -14,6 +15,7 @@ export default function Einstellungen() {
   const [language, setLanguage] = useState(user?.language === "en" ? "en" : "de");
   const [share, setShare] = useState(user?.share_with_parents ?? true);
   const [saved, setSaved] = useState(false);
+  const [speicherFehler, setSpeicherFehler] = useState("");
   const [busy, setBusy] = useState(false);
 
   const TABS = [
@@ -27,6 +29,7 @@ export default function Einstellungen() {
   async function save(extra = {}) {
     setBusy(true);
     setSaved(false);
+    setSpeicherFehler("");
     try {
       const updated = await api.patch("/api/auth/me", {
         display_name: name,
@@ -42,7 +45,9 @@ export default function Einstellungen() {
       setTimeout(() => setSaved(false), 2000);
       return true;
     } catch (e) {
-      alert(e.message);
+      // Ein eigenes Fenster waere fuer «Speichern ging nicht» zu viel: die
+      // Meldung gehoert dorthin, wo der Knopf steht.
+      setSpeicherFehler(e.message || t("Speichern hat nicht geklappt.", "Saving didn't work."));
       return false;
     } finally {
       setBusy(false);
@@ -97,7 +102,7 @@ export default function Einstellungen() {
                   {GRADE_KEYS.map((g) => <option key={g} value={g}>{gradeLabel(g, lang)}</option>)}
                 </select>
               </Field>
-              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
+              <SaveRow busy={busy} saved={saved} fehler={speicherFehler} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
 
               {/* Abmelden gehoert dorthin, wo man es sucht – nicht nur in die Seitenleiste. */}
               <div style={{ borderTop: "1px solid #eef0f3", marginTop: 28, paddingTop: 20 }}>
@@ -134,7 +139,7 @@ export default function Einstellungen() {
                 {t("Auch der Tutor antwortet in dieser Sprache. Die App erkennt die Sprache beim ersten Besuch automatisch – hier stellst du sie fest ein.",
                    "The tutor also replies in this language. The app auto-detects your language on first visit – here you set it permanently.")}
               </div>
-              <SaveRow busy={busy} saved={saved} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
+              <SaveRow busy={busy} saved={saved} fehler={speicherFehler} onSave={() => save()} onCancel={() => nav("/app/lernen")} t={t} />
             </div>
           </>
         )}
@@ -301,14 +306,15 @@ function Field({ label, children }) {
   );
 }
 
-function SaveRow({ busy, saved, onSave, onCancel, t }) {
+function SaveRow({ busy, saved, fehler, onSave, onCancel, t }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
       <button onClick={onSave} disabled={busy} className="btn-primary" style={{ padding: "11px 20px", borderRadius: 11, fontSize: 14, border: "none" }}>
         {busy ? t("speichert …", "saving …") : t("Speichern", "Save")}
       </button>
       <button onClick={onCancel} className="btn-ghost" style={{ padding: "11px 20px", fontSize: 14 }}>{t("Abbrechen", "Cancel")}</button>
       {saved && <span style={{ fontSize: 13, color: "#1a7f3c", fontWeight: 600 }}>{t("✓ gespeichert", "✓ saved")}</span>}
+      {fehler && <span style={{ fontSize: 13, color: "#c0392b", fontWeight: 600 }}>{fehler}</span>}
     </div>
   );
 }
@@ -325,13 +331,21 @@ function Toggle({ on, onClick }) {
 export function DeleteAccount() {
   const { logout } = useAuth();
   const { t } = useLang();
+  const dialog = useDialog();
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function doDelete() {
-    if (!window.confirm(t("Wirklich alles löschen? Aufgaben, Chats und Guthaben sind danach unwiderruflich weg.", "Really delete everything? Tasks, chats and balance will be gone for good."))) return;
+    const ja = await dialog.bestaetigen({
+      titel: t("Konto endgültig löschen?", "Delete your account for good?"),
+      text: t("Aufgaben, Chats und dein Token-Guthaben sind danach unwiderruflich weg. Das lässt sich nicht rückgängig machen.",
+              "Tasks, chats and your token balance will be gone for good. This cannot be undone."),
+      bestaetigen: t("Endgültig löschen", "Delete permanently"),
+      gefahr: true,
+    });
+    if (!ja) return;
     setBusy(true);
     setErr("");
     try {

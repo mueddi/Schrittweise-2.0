@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useShell } from "../components/AppShell.jsx";
 import { useLang } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 import MathText from "../lib/MathText.jsx";
 import DrawPad from "../components/DrawPad.jsx";
 
@@ -24,6 +25,7 @@ export default function Pruefung() {
   const nav = useNavigate();
   const shell = useShell();
   const { t, lang } = useLang();
+  const dialog = useDialog();
   const li = lang === "en" ? 1 : 0;
   const [pruefung, setPruefung] = useState(null);
   const [antworten, setAntworten] = useState({});
@@ -48,9 +50,17 @@ export default function Pruefung() {
 
   async function abgeben() {
     const offen = pruefung.items.filter((i) => !(antworten[i.id] || "").trim() && !bilder[i.id]);
-    if (offen.length && !window.confirm(
-      t(`${offen.length} Aufgabe(n) sind noch leer. Trotzdem abgeben? Leere Aufgaben zählen als falsch.`,
-        `${offen.length} task(s) are still empty. Submit anyway? Blank tasks count as wrong.`))) return;
+    if (offen.length) {
+      const ja = await dialog.bestaetigen({
+        titel: offen.length === 1
+          ? t("Eine Aufgabe ist noch leer", "One task is still empty")
+          : t(`${offen.length} Aufgaben sind noch leer`, `${offen.length} tasks are still empty`),
+        text: t("Leere Aufgaben zählen als falsch.", "Blank tasks count as wrong."),
+        bestaetigen: t("Trotzdem abgeben", "Submit anyway"),
+        abbrechen: t("Zurück zur Prüfung", "Back to the test"),
+      });
+      if (!ja) return;
+    }
     setBusy(true);
     setFehler("");
     try {

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/keine-browser-dialoge.mjs && vite build",
+    "pruefe:dialoge": "node scripts/keine-browser-dialoge.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

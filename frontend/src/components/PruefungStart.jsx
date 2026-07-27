@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useShell } from "./AppShell.jsx";
 import { useLang } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 
 // Probeprüfung starten – mit dem Preis VOR dem Klick. Eine Prüfung kostet ein
 // Vielfaches eines Chat-Turns; bei 50 Gratis-Tokens im Monat darf das niemand
@@ -13,6 +14,7 @@ export default function PruefungStart({ topicId }) {
   const { t } = useLang();
   const nav = useNavigate();
   const shell = useShell();
+  const dialog = useDialog();
   const [vorschau, setVorschau] = useState(null);
   const [alte, setAlte] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -33,9 +35,13 @@ export default function PruefungStart({ topicId }) {
   useEffect(() => { laden(); }, [laden]);
 
   async function starten() {
-    if (!window.confirm(
-      t(`Diese Probeprüfung kostet ungefähr ${vorschau.kosten_rappen} Tokens von deinen ${vorschau.guthaben} übrigen. Jetzt starten?`,
-        `This practice test costs about ${vorschau.kosten_rappen} tokens of your ${vorschau.guthaben} remaining. Start now?`))) return;
+    const ja = await dialog.bestaetigen({
+      titel: t("Probeprüfung starten?", "Start the practice test?"),
+      text: t(`Sie kostet ungefähr ${vorschau.kosten_rappen} Tokens von deinen ${vorschau.guthaben} übrigen.\n\nDie Aufgaben werden jetzt geschrieben – das dauert ein paar Sekunden.`,
+              `It costs about ${vorschau.kosten_rappen} tokens of your ${vorschau.guthaben} remaining.\n\nThe tasks are written now – this takes a few seconds.`),
+      bestaetigen: t("Jetzt starten", "Start now"),
+    });
+    if (!ja) return;
     setBusy(true);
     setFehler("");
     try {
