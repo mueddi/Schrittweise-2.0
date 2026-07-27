@@ -6,6 +6,7 @@ import DrawPad from "../components/DrawPad.jsx";
 import MathText from "../lib/MathText.jsx";
 import MathFigure from "../components/MathFigure.jsx";
 import { useLang } from "../lib/i18n.jsx";
+import { useDialog } from "../lib/dialog.jsx";
 
 const BASE = import.meta.env.VITE_API_BASE || "";
 
@@ -239,6 +240,7 @@ export default function Lernen() {
   const { attemptId } = useParams();
   const nav = useNavigate();
   const shell = useShell();
+  const dialog = useDialog();
   const { t } = useLang();
   const [state, setState] = useState(null); // {attempt, messages, exercise}
   const [streaming, setStreaming] = useState("");
@@ -535,6 +537,30 @@ export default function Lernen() {
   const { attempt, exercise } = state;
   const topicName = shell.topics?.find((t) => t.id === exercise.topic_id)?.name || t("Aufgabe", "Task");
 
+  // Hand-Haken: die Aufgabe ist fertig, auch wenn die App sie nicht nachrechnen
+  // kann (Zeichnen, Begruenden, zwei Unbekannte). Ohne diesen Knopf blieb so
+  // eine Aufgabe fuer immer offen – der haeufigste Fall ueberhaupt.
+  async function abhaken(geloest) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const a = await api.post(`/api/attempts/${attempt.id}/${geloest ? "geloest" : "offen"}`);
+      setState((s) => (s ? { ...s, attempt: a } : s));
+      shell.reloadTopics?.();
+      if (geloest && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        setCelebrate(true);
+        setTimeout(() => setCelebrate(false), 3200);
+      }
+    } catch (e) {
+      await dialog.hinweis({
+        titel: t("Das hat nicht geklappt", "That didn't work"),
+        text: e?.message || t("Versuch es gleich nochmal.", "Please try again in a moment."),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function retry() {
     if (busy) return;
     setBusy(true);
@@ -647,9 +673,21 @@ export default function Lernen() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {attempt.solved && (
-            <button onClick={retry} className="btn-ghost" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 999 }}>
-              {t("↻ Nochmal üben", "↻ Practice again")}
+          {attempt.solved ? (
+            <>
+              <button onClick={() => abhaken(false)} disabled={busy} className="btn-ghost"
+                      style={{ fontSize: 12, padding: "8px 14px", borderRadius: 999 }}>
+                {t("↩ Doch nicht fertig", "↩ Not done after all")}
+              </button>
+              <button onClick={retry} className="btn-ghost" style={{ fontSize: 12, padding: "8px 14px", borderRadius: 999 }}>
+                {t("↻ Nochmal üben", "↻ Practice again")}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => abhaken(true)} disabled={busy}
+                    title={t("Hakt die Aufgabe in deiner Liste ab", "Ticks the task off in your list")}
+                    style={{ border: "1px solid #cde7d6", background: "#e8f6ec", color: "#1a7f3c", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+              {t("✓ Fertig", "✓ Done")}
             </button>
           )}
           {/* Hilfe-Anzeige gilt PRO Aufgabe: erst zeigen, wenn in dieser

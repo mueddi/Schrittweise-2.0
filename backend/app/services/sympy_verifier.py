@@ -233,6 +233,13 @@ def extract_expression(text: str) -> str | None:
             if found:
                 return found
         return None
+    # «2 + 7 =» ist die normale Schreibweise auf dem Papier: das Gleichheits-
+    # zeichen steht schon da, die Antwort fehlt noch. Vorher verlangte der
+    # Zweig unten zwingend etwas RECHTS vom «=» – eine so geschriebene Aufgabe
+    # bekam deshalb gar keinen Pruefausdruck und konnte nie «geloest» werden.
+    gestutzt = text.rstrip()
+    if gestutzt.endswith("="):
+        return extract_expression(gestutzt[:-1])
     # Mehrzeilige Eingaben (Stift/Foto-Erkennung): erst Zeile fuer Zeile
     # versuchen, dann alles zu EINER Zeile verbunden («2 + 3\n= 2y»).
     lines = [ln for ln in text.splitlines() if ln.strip()]

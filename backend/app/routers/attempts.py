@@ -43,6 +43,31 @@ def _ohne_offenen_figur_block(text: str) -> str:
     return text
 
 
+GELOEST_MARKER = "[[GELOEST]]"
+
+
+def _marker_teilen(puffer: str, marker: str = GELOEST_MARKER) -> tuple[str, str, bool]:
+    """Marker aus dem Textstrom fischen, ohne ihn je anzuzeigen.
+
+    Der Tutor haengt ``[[GELOEST]]`` ans Ende, wenn das Kind die Aufgabe
+    geloest hat. Beim Streamen kann der Marker ueber zwei Haeppchen verteilt
+    ankommen (``[[GEL`` + ``OEST]]``) – deshalb wird ein moegliches Marker-
+    Ende zurueckbehalten, bis feststeht, ob es wirklich der Marker ist.
+
+    Rueckgabe: (jetzt ausgeben, zurueckbehalten, Marker gesehen).
+    """
+    gesehen = marker in puffer
+    if gesehen:
+        puffer = puffer.replace(marker, "")
+    halten = 0
+    for i in range(1, min(len(marker), len(puffer)) + 1):
+        if puffer.endswith(marker[:i]):
+            halten = i
+    if not halten:
+        return puffer, "", gesehen
+    return puffer[:-halten], puffer[-halten:], gesehen
+
+
 def _shrink_for_tutor(data: bytes, mime: str) -> tuple[bytes, str]:
     """Bild fuers LLM verkleinern (max. 1100 px): die praezise Text-Extraktion
     hat schon das OCR in voller Aufloesung gemacht – fuers Mitschauen im Chat
@@ -81,6 +106,51 @@ def get_state(attempt_id: int, user: User = Depends(require_student), db: Sessio
         messages=[message_out(m) for m in msgs],
         exercise=ExerciseOut.model_validate(ex),
     )
+
+
+def _setze_geloest(db: Session, attempt: Attempt, geloest: bool) -> Attempt:
+    """Hand-Schalter fuer «erledigt».
+
+    Bewusst OHNE Aenderung an ``hint_level``/``own_attempts``: die beschreiben,
+    wieviel Hilfe noetig war, und das aendert ein Haken nicht. Und bewusst
+    ohne KI: das kostet nichts, geht immer und funktioniert auch dann, wenn
+    Modell oder Pruefung sich uneinig sind.
+    """
+    attempt.solved = geloest
+    attempt.status = AttemptStatus.solved if geloest else AttemptStatus.active
+    db.commit()
+    db.refresh(attempt)
+    try:
+        aggregates.recompute_week(db, attempt.user_id)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        alert.notify("server",
+                     f"Wochen-Aggregat nach Hand-Haken fehlgeschlagen: {type(exc).__name__}: {exc}",
+                     key="recompute_week")
+    return attempt
+
+
+@router.post("/{attempt_id}/geloest", response_model=AttemptOut)
+def als_geloest_markieren(attempt_id: int, user: User = Depends(require_student),
+                          db: Session = Depends(get_db)):
+    """Aufgabe von Hand als erledigt abhaken.
+
+    Ohne diesen Weg blieb eine Aufgabe fuer immer offen, sobald die App sie
+    nicht maschinell pruefen kann (Zeichnen, Begruenden, zwei Unbekannte) –
+    das betrifft zwei Drittel aller Aufgaben. Das Kind sah «gelöst 🎉» nie,
+    obwohl es fertig war.
+    """
+    return AttemptOut.model_validate(
+        _setze_geloest(db, _load_owned(db, attempt_id, user), True))
+
+
+@router.post("/{attempt_id}/offen", response_model=AttemptOut)
+def wieder_offen(attempt_id: int, user: User = Depends(require_student),
+                 db: Session = Depends(get_db)):
+    """Haken wieder wegnehmen – ein Fehlgriff darf nicht endgueltig sein."""
+    return AttemptOut.model_validate(
+        _setze_geloest(db, _load_owned(db, attempt_id, user), False))
 
 
 @router.post("/{attempt_id}/chat")
@@ -210,16 +280,31 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
 
     exercise_id_local = ex.id
     unlimited_local = quota.is_unlimited(user)
+    # Darf der Tutor diese Runde selbst abhaken? Nur wenn die Aufgabe noch
+    # offen ist und SymPy nicht WIDERSPRICHT. Sagt SymPy «falsch», bleibt
+    # SymPy die Autoritaet – das Modell darf eine falsche Antwort nie
+    # richtigreden.
+    tutor_darf_abhaken = not already_solved and verification.status != "incorrect"
 
     def generate():
         parts: list[str] = []
         usage_out: dict = {}
+        rest = ""            # moegliches Marker-Bruchstueck am Haeppchen-Ende
+        marker_gesehen = False
         try:
             for chunk in tutor.stream_reply(history, step, verification, ex_text, ex_expr,
                                             grade_level, image, usage_out,
                                             last_image=msg_image, language=lang_local):
-                parts.append(chunk)
-                yield chunk
+                raus, rest, gesehen = _marker_teilen(rest + chunk)
+                marker_gesehen = marker_gesehen or gesehen
+                if raus:
+                    parts.append(raus)
+                    yield raus
+            # Uebrig gebliebenes Bruchstueck: nur ausgeben, wenn es KEIN
+            # angefangener Marker ist – sonst stuende «[[GELO» im Chat.
+            if rest and not GELOEST_MARKER.startswith(rest):
+                parts.append(rest)
+                yield rest
             # Nachrechnung der Tutor-Antwort: rein numerische Gleichungen per
             # SymPy pruefen; Fehler sichtbar korrigieren + Betreiber-Alarm.
             try:
@@ -249,12 +334,19 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
             # Stufen-Etikett («👣 Teilschritt vorgemacht» ueber «technische
             # Probleme» war schlicht falsch).
             geantwortet = not usage_out.get("fehler")
+            # Der Tutor hat die Aufgabe abgehakt (siehe [[GELOEST]]). Das ist
+            # der einzige Weg fuer Aufgaben, die SymPy nicht pruefen kann –
+            # also fuer zwei Drittel aller Aufgaben.
+            vom_tutor_geloest = marker_gesehen and geantwortet and tutor_darf_abhaken
             with SessionLocal() as s:
                 s.add(Message(attempt_id=attempt_id_local, role=MessageRole.tutor, text=full,
                               hint_level=reply_level if geantwortet else None))
                 if geantwortet and reply_level is not None:
                     s.query(Attempt).filter(Attempt.id == attempt_id_local).update(
                         {"hint_level": reply_level})
+                if vom_tutor_geloest:
+                    s.query(Attempt).filter(Attempt.id == attempt_id_local).update(
+                        {"solved": True, "status": AttemptStatus.solved})
                 if usage_out.get("usage") is not None:
                     # Verrechnung + Erfassung im selben Commit wie die Tutor-Message,
                     # damit charged_tokens nie vom tatsaechlich Abgebuchten abweicht.
@@ -267,7 +359,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                                  user_id=user_id_local, exercise_id=exercise_id_local,
                                  charged=charged)
                 s.commit()
-            if solved_now:
+            if solved_now or vom_tutor_geloest:
                 # BEWUSST in einer EIGENEN Sitzung und NACH dem Commit oben:
                 # scheitert recompute_week (es endet mit db.flush()), ist die
                 # Sitzung vergiftet – das «except» heilt sie nicht, und der

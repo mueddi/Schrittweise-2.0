@@ -71,6 +71,14 @@ Erlaubte JSON-Objekte:
 - Fuer ALLE anderen Formen (Trapez, Raute, zusammengesetzte Figuren): {"typ":"figur","punkte":[[0,0],[80,0],[60,40],[20,40]],"linien":[[0,1],[1,2],[2,3],[3,0]],"labels":[{"x":40,"y":-8,"text":"a"}]} – Koordinaten frei waehlbar (werden eingepasst); ohne "linien" wird der Punktezug geschlossen gezeichnet.
 Zeichne NIEMALS selbst SVG/HTML. Die Skizze ersetzt keine Erklaerung – kurzer Text gehoert immer dazu. Hoechstens eine Skizze pro Antwort, und nur wenn sie wirklich etwas zeigt.
 
+AUFGABE ABHAKEN:
+Hat der Schueler die Aufgabe WIRKLICH geloest, schreib als ALLERLETZTES deiner Antwort den Marker [[GELOEST]]. Er wird dem Schueler nicht angezeigt – er hakt die Aufgabe in seiner Liste ab.
+Regeln dafuer:
+- Nur wenn der Schueler die richtige Antwort SELBST geschrieben oder gezeichnet hat. Hast nur du sie genannt, setz den Marker NICHT.
+- Nur wenn die GANZE Aufgabe erledigt ist, nicht nach einem Zwischenschritt.
+- Im Zweifel weglassen. Lieber einmal nicht abgehakt als faelschlich abgehakt.
+- Der Marker ersetzt kein Wort: schreib zuerst deine normale Antwort, der Marker steht ganz am Schluss.
+
 SO ERKLAERST DU (SEHR WICHTIG):
 - Die meisten Schueler:innen hier haben Muehe mit Mathe und wenig Selbstvertrauen. Geh IMMER davon aus, dass die Grundlagen wackeln.
 - Extrem einfache Sprache: kurze Saetze. Ein Gedanke pro Satz.
@@ -303,6 +311,12 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
             lines.append(f"- Stufe: {grade_level} (Oberstufe/Sek I) – einfach erklaeren, kleine Schritte, Alltagsbilder.")
     if verification.status == "unknown":
         lines.append("- Die Antwort konnte NICHT automatisch geprueft werden – beurteile selbst sorgfaeltig, was wirklich dasteht (oder auf der Zeichnung steht); im Zweifel nachfragen statt bestaetigen.")
+    # Ohne maschinelle Pruefung bist DU der einzige Richter: dann muss der
+    # Tutor die Aufgabe auch abhaken duerfen. Vorher konnte «geloest» NUR aus
+    # SymPy kommen – zwei Dritteln aller Aufgaben fehlt aber ein Pruefausdruck,
+    # sie liessen sich also nie abschliessen, egal was das Kind rechnete.
+    if not step.solved and verification.status != "correct":
+        lines.append("- Diese Aufgabe kann die App nicht selbst pruefen. Wenn der Schueler sie in dieser Antwort wirklich geloest hat, haeng den Marker [[GELOEST]] ganz ans Ende (Regeln siehe oben).")
     if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "simpler":
