@@ -312,18 +312,17 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
             lines.append(f"- Stufe: {grade_level} (Oberstufe/Sek I) – einfach erklaeren, kleine Schritte, Alltagsbilder.")
     if verification.status == "unknown":
         lines.append("- Die Antwort konnte NICHT automatisch geprueft werden – beurteile selbst sorgfaeltig, was wirklich dasteht (oder auf der Zeichnung steht); im Zweifel nachfragen statt bestaetigen.")
-    # Ohne maschinelle Pruefung bist DU der einzige Richter: dann muss der
-    # Tutor die Aufgabe auch abhaken duerfen. Vorher konnte «geloest» NUR aus
-    # SymPy kommen – zwei Dritteln aller Aufgaben fehlt aber ein Pruefausdruck,
-    # sie liessen sich also nie abschliessen, egal was das Kind rechnete.
-    if not step.solved and verification.status != "correct":
-        lines.append("- Diese Aufgabe kann die App nicht selbst pruefen. Wenn der Schueler sie in dieser Antwort wirklich geloest hat, haeng den Marker [[GELOEST]] ganz ans Ende (Regeln siehe oben).")
     if step.intent == "plea" and not step.permit_solution:
         lines.append("- Der Schueler BETTELT um die Loesung. Freundlich ablehnen, aktivierende Frage stellen, Stufe NICHT erhoehen.")
     if step.intent == "simpler":
         lines.append("- Der Schueler versteht die aktuelle Erklaerung NICHT oder wuenscht eine ANDERE DARSTELLUNG. Erklaere DENSELBEN Punkt nochmal anders: kleinerer Schritt, Alltagsbeispiel mit konkreten Zahlen, andere Worte. Wuenscht er eine SKIZZE, baue einen passenden [[FIGUR]]-Block ein. Nichts Neues verraten, Stufe nicht erhoehen.")
     if step.intent == "step":
-        lines.append("- Der Schueler hat einen EIGENEN Schritt gemacht (siehe Pruefung). Ist er richtig: konkret bestaetigen und zum naechsten Schritt ermutigen – KEINE zusaetzliche Hilfe geben, er schafft es gerade selbst.")
+        # Frueher hiess diese Zeile nur «hat einen EIGENEN SCHRITT gemacht …
+        # zum naechsten Schritt ermutigen». Das widersprach der Abhak-Regel
+        # («nicht nach einem Zwischenschritt») – und genau deshalb blieb eine
+        # fertig gerechnete Aufgabe offen: das Modell hielt die Loesung fuer
+        # einen Zwischenschritt. Jetzt steht die Entscheidung ausdruecklich da.
+        lines.append("- Der Schueler hat SELBST gerechnet (siehe Pruefung). Entscheide zuerst: steht da schon die VOLLSTAENDIGE Loesung der Aufgabe? Wenn JA: bestaetigen, kurz sagen warum es stimmt, und [[GELOEST]] ganz ans Ende haengen. Wenn NEIN: konkret bestaetigen und zum naechsten Schritt ermutigen – KEINE zusaetzliche Hilfe geben, er schafft es gerade selbst.")
     if step.intent == "correct":
         lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")
     if step.intent == "post_solved":
@@ -354,6 +353,13 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     if (language or "de").startswith("en"):
         lines.append("- WICHTIG: Der Schueler nutzt die App auf ENGLISCH. "
                      "Antworte IMMER auf Englisch (alle Erklaerungen, Fragen und Hinweise).")
+    # Ganz zuletzt und als Frage, die du beantworten MUSST: ohne maschinelle
+    # Pruefung bist du der einzige Richter darueber, ob die Aufgabe fertig ist.
+    # Zwei Dritteln aller Aufgaben fehlt ein Pruefausdruck – ohne diese Zeile
+    # liessen sie sich nie abschliessen. Bei einer Bettelei steht sie NICHT da:
+    # dort liefert der Tutor die Loesung, das Kind hat nichts geloest.
+    if not step.solved and verification.status != "correct" and step.intent != "plea":
+        lines.append("- ZUM SCHLUSS ENTSCHEIDEN: Ist die Aufgabe mit dieser Antwort fertig geloest – hat der Schueler das Ergebnis also selbst hingeschrieben? Wenn ja, haeng [[GELOEST]] als Allerletztes an. Wenn nein, lass es weg.")
     return "\n".join(lines)
 
 

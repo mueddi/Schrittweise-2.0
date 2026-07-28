@@ -100,6 +100,52 @@ def test_sympy_schlaegt_den_tutor(client, monkeypatch):
     assert zustand["attempt"]["solved"] is False
 
 
+def test_betteln_hakt_nie_ab(client, monkeypatch):
+    """«Zeig mir die Lösung» darf die Aufgabe NICHT abschliessen.
+
+    Gemeldet vom Betreiber und in der Produktion belegt (Aufgabe 48): die
+    selbst gerechnete Lösung blieb offen, und erst der Knopf «Zeig mir die
+    Lösung» hakte ab. Auf DIESER Runde liefert der Tutor die Lösung – das
+    Kind hat nichts gelöst.
+    """
+    from app.services import tutor
+
+    def fake_stream(*args, **kwargs):
+        yield "Klar, hier der ganze Weg: $x = 5$. [[GELOEST]]"
+
+    monkeypatch.setattr(tutor, "stream_reply", fake_stream)
+    headers = register_pw(client, "abhaken9@test.ch")
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "zeichne eine Parabel"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+    with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                       json={"text": "Zeig mir die Lösung bitte."}) as r:
+        sichtbar = "".join(r.iter_text())
+    assert "GELOEST" not in sichtbar
+    zustand = client.get(f"/api/attempts/{aid}", headers=headers).json()
+    assert zustand["attempt"]["solved"] is False
+
+
+def test_regie_verlangt_die_entscheidung_beim_eigenen_schritt():
+    """Der Widerspruch, der die Ursache war: die Regie nannte JEDE eigene
+    Rechnung einen «Schritt» und die Abhak-Regel verbietet den Marker nach
+    einem Zwischenschritt. Das Modell hielt die fertige Lösung deshalb für
+    einen Zwischenschritt."""
+    from app.services import tutor
+    from app.services.sympy_verifier import Verification
+
+    unpruefbar = Verification(status="unknown", detail="", extracted="7y/3", solution=None)
+    schritt = tutor.LadderStep("step", 2, 1, False, False)
+    regie = tutor._regie(schritt, unpruefbar, "2 + 5 = (3*x)/y", None)
+    assert "VOLLSTAENDIGE Loesung" in regie
+    assert regie.count("[[GELOEST]]") >= 1
+    assert "zum naechsten Schritt ermutigen" in regie  # der Normalfall bleibt
+
+    # Bei einer Bettelei darf die Abhak-Frage NICHT dastehen
+    bettelt = tutor.LadderStep("plea", 4, 2, False, True)
+    assert "[[GELOEST]]" not in tutor._regie(bettelt, unpruefbar, "2 + 5 = (3*x)/y", None)
+
+
 # -------------------------------------------------------------- Hand-Weg
 
 def test_kind_kann_selbst_abhaken(client):

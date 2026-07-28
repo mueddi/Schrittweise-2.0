@@ -280,11 +280,17 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
 
     exercise_id_local = ex.id
     unlimited_local = quota.is_unlimited(user)
-    # Darf der Tutor diese Runde selbst abhaken? Nur wenn die Aufgabe noch
-    # offen ist und SymPy nicht WIDERSPRICHT. Sagt SymPy «falsch», bleibt
-    # SymPy die Autoritaet – das Modell darf eine falsche Antwort nie
-    # richtigreden.
-    tutor_darf_abhaken = not already_solved and verification.status != "incorrect"
+    # Darf der Tutor diese Runde selbst abhaken?
+    # * Nicht, wenn die Aufgabe schon zu ist.
+    # * Nicht, wenn SymPy WIDERSPRICHT – dann bleibt SymPy die Autoritaet und
+    #   das Modell kann eine falsche Antwort nicht richtigreden.
+    # * Nicht auf eine Bettelei hin («zeig mir die Loesung»): auf dieser Runde
+    #   liefert der TUTOR die Loesung, das Kind hat nichts geloest. Genau so
+    #   wurde eine Aufgabe abgehakt, sobald man den Knopf drueckte – waehrend
+    #   die selbst gerechnete Loesung eine Runde davor offen blieb.
+    tutor_darf_abhaken = (not already_solved
+                          and verification.status != "incorrect"
+                          and step.intent != "plea")
 
     def generate():
         parts: list[str] = []

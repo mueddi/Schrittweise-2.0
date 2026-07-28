@@ -178,7 +178,7 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
 // englische Knopf als blosses Reden ankam. Sichtbare Folge: der Knopf «Show me
 // the full solution» erschien – und die Loesung wurde dann verweigert. Der
 // Tutor antwortet trotzdem auf Englisch, das steuert die Regie-Anweisung.
-function QuickReplies({ solved, unlocked, onSend, onNew, onVariant }) {
+function QuickReplies({ solved, unlocked, onSend, onNew, onVariant, onFertig }) {
   const { t } = useLang();
   const items = solved
     ? [
@@ -187,8 +187,12 @@ function QuickReplies({ solved, unlocked, onSend, onNew, onVariant }) {
         { label: t("➕ Neue Aufgabe", "➕ New task"), act: onNew },
       ]
     : [
+        // Der sichere Weg zum Haken: kostet nichts und haengt an keinem Modell.
+        // Er steht bewusst VORNE – wer fertig ist, sucht hier, nicht im Kopf
+        // der Seite.
+        ...(onFertig ? [{ label: t("✓ Ich bin fertig", "✓ I'm done"), act: onFertig, accent: true }] : []),
         // verdient nach 2 eigenen Versuchen: die Loesung ist jetzt abholbar
-        ...(unlocked ? [{ label: t("🔓 Zeig mir die ganze Lösung", "🔓 Show me the full solution"), act: () => onSend("Zeig mir die Lösung bitte."), accent: true }] : []),
+        ...(unlocked ? [{ label: t("🔓 Zeig mir die ganze Lösung", "🔓 Show me the full solution"), act: () => onSend("Zeig mir die Lösung bitte.") }] : []),
         { label: t("🤔 Ich verstehe es nicht", "🤔 I don't get it"), act: () => onSend("Ich verstehe es nicht.") },
         { label: t("💡 Gib mir einen Tipp", "💡 Give me a hint"), act: () => onSend("Gib mir bitte einen Tipp.") },
         { label: t("👣 Zeig mir den ersten Schritt", "👣 Show me the first step"), act: () => onSend("Zeig mir bitte den ersten Schritt.") },
@@ -835,6 +839,7 @@ export default function Lernen() {
             onSend={(t) => send(t)}
             onNew={() => shell.openNewTask(exercise.topic_id ?? undefined)}
             onVariant={makeVariant}
+            onFertig={() => abhaken(true)}
           />
         )}
         {inputLooksMathy && (
