@@ -52,7 +52,7 @@ export default function ParentDashboard({ preview = false }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 28px", borderBottom: "1px solid #eef0f3", background: "#fff" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <span style={{ width: 22, height: 22, borderRadius: 7, background: "#6366f1" }} />
-          <span style={{ fontWeight: 800, fontSize: 16, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+          <span style={{ fontWeight: 800, fontSize: 16, color: "#4f46e5", letterSpacing: "-.02em" }}>Kniff</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280", background: "#f1f2f6", borderRadius: 999, padding: "4px 12px", marginLeft: 8 }}>{t("Elternansicht", "Parent view")}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>

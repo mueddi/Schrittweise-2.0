@@ -62,7 +62,7 @@ export default function FeedbackModal({ onClose }) {
               <div style={{ textAlign: "center", padding: "18px 0" }}>
                 <div style={{ fontSize: 30, marginBottom: 8 }}>🙏</div>
                 <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{t("Danke für dein Feedback!", "Thanks for your feedback!")}</div>
-                <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>{t("Es hilft uns, Schrittweise besser zu machen.", "It helps us make Schrittweise better.")}</div>
+                <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 16 }}>{t("Es hilft uns, Kniff besser zu machen.", "It helps us make Kniff better.")}</div>
                 <button onClick={onClose} className="btn-primary" style={{ padding: "10px 20px", borderRadius: 10, fontSize: 13, border: "none" }}>{t("Schliessen", "Close")}</button>
               </div>
             ) : (

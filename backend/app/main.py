@@ -1,4 +1,4 @@
-"""Schrittweise – FastAPI-Backend (Einstiegspunkt)."""
+"""Kniff – FastAPI-Backend (Einstiegspunkt)."""
 import logging
 from contextlib import asynccontextmanager
 
@@ -54,7 +54,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Schrittweise API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Kniff API", version="0.1.0", lifespan=lifespan)
 
 
 @app.exception_handler(Exception)

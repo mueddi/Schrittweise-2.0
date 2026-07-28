@@ -165,7 +165,7 @@ export default function Preise() {
             <Feature>{t("Rechnung an die Schule", "Invoice sent to the school")}</Feature>
           </div>
           <a
-            href="mailto:mahmmouds62@gmail.com?subject=Schul-Abo%20Schrittweise"
+            href="mailto:mahmmouds62@gmail.com?subject=Schul-Abo%20Kniff"
             style={{ display: "block", border: "1px solid #d2d4dd", borderRadius: 11, padding: 11, textAlign: "center", fontSize: 14, fontWeight: 600, color: "#1a1c22" }}
           >
             {t("Kontakt aufnehmen", "Get in touch")}

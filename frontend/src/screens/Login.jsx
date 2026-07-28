@@ -109,7 +109,7 @@ export default function Login() {
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(560px 320px at 80% 0%, rgba(255,255,255,.16), transparent 70%)" }} />
         <Link to="/" style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, marginBottom: "auto" }}>
           <span style={{ width: 26, height: 26, borderRadius: 8, background: "#fff" }} />
-          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-.02em" }}>Schrittweise</span>
+          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: "-.02em" }}>Kniff</span>
         </Link>
         <div style={{ position: "relative" }}>
           <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.18, letterSpacing: "-.02em", marginBottom: 22, textWrap: "balance" }}>

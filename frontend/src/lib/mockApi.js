@@ -511,4 +511,4 @@ ribbon.onclick = () => ribbon.remove();
 document.addEventListener("DOMContentLoaded", () => document.body.appendChild(ribbon));
 if (document.readyState !== "loading") document.body.appendChild(ribbon);
 
-console.info("[Schrittweise] Demo-Modus aktiv – /api/* wird im Browser simuliert.");
+console.info("[Kniff] Demo-Modus aktiv – /api/* wird im Browser simuliert.");

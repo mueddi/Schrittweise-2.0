@@ -1,4 +1,4 @@
-# Schrittweise – KI-Mathe-Tutor für Mittelstufe, Oberstufe & Gymnasium
+# Kniff – KI-Mathe-Tutor für Mittelstufe, Oberstufe & Gymnasium
 
 > **Mathe verstehen. Nicht abschreiben.** Ein Tutor, der die Lösung nie direkt
 > verrät, sondern über eine **Hinweis-Leiter** (4 Stufen) zum eigenen Denken führt.
@@ -9,6 +9,30 @@
 
 Live: **https://schrittweise-2-0.vercel.app** · Der visuelle Massstab ist
 `design/referenz.html` (im Browser öffnen).
+
+## Der Name
+
+**Kniff** ist der clevere Handgriff, die Technik, die man beherrscht. «Den Kniff
+raushaben» heisst, etwas selbst zu können – nicht, die Lösung serviert zu
+bekommen. Der Name trägt das Produktversprechen also schon in sich. Dazu die
+Wortfamilie: Aufgaben sind **knifflig** – die App gibt dir den **Kniff**.
+
+**Markenstory.** Jeder kennt den Moment: Man sitzt vor einer Aufgabe und kommt
+nicht weiter. Die einen schreiben ab – und lernen nichts. Die anderen haben
+jemanden, der die richtige Frage stellt, einen kleinen Tipp gibt, geduldig
+bleibt. Kniff ist dieser Jemand. Wer den Kniff einmal selbst gefunden hat,
+vergisst ihn nicht mehr.
+
+**Tonalität.** Gegenüber Schüler:innen wie ein älterer Bruder, der Mathe kann:
+kumpelhaft, geduldig, nie belehrend, nie überwachend (steht so im
+`SYSTEM_PROMPT`, `backend/app/services/tutor.py`). Gegenüber Eltern
+seriös-kompetent, aber warm und klar – kein Bildungsjargon, keine KI-Buzzwords.
+
+> **Noch auf den alten Namen:** die Live-Adresse (`schrittweise-2-0.vercel.app`),
+> das Vercel-Projekt, der GitHub-Repo-Name, die Backup-Dateinamen und die
+> Absender-Domain in `smtp_from`. Das sind Infrastruktur-Bezeichner – sie zu
+> ändern bricht Deploy und Backups und gehört in einen eigenen, bewussten
+> Schritt (siehe unten «Umbenennen: was noch offen ist»).
 
 ## Prinzipien (nicht verhandelbar)
 
@@ -215,7 +239,23 @@ Token-Modell ab; Tests, Backups, Alarme und Härtung sind eingebaut. Offen:
    `REQUIRE_EMAIL_VERIFICATION=true` setzen – ab dann brauchen neue Konten
    die E-Mail-Bestätigung für KI-Nutzung und Käufe.
 5. **Bibliothek füllen** (10–15 Arbeitsblätter) und optional eigene Domain
-   (z. B. schrittweise.ch) in Vercel verbinden.
+   (z. B. kniff.ch) in Vercel verbinden.
+
+## Umbenennen: was noch offen ist
+
+Der Produktname heisst überall **Kniff** – Seitentitel, Logo, Landing, Login,
+Eltern-Ansicht, Rechtliches (AGB/Impressum/Datenschutz), Feedback, Mail-Betreff
+und -Signatur, Stripe-Paketnamen, Favicon («K») und der Tutor selbst.
+
+Bewusst **nicht** angefasst, weil es laufende Technik bricht – jeder Punkt ist
+eine eigene, bewusste Umstellung:
+
+| Was | Heute | Warum offen |
+|---|---|---|
+| Live-Adresse | `schrittweise-2-0.vercel.app` | Umbenennen des Vercel-Projekts ändert die URL – erst eine eigene Domain (z. B. `kniff.ch`) verbinden, dann umstellen |
+| GitHub-Repo | `mueddi/Schrittweise-2.0` | Umbenennen bricht alle bestehenden Klone und den Deploy-Workflow, bis er nachgezogen ist |
+| Absender der Mails | `no-reply@schrittweise.ch` | Die Domain muss zuerst existieren und im Mailversand freigegeben sein, sonst landen Mails im Spam |
+| Backup-Dateinamen, Log-Namen, `sw_token` im Browser | `schrittweise…` | Rein intern; ein Wechsel würde alte Backups schwerer auffindbar machen und alle Nutzer ausloggen |
 
 Hinweis Supabase free: Projekte pausieren nach ~1 Woche ohne Zugriff – bei
 täglich genutzter App passiert das nicht.

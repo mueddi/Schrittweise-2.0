@@ -11,7 +11,7 @@ function Shell({ title, children }) {
       <nav style={{ display: "flex", alignItems: "center", gap: 10, padding: "20px 40px", maxWidth: 860, margin: "0 auto" }}>
         <Link to="/" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 26, height: 26, borderRadius: 8, background: "#6366f1" }} />
-          <span style={{ fontWeight: 800, fontSize: 19, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+          <span style={{ fontWeight: 800, fontSize: 19, color: "#4f46e5", letterSpacing: "-.02em" }}>Kniff</span>
         </Link>
         <Link to="/" style={{ marginLeft: "auto", fontSize: 13, fontWeight: 600, color: "#4f46e5" }}>{t("← zur Startseite", "← back to home")}</Link>
       </nav>
@@ -52,7 +52,7 @@ export function Impressum() {
           <P>Mahmmoud Said</P>
           <H>Disclaimer</H>
           <P>
-            Schrittweise is a learning tool and does not replace classroom teaching. Despite
+            Kniff is a learning tool and does not replace classroom teaching. Despite
             careful review, we accept no liability for the factual accuracy of individual
             AI-generated hints. The operators of external links are solely responsible for
             their content.
@@ -74,7 +74,7 @@ export function Impressum() {
           <P>Mahmmoud Said</P>
           <H>Haftungsausschluss</H>
           <P>
-            Schrittweise ist ein Lernwerkzeug und ersetzt keinen Unterricht. Trotz sorgfältiger
+            Kniff ist ein Lernwerkzeug und ersetzt keinen Unterricht. Trotz sorgfältiger
             Prüfung übernehmen wir keine Gewähr für die fachliche Richtigkeit einzelner
             KI-generierter Hinweise. Für Inhalte externer Links sind ausschliesslich deren
             Betreiber verantwortlich.
@@ -93,7 +93,7 @@ export function Datenschutz() {
         <>
           <Note>This is a courtesy translation. The German version is legally binding.</Note>
           <P>
-            This privacy policy explains which personal data Schrittweise processes – in
+            This privacy policy explains which personal data Kniff processes – in
             accordance with the Swiss Federal Act on Data Protection (revFADP). Last
             updated: July 2026.
           </P>
@@ -177,14 +177,14 @@ export function Datenschutz() {
 
           <H>10. No advertising, no tracking</H>
           <P>
-            Schrittweise does not use advertising or tracking cookies. Only a
+            Kniff does not use advertising or tracking cookies. Only a
             technically necessary login token is stored in the browser.
           </P>
         </>
       ) : (
         <>
           <P>
-            Diese Datenschutzerklärung informiert darüber, welche Personendaten Schrittweise
+            Diese Datenschutzerklärung informiert darüber, welche Personendaten Kniff
             bearbeitet – gemäss dem Schweizer Datenschutzgesetz (revDSG). Stand: Juli 2026.
           </P>
 
@@ -267,7 +267,7 @@ export function Datenschutz() {
 
           <H>10. Keine Werbung, kein Tracking</H>
           <P>
-            Schrittweise setzt keine Werbe- oder Tracking-Cookies ein. Es wird nur ein
+            Kniff setzt keine Werbe- oder Tracking-Cookies ein. Es wird nur ein
             technisch notwendiges Login-Token im Browser gespeichert.
           </P>
         </>
@@ -284,7 +284,7 @@ export function Agb() {
         <>
           <Note>This is a courtesy translation. The German version is legally binding.</Note>
           <P>
-            General terms and conditions (contract of use) for Schrittweise, operated by
+            General terms and conditions (contract of use) for Kniff, operated by
             Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Switzerland
             (<Mail />).
             Last updated: July 2026.
@@ -292,7 +292,7 @@ export function Agb() {
 
           <H>1. Service</H>
           <P>
-            Schrittweise is an AI-powered maths tutor for middle school, secondary school
+            Kniff is an AI-powered maths tutor for middle school, secondary school
             and high school (Gymnasium). Every account receives 50 free tokens per
             calendar month. In addition, one-time token packages can be purchased. 1
             token = 1 Swiss centime (Rappen) of AI computation: each tutor response
@@ -330,7 +330,7 @@ export function Agb() {
 
           <H>6. Availability and warranty</H>
           <P>
-            Schrittweise is a learning tool and does not replace classroom teaching.
+            Kniff is a learning tool and does not replace classroom teaching.
             AI-generated hints may occasionally be incorrect; no warranty is given for
             them. Uninterrupted availability is aimed for but not guaranteed. In the
             event of longer outages, affected tokens will be replaced on request.
@@ -351,7 +351,7 @@ export function Agb() {
       ) : (
         <>
           <P>
-            Allgemeine Geschäftsbedingungen für die Nutzung von Schrittweise, betrieben von
+            Allgemeine Geschäftsbedingungen für die Nutzung von Kniff, betrieben von
             Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Schweiz
             (<Mail />).
             Stand: Juli 2026.
@@ -359,7 +359,7 @@ export function Agb() {
 
           <H>1. Leistung</H>
           <P>
-            Schrittweise ist ein KI-gestützter Mathe-Lern-Tutor für Mittelstufe, Oberstufe
+            Kniff ist ein KI-gestützter Mathe-Lern-Tutor für Mittelstufe, Oberstufe
             und Gymnasium. Jedes
             Konto erhält 50 Gratis-Tokens pro Kalendermonat. Zusätzlich können einmalige
             Token-Pakete gekauft werden. 1 Token entspricht 1 Rappen KI-Leistung: Jede
@@ -398,7 +398,7 @@ export function Agb() {
 
           <H>6. Verfügbarkeit und Gewähr</H>
           <P>
-            Schrittweise ist ein Lernwerkzeug und ersetzt keinen Unterricht. KI-generierte
+            Kniff ist ein Lernwerkzeug und ersetzt keinen Unterricht. KI-generierte
             Hinweise können im Einzelfall fehlerhaft sein; dafür wird keine Gewähr
             übernommen. Eine ununterbrochene Verfügbarkeit wird angestrebt, aber nicht
             garantiert. Bei längeren Ausfällen werden betroffene Tokens auf Anfrage ersetzt.

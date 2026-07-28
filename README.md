@@ -1,8 +1,8 @@
-# Schrittweise
+# Kniff
 
 **KI-Mathe-Tutor für die Schweizer Oberstufe & das Gymnasium** — Mathe verstehen, nicht abschreiben.
 
-Schrittweise ist ein Lern-Tutor für Sek-I-Schüler:innen (Lehrplan 21) und
+Kniff ist ein Lern-Tutor für Sek-I-Schüler:innen (Lehrplan 21) und
 Gymnasiast:innen bis zur Matura,
 der die Lösung nie direkt verrät. Stattdessen führt eine **Hinweis-Leiter** in vier
 Stufen zum eigenen Denken:
@@ -97,7 +97,7 @@ vercel.json       Vercel Build & Routing
 
 Ausführliche Anleitungen (Vercel, Render, Supabase-Postgres, SMTP,
 Launch-Checkliste, Sicherheits-Guards) stehen in
-[SCHRITTWEISE.md](SCHRITTWEISE.md).
+[KNIFF.md](KNIFF.md).
 
 Wichtig: Secrets (`ANTHROPIC_API_KEY`, `JWT_SECRET`, `SMTP_*`, `DATABASE_URL`)
 werden **nie committet** — nur als Umgebungsvariablen im Hosting-Dashboard

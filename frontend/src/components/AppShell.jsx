@@ -153,7 +153,7 @@ export default function AppShell() {
               «Anmelden»-Knopf und hielt sich fuer ausgeloggt. */}
           <Link to="/app/lernen" style={{ display: "flex", alignItems: "center", gap: 9, padding: "16px 16px 12px" }}>
             <span style={{ width: 22, height: 22, borderRadius: 7, background: "#6366f1" }} />
-            <span style={{ fontWeight: 800, fontSize: 16, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+            <span style={{ fontWeight: 800, fontSize: 16, color: "#4f46e5", letterSpacing: "-.02em" }}>Kniff</span>
           </Link>
 
           <button
@@ -230,7 +230,7 @@ export default function AppShell() {
             <button onClick={() => setNavOpen(true)} aria-label={t("Menü", "Menu")} style={{ width: 36, height: 36, borderRadius: 10, border: "1px solid #e7e8ee", background: "#fff", fontSize: 16 }}>☰</button>
             <Link to="/app/lernen" style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 20, height: 20, borderRadius: 6, background: "#6366f1" }} />
-              <span style={{ fontWeight: 800, fontSize: 15, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+              <span style={{ fontWeight: 800, fontSize: 15, color: "#4f46e5", letterSpacing: "-.02em" }}>Kniff</span>
             </Link>
           </div>
           {user?.email_verified === false && mailOk && (

@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "Schrittweise <no-reply@schrittweise.ch>"
+    smtp_from: str = "Kniff <no-reply@schrittweise.ch>"
 
     # Zieladresse fuer Betreiber-Alarme (KI-Ausfall, Webhook-Fehler);
     # Mails gehen nur raus, wenn zusaetzlich SMTP konfiguriert ist.

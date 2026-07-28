@@ -1,4 +1,4 @@
-"""Datenmodell (Kern) fuer Schrittweise.
+"""Datenmodell (Kern) fuer Kniff.
 
 Privacy by Design:
   * ``messages`` (Transkripte) haengen an ``attempts`` und sind ausschliesslich

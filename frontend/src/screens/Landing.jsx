@@ -43,7 +43,7 @@ export default function Landing() {
       <nav style={{ display: "flex", alignItems: "center", gap: 24, padding: "20px 40px", maxWidth: 1180, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 26, height: 26, borderRadius: 8, background: "#6366f1" }} />
-          <span style={{ fontWeight: 800, fontSize: 19, color: "#4f46e5", letterSpacing: "-.02em" }}>Schrittweise</span>
+          <span style={{ fontWeight: 800, fontSize: 19, color: "#4f46e5", letterSpacing: "-.02em" }}>Kniff</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
           <span>
@@ -77,6 +77,12 @@ export default function Landing() {
           <h1 style={{ margin: "0 0 18px", fontSize: 54, lineHeight: 1.03, fontWeight: 900, letterSpacing: "-.035em", textWrap: "balance" }}>
             {t("Mathe verstehen. Nicht abschreiben.", "Understand math. Don't just copy answers.")}
           </h1>
+          {/* Das Wortspiel traegt das Versprechen: knifflig ist die Aufgabe,
+              den Kniff findest DU – mit Hilfe, aber selber. */}
+          <p style={{ margin: "-8px 0 16px", fontSize: 18, fontWeight: 700, color: "#4f46e5" }}>
+            {t("Aufgaben sind knifflig. Kniff zeigt dir den Kniff.",
+               "Problems are tricky. Kniff shows you the trick.")}
+          </p>
           <p style={{ margin: "0 0 28px", fontSize: 18, lineHeight: 1.55, color: "#4b5563", maxWidth: "46ch" }}>
             {t("Dein Mathe-Tutor für Mittelstufe, Oberstufe und Gymnasium, der dir die Lösung nie einfach verrät – sondern dich Schritt für Schritt selber draufkommen lässt.",
                "Your math tutor for middle school, secondary school and high school that never just tells you the answer – it helps you figure it out yourself, step by step.")}
@@ -197,7 +203,7 @@ export default function Landing() {
           <Link to="/login" style={{ fontSize: 14, fontWeight: 600, color: "#fff", background: "#6366f1", borderRadius: 11, padding: "10px 18px" }}>{t("Kostenlos loslegen →", "Start for free →")}</Link>
         </div>
         <div style={{ maxWidth: 1180, margin: "22px auto 0", paddingTop: 16, borderTop: "1px solid #2c2f38", display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center", fontSize: 12.5, color: "#8b909c" }}>
-          <span>© {new Date().getFullYear()} Schrittweise</span>
+          <span>© {new Date().getFullYear()} Kniff</span>
           <Link to="/impressum" style={{ color: "#aab0bd" }}>{t("Impressum", "Legal notice")}</Link>
           <Link to="/datenschutz" style={{ color: "#aab0bd" }}>{t("Datenschutz", "Privacy")}</Link>
           <Link to="/agb" style={{ color: "#aab0bd" }}>{t("AGB", "Terms")}</Link>

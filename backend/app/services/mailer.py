@@ -14,12 +14,12 @@ def send_magic_link(to_email: str, link: str) -> bool:
     if not settings.smtp_enabled:
         return False
     msg = EmailMessage()
-    msg["Subject"] = "Dein Login-Link für Schrittweise"
+    msg["Subject"] = "Dein Login-Link für Kniff"
     msg["From"] = settings.smtp_from
     msg["To"] = to_email
     msg.set_content(
         f"Hoi!\n\nHier ist dein Login-Link – gültig für kurze Zeit:\n{link}\n\n"
-        "Wenn du das nicht warst, kannst du diese Mail ignorieren.\n\nSchrittweise"
+        "Wenn du das nicht warst, kannst du diese Mail ignorieren.\n\nKniff"
     )
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as s:
         s.starttls()
@@ -34,7 +34,7 @@ def send_alert_mail(subject: str, body: str) -> bool:
     if not (settings.smtp_enabled and settings.alert_email):
         return False
     msg = EmailMessage()
-    msg["Subject"] = f"[Schrittweise-Alarm] {subject}"
+    msg["Subject"] = f"[Kniff-Alarm] {subject}"
     msg["From"] = settings.smtp_from
     msg["To"] = settings.alert_email
     msg.set_content(body)
