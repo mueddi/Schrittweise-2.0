@@ -29,10 +29,31 @@ def test_prompt_zeigt_jede_stufe_an_einem_beispiel():
     assert "Betteln →" in sp     # und so eine Abfuhr
 
 
-def test_laengenregel_ist_konkret_und_kennt_die_ausnahme():
+def test_laengenregel_ist_konkret_und_pro_stufe():
+    """Eine Zahl haelt besser als «kurz halten» – aber eine EINZIGE Zahl war zu
+    eng: gemessen lagen 35 % der Stufe-3-Antworten ueber 350 Zeichen, weil ein
+    vorgemachter Rechenschritt Platz braucht. Deshalb pro Stufe."""
     sp = tutor.SYSTEM_PROMPT
-    assert "350 Zeichen" in sp, "eine Zahl haelt besser als «kurz halten»"
-    assert "AUSNAHME" in sp and "Stufe 4" in sp
+    assert "350 Zeichen" in sp
+    assert "600" in sp, "Stufe 3 braucht mehr Platz als Stufe 1/2"
+    assert "so lang wie der Loesungsweg wirklich braucht" in sp
+
+
+def test_prompt_gibt_dem_tutor_ausdruecklich_spielraum():
+    """Ein Prompt, der nur verbietet, macht den Tutor schematisch. Genau zwei
+    Dinge sind unverhandelbar – der Rest ist sein Urteil."""
+    sp = tutor.SYSTEM_PROMPT
+    assert "LEITPLANKEN, KEIN KORSETT" in sp
+    assert "folge deinem Urteil" in sp
+
+
+def test_beispiele_sollen_nicht_abgeschrieben_werden():
+    """Alle Beispiele aus EINER Aufgabe waeren die sicherste Art, jede Antwort
+    gleich klingen zu lassen. Deshalb drei Stufen – und der Hinweis dazu."""
+    sp = tutor.SYSTEM_PROMPT
+    assert "kopiere die" in sp and "nicht" in sp
+    for stufe in ("Oberstufe,", "Mittelstufe,", "Gymnasium,"):
+        assert stufe in sp, f"Beispiel fuer {stufe} fehlt"
 
 
 def test_keine_doppelten_stilregeln():
