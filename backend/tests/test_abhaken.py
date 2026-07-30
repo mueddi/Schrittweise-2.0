@@ -11,6 +11,7 @@ Zwei Wege sind neu, und beide werden hier gefahren:
 * das Kind hakt selbst ab (kostet nichts, geht immer).
 """
 from app.routers.attempts import GELOEST_MARKER, _marker_teilen
+from app.services import tutor
 from app.services.sympy_verifier import extract_expression
 
 from .test_library import register_pw
@@ -144,6 +145,74 @@ def test_regie_verlangt_die_entscheidung_beim_eigenen_schritt():
     # Bei einer Bettelei darf die Abhak-Frage NICHT dastehen
     bettelt = tutor.LadderStep("plea", 4, 2, False, True)
     assert "[[GELOEST]]" not in tutor._regie(bettelt, unpruefbar, "2 + 5 = (3*x)/y", None)
+
+
+# ------------------------------------------- «Ich bin fertig» sagen (statt drücken)
+
+def test_fertig_wird_erkannt_auch_auf_mundart_und_englisch():
+    for satz in ["fertig", "ich bin fertig", "das wars", "das war's", "han es",
+                 "ich habs", "done", "I'm done", "finished"]:
+        assert tutor.sagt_fertig(satz), satz
+
+
+def test_verneintes_fertig_zaehlt_nicht():
+    """«Ich bin noch nicht fertig» darf die Aufgabe nicht abschliessen."""
+    for satz in ["ich bin noch nicht fertig", "bin nöd fertig", "noch nicht fertig",
+                 "fertig bin ich nicht"]:
+        assert not tutor.sagt_fertig(satz), satz
+
+
+def test_fertig_ist_weder_versuch_noch_hilferuf():
+    from app.services.sympy_verifier import Verification
+
+    unbekannt = Verification("unknown", "", None)
+    assert tutor.detect_intent("ich bin fertig", unbekannt) == "fertig"
+    # Stufe und Versuchszaehler bleiben unangetastet – «fertig» ist eine
+    # Behauptung, kein gerechneter Schritt.
+    schritt = tutor.advance_ladder(2, 1, "fertig")
+    assert (schritt.allowed_stage, schritt.own_attempts, schritt.solved) == (2, 1, False)
+
+
+def test_regie_laesst_den_tutor_pruefen_statt_glauben():
+    from app.services.sympy_verifier import Verification
+
+    schritt = tutor.advance_ladder(2, 1, "fertig")
+    regie = tutor._regie(schritt, Verification("unknown", "", None), "zeichne eine Parabel", None)
+    assert "sagt, er sei FERTIG" in regie
+    assert "hak NICHT ab" in regie          # nicht auf Zuruf
+    assert "[[GELOEST]]" in regie           # aber abhaken, wenn es stimmt
+
+
+def test_fertig_sagen_schliesst_ab_wenn_der_tutor_zustimmt(client, monkeypatch):
+    def fake_stream(*args, **kwargs):
+        yield "Stimmt, deine Gerade und die Gleichung passen zusammen. [[GELOEST]]"
+
+    monkeypatch.setattr(tutor, "stream_reply", fake_stream)
+    headers = register_pw(client, "fertig1@test.ch")
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "zeichne eine lineare Gleichung"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+    with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                       json={"text": "ich bin fertig"}) as r:
+        sichtbar = "".join(r.iter_text())
+    assert "GELOEST" not in sichtbar
+    assert client.get(f"/api/attempts/{aid}", headers=headers).json()["attempt"]["solved"] is True
+
+
+def test_fertig_sagen_allein_reicht_nicht(client, monkeypatch):
+    """Sagt der Tutor «da fehlt noch was», bleibt die Aufgabe offen."""
+    def fake_stream(*args, **kwargs):
+        yield "Fast! Die Gerade steht, aber die Gleichung dazu fehlt noch."
+
+    monkeypatch.setattr(tutor, "stream_reply", fake_stream)
+    headers = register_pw(client, "fertig2@test.ch")
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "zeichne eine lineare Gleichung"}).json()
+    aid = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()["attempt"]["id"]
+    with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
+                       json={"text": "fertig"}) as r:
+        "".join(r.iter_text())
+    assert client.get(f"/api/attempts/{aid}", headers=headers).json()["attempt"]["solved"] is False
 
 
 # -------------------------------------------------------------- Hand-Weg

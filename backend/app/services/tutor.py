@@ -187,6 +187,30 @@ HILFE_PATTERNS = [
 ]
 
 
+# «Ich bin fertig» – der natuerliche Weg, eine Aufgabe abzuschliessen.
+# Ein Knopf dafuer waere falsch: das Kind soll nicht selber abhaken, sondern
+# es sagen – und der Tutor prueft nach. Deutsch, Mundart und Englisch, und
+# ausdruecklich NICHT bei einer Verneinung («ich bin noch nicht fertig»).
+_FERTIG = re.compile(
+    rf"\b(?:{_NICHT}|noch|nöd|kaum)\b[^.?!]{{0,15}}\bfertig\b"      # Verneinung zuerst …
+    r"|\bfertig\b[^.?!]{0,15}\b(?:nicht|nöd|nid)\b"
+)
+_FERTIG_WORT = re.compile(
+    r"\b(?:fertig|fertsch|dur|durae)\b"
+    r"|\bdas\s*war'?s\b|\bdas\s*wärs\b"
+    r"|\bhab'?\s*(?:es|s)\b|\bhan\s*(?:es|s)\b|\bhabs\b|\bhans\b"
+    r"|\b(?:i'?m\s+)?done\b|\bfinished\b|\bthat'?s\s+it\b"
+)
+
+
+def sagt_fertig(message: str) -> bool:
+    """Sagt das Kind, dass es fertig ist? (Verneinung schliesst aus.)"""
+    low = (message or "").lower()
+    if _FERTIG.search(low):
+        return False
+    return bool(_FERTIG_WORT.search(low))
+
+
 def detect_intent(message: str, verification: Verification) -> str:
     """'plea' | 'correct' | 'attempt' | 'step' | 'simpler' | 'stuck'.
 
@@ -200,6 +224,10 @@ def detect_intent(message: str, verification: Verification) -> str:
     bettelt = not _KEIN_BETTELN.search(low)
     if verification.status == "correct":
         return "correct"
+    # «Ich bin fertig» ist weder ein Hilferuf noch ein Rechenversuch: es ist
+    # die Bitte, die Arbeit anzuschauen. Der Tutor prueft und entscheidet.
+    if sagt_fertig(low):
+        return "fertig"
     if bettelt and any(re.search(p, low) for p in BETTEL_PATTERNS):
         return "plea"
     if verification.status == "partial":
@@ -260,6 +288,11 @@ def advance_ladder(current_stage: int, own_attempts: int, intent: str, min_attem
         # Betteln davor: Stufe bleibt, kein Versuch gezaehlt
         stage = max(current_stage, 1)
         return LadderStep(intent, stage, own_attempts, False, False)
+
+    if intent == "fertig":
+        # Weder Versuch noch Hilferuf: die Stufe bleibt, nichts wird gezaehlt.
+        # Ob wirklich fertig, entscheidet der Tutor in seiner Antwort.
+        return LadderStep(intent, max(current_stage, 1), own_attempts, False, False)
 
     if intent in ("simpler", "talk"):
         # «Verstehe es nicht» / «erklaer einfacher» / normales Reden: dieselbe
@@ -362,6 +395,9 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
         # fertig gerechnete Aufgabe offen: das Modell hielt die Loesung fuer
         # einen Zwischenschritt. Jetzt steht die Entscheidung ausdruecklich da.
         lines.append("- Der Schueler hat SELBST gerechnet (siehe Pruefung). Entscheide zuerst: steht da schon die VOLLSTAENDIGE Loesung der Aufgabe? Wenn JA: bestaetigen, kurz sagen warum es stimmt, und [[GELOEST]] ganz ans Ende haengen. Wenn NEIN: konkret bestaetigen und zum naechsten Schritt ermutigen – KEINE zusaetzliche Hilfe geben, er schafft es gerade selbst.")
+    if step.intent == "fertig":
+        # Nicht auf Zuruf abhaken: «fertig» ist eine Behauptung, keine Loesung.
+        lines.append("- Der Schueler sagt, er sei FERTIG. Schau dir an, was er im Gespraech wirklich gerechnet oder gezeichnet hat. Stimmt das Ergebnis: bestaetige es knapp und haeng [[GELOEST]] ganz ans Ende. Fehlt noch etwas: sag freundlich und konkret, was genau noch offen ist – und hak NICHT ab. Steht ueberhaupt kein Ergebnis da, frag danach («Zeig mir kurz, was rausgekommen ist»).")
     if step.intent == "correct":
         lines.append("- Die Antwort ist KORREKT. Bestaetige knapp und ermutigend, erklaere kurz warum.")
     if step.intent == "post_solved":
@@ -400,7 +436,7 @@ def _regie(step: LadderStep, verification: Verification, exercise_text: str, exe
     # Bei «step» steht die Frage schon oben in der Schritt-Zeile – zweimal
     # dasselbe zu verlangen macht die Regie nur laenger, nicht deutlicher.
     if (not step.solved and verification.status != "correct"
-            and step.intent not in ("plea", "step")):
+            and step.intent not in ("plea", "step", "fertig")):
         lines.append("- ZUM SCHLUSS ENTSCHEIDEN: Ist die Aufgabe mit dieser Antwort fertig geloest – hat der Schueler das Ergebnis also selbst hingeschrieben? Wenn ja, haeng [[GELOEST]] als Allerletztes an. Wenn nein, lass es weg.")
     return "\n".join(lines)
 

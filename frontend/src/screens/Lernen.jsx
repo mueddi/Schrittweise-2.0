@@ -178,7 +178,7 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
 // englische Knopf als blosses Reden ankam. Sichtbare Folge: der Knopf «Show me
 // the full solution» erschien – und die Loesung wurde dann verweigert. Der
 // Tutor antwortet trotzdem auf Englisch, das steuert die Regie-Anweisung.
-function QuickReplies({ solved, unlocked, onSend, onNew, onVariant, onFertig }) {
+function QuickReplies({ solved, unlocked, onSend, onNew, onVariant, fertigMoeglich }) {
   const { t } = useLang();
   const items = solved
     ? [
@@ -187,10 +187,11 @@ function QuickReplies({ solved, unlocked, onSend, onNew, onVariant, onFertig }) 
         { label: t("➕ Neue Aufgabe", "➕ New task"), act: onNew },
       ]
     : [
-        // Der sichere Weg zum Haken: kostet nichts und haengt an keinem Modell.
-        // Er steht bewusst VORNE – wer fertig ist, sucht hier, nicht im Kopf
-        // der Seite.
-        ...(onFertig ? [{ label: t("✓ Ich bin fertig", "✓ I'm done"), act: onFertig, accent: true }] : []),
+        // «Fertig» ist KEIN Knopf, der abhakt: das Kind sagt es dem Tutor, der
+        // schaut die Rechnung an und entscheidet. Ein Haken zum Selberdruecken
+        // waere eine Behauptung, keine Leistung – und stuende ab der ersten
+        // Sekunde im Weg, bevor ueberhaupt etwas gerechnet wurde.
+        ...(fertigMoeglich ? [{ label: t("✓ Ich bin fertig", "✓ I'm done"), act: () => onSend("Ich bin fertig."), accent: true }] : []),
         // verdient nach 2 eigenen Versuchen: die Loesung ist jetzt abholbar
         ...(unlocked ? [{ label: t("🔓 Zeig mir die ganze Lösung", "🔓 Show me the full solution"), act: () => onSend("Zeig mir die Lösung bitte.") }] : []),
         { label: t("🤔 Ich verstehe es nicht", "🤔 I don't get it"), act: () => onSend("Ich verstehe es nicht.") },
@@ -677,7 +678,10 @@ export default function Lernen() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {attempt.solved ? (
+          {/* Kein Knopf zum Selber-Abhaken: ob eine Aufgabe fertig ist,
+              entscheidet der Tutor, wenn er die Rechnung gesehen hat. Was
+              bleibt, ist die Korrektur eines FALSCHEN Hakens. */}
+          {attempt.solved && (
             <>
               <button onClick={() => abhaken(false)} disabled={busy} className="btn-ghost"
                       style={{ fontSize: 12, padding: "8px 14px", borderRadius: 999 }}>
@@ -687,12 +691,6 @@ export default function Lernen() {
                 {t("↻ Nochmal üben", "↻ Practice again")}
               </button>
             </>
-          ) : (
-            <button onClick={() => abhaken(true)} disabled={busy}
-                    title={t("Hakt die Aufgabe in deiner Liste ab", "Ticks the task off in your list")}
-                    style={{ border: "1px solid #cde7d6", background: "#e8f6ec", color: "#1a7f3c", borderRadius: 999, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
-              {t("✓ Fertig", "✓ Done")}
-            </button>
           )}
           {/* Hilfe-Anzeige gilt PRO Aufgabe: erst zeigen, wenn in dieser
               Aufgabe Hilfe im Spiel ist (oder sie geloest wurde) – ein
@@ -839,7 +837,10 @@ export default function Lernen() {
             onSend={(t) => send(t)}
             onNew={() => shell.openNewTask(exercise.topic_id ?? undefined)}
             onVariant={makeVariant}
-            onFertig={() => abhaken(true)}
+            // Erst anbieten, wenn das Kind wirklich etwas gerechnet hat. Vorher
+            // stand «✓ Ich bin fertig» ab der ersten Sekunde da – bevor
+            // ueberhaupt eine Aufgabe angeschaut war.
+            fertigMoeglich={attempt.own_attempts >= 1}
           />
         )}
         {inputLooksMathy && (
