@@ -3,6 +3,9 @@
   "buildCommand": "cd frontend && npm ci && npm run build",
   "outputDirectory": "frontend/dist",
   "regions": ["fra1"],
+  "git": {
+    "deploymentEnabled": { "main": false }
+  },
   "functions": {
     "api/index.py": { "maxDuration": 60 }
   },

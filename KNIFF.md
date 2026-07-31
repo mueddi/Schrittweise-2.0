@@ -95,9 +95,29 @@ In der Sidebar sichtbar, sobald `users.is_admin = TRUE`:
 
 ## 🚀 Deployment (Vercel über GitHub Actions)
 
-**Der einzige Deploy-Weg:** Push auf `main` → `.github/workflows/deploy.yml`
-läuft automatisch (Backend-Tests + Frontend-Build → Vercel-Deploy →
-Smoke-Test gegen die Live-App). Es gibt KEIN manuelles Dashboard-Deployment.
+**Der einzige Deploy-Weg in die Produktion:** Push auf `main` →
+`.github/workflows/deploy.yml` läuft automatisch (Backend-Tests +
+Frontend-Build → Vercel-Deploy → Smoke-Test gegen die Live-App).
+
+Die Vercel-Git-Verbindung bleibt bewusst bestehen, deployt aber **nicht** die
+Produktion: `vercel.json` setzt `git.deploymentEnabled: {"main": false}`.
+Grund: Vercels eigener Deploy überspringt die Tests **und** bekommt das
+Secrets-Sidecar `api/runtime-env.json` nicht – am 31.07.2026 hat genau das die
+API für fünf Minuten lahmgelegt (`FUNCTION_INVOCATION_FAILED`, fehlendes
+`JWT_SECRET`). Die Aufgabenteilung ist deshalb:
+
+| Weg | Zuständig für | Tests davor |
+|---|---|---|
+| Vercel-Git-Verbindung | **Vorschau-Deploys** je Branch (alles ausser `main`) | – |
+| GitHub Actions | **Produktion** (`main`) | ja |
+
+Vorschau-Deploys brauchen ihre eigenen Werte unter **Vercel → Settings →
+Environment Variables → Preview**: mindestens `JWT_SECRET` (sonst verweigert
+`_check_production_config()` den Start) und `ANTHROPIC_API_KEY`. `DATABASE_URL`
+dort **bewusst weglassen** – dann fällt `api/index.py` auf eine leere
+Wegwerf-Datenbank (SQLite in `/tmp`) zurück und ein Testlauf kann die echten
+Schülerdaten nicht berühren. In Vercel gesetzte Variablen gewinnen über das
+Sidecar (`os.environ.setdefault`).
 
 **GitHub-Secrets** (Settings → Secrets and variables → Actions):
 
