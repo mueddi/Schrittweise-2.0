@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from "react";
 import { api } from "./api.js";
+import { detectLang } from "./sprache.js";
 
 // Zweisprachigkeit ohne Fremd-Library: jede Stelle uebergibt beide
 // Fassungen direkt – t("Deutsch …", "English …"). Sprache: manueller
@@ -7,12 +8,6 @@ import { api } from "./api.js";
 
 const LangContext = createContext(null);
 
-export function detectLang() {
-  const stored = localStorage.getItem("sw_lang");
-  if (stored === "de" || stored === "en") return stored;
-  const langs = navigator.languages?.length ? navigator.languages : [navigator.language || "de"];
-  return langs.some((l) => String(l).toLowerCase().startsWith("de")) ? "de" : "en";
-}
 
 export function LanguageProvider({ children }) {
   const [lang, setLangState] = useState(detectLang);

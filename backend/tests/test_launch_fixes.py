@@ -125,3 +125,48 @@ def test_server_fehler_landet_im_stoerungsprotokoll(client):
     with SessionLocal() as db:
         rows = [a for a in db.query(Alert).all() if a.kind == "server"]
     assert rows and "RuntimeError" in rows[0].detail
+
+
+# --- Fix: ein Datenbank-Aussetzer beim Kaltstart darf die App nicht killen ---
+def test_kaltstart_ueberlebt_eine_tote_datenbank(monkeypatch):
+    """Vercel meldete FUNCTION_INVOCATION_FAILED – die ganze Seite weg, nicht
+    nur die eine Anfrage.
+
+    Ursache: init_db() lief bei jedem Kaltstart UNGESCHUETZT. War die Datenbank
+    in dem Moment kurz nicht erreichbar, flog die Ausnahme bis in den Import
+    von api/index.py. Jetzt kostet ein Aussetzer höchstens die
+    Schema-Aktualisierung, nie den Start.
+    """
+    from app import database
+
+    def kaputt(*args, **kwargs):
+        raise OSError("Datenbank nicht erreichbar")
+
+    monkeypatch.setattr(database, "_schema_sicherstellen", kaputt)
+    database.init_db()  # darf NICHT werfen
+
+
+def test_schema_pruefung_fragt_jede_tabelle_nur_einmal(monkeypatch):
+    """13 Migrations-Eintraege verteilen sich auf wenige Tabellen – vorher wurde
+    fuer JEDEN Eintrag einzeln nachgefragt. Das sind Runden zur Datenbank, die
+    bei jedem Kaltstart anfallen."""
+    import sqlalchemy
+
+    from app import database
+
+    gefragt: list[str] = []
+
+    class Attrappe:
+        def get_table_names(self):
+            return list(database.Base.metadata.tables)
+
+        def get_columns(self, table):
+            gefragt.append(table)
+            # so tun, als sei jede Spalte schon da -> keine ALTER-Befehle
+            return [{"name": c.name} for c in database.Base.metadata.tables[table].columns]
+
+    monkeypatch.setattr(sqlalchemy, "inspect", lambda *a, **k: Attrappe())
+    database._schema_sicherstellen()
+
+    assert gefragt, "es wurde ueberhaupt keine Tabelle geprueft"
+    assert len(gefragt) == len(set(gefragt)), f"Tabelle mehrfach abgefragt: {gefragt}"
