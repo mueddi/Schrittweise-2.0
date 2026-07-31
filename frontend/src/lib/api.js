@@ -1,8 +1,4 @@
 // Schmaler API-Client. Basis-URL aus VITE_API_BASE (leer = Vite-Dev-Proxy).
-// Sprache fuer Backend-Fehlermeldungen VOR dem Login (X-Lang-Header);
-// nach dem Login zaehlt das Profil serverseitig.
-import { detectLang as currentLang } from "./sprache.js";
-
 const BASE = import.meta.env.VITE_API_BASE || "";
 
 let token = localStorage.getItem("sw_token") || null;
@@ -21,6 +17,14 @@ export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn;
 }
 
+// Sprache fuer Backend-Fehlermeldungen VOR dem Login (X-Lang-Header);
+// nach dem Login zaehlt das Profil serverseitig.
+function currentLang() {
+  const stored = localStorage.getItem("sw_lang");
+  if (stored === "de" || stored === "en") return stored;
+  const langs = navigator.languages?.length ? navigator.languages : [navigator.language || "de"];
+  return langs.some((l) => String(l).toLowerCase().startsWith("de")) ? "de" : "en";
+}
 
 function headers(extra = {}) {
   const h = { "Content-Type": "application/json", "X-Lang": currentLang(), ...extra };

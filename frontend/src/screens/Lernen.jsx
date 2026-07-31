@@ -8,6 +8,7 @@ import MathFigure from "../components/MathFigure.jsx";
 import { useLang } from "../lib/i18n.jsx";
 import { useDialog } from "../lib/dialog.jsx";
 
+const BASE = import.meta.env.VITE_API_BASE || "";
 
 // Fehler MIT Begruendung vom Server. Ohne ihn wurde jede Absage ausser 401/402
 // zu «Ups, da ging etwas schief» eingedampft – auch die Frequenz-Bremse und
@@ -396,7 +397,7 @@ export default function Lernen() {
       let res;
       for (let anlauf = 0; ; anlauf++) {
         try {
-          res = await fetch(`${api.base}/api/attempts/${myAttempt}/chat`, {
+          res = await fetch(`${BASE}/api/attempts/${myAttempt}/chat`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
             body: JSON.stringify({ text: sendText, image_path: img || undefined }),
@@ -720,7 +721,7 @@ export default function Lernen() {
             <>
               {showTaskImage && (
                 <img
-                  src={`${api.base}${exercise.image_path}`}
+                  src={`${BASE}${exercise.image_path}`}
                   alt={t("Aufgaben-Bild", "Task image")}
                   title={t("🔍 vergrössern", "🔍 zoom in")}
                   onClick={() => setLightbox(exercise.image_path)}
@@ -793,7 +794,7 @@ export default function Lernen() {
               <Bubble key={m.id} role={m.role} verifyStatus={m.verification_status} hintLevel={m.role === "tutor" ? m.hint_level : null}>
                 {m.image_path && (
                   <img
-                    src={`${api.base}${m.image_path}`}
+                    src={`${BASE}${m.image_path}`}
                     alt={t("Angehängtes Bild", "Attached image")}
                     title={t("🔍 vergrössern", "🔍 zoom in")}
                     onClick={() => setLightbox(m.image_path)}
@@ -886,7 +887,7 @@ export default function Lernen() {
         {pendingImage && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 12, padding: "6px 10px" }}>
             <img
-              src={`${api.base}${pendingImage}`}
+              src={`${BASE}${pendingImage}`}
               alt={t("Bild-Anhang", "Image attachment")}
               onClick={() => setLightbox(pendingImage)}
               style={{ height: 48, maxWidth: 90, objectFit: "cover", borderRadius: 8, border: "1px solid #e0e2fb", cursor: "zoom-in", background: "#fff" }}
@@ -931,7 +932,7 @@ export default function Lernen() {
           style={{ position: "fixed", inset: 0, background: "rgba(15,15,30,.82)", zIndex: 60, display: "grid", placeItems: "center", padding: 20, cursor: "zoom-out" }}
         >
           <img
-            src={`${api.base}${lightbox}`}
+            src={`${BASE}${lightbox}`}
             alt={t("Bild gross", "Image enlarged")}
             style={{ maxWidth: "92vw", maxHeight: "88vh", borderRadius: 14, boxShadow: "0 20px 60px rgba(0,0,0,.5)", background: "#fff" }}
           />
