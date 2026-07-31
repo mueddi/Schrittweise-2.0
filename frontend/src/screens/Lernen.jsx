@@ -274,7 +274,7 @@ export default function Lernen() {
     if (!el) return true;
     return el.scrollHeight - el.scrollTop - el.clientHeight < rand;
   };
-  const scrollDown = useCallback((force = true) => {
+  const scrollDown = useCallback(() => {
     requestAnimationFrame(() => {
       if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
     });

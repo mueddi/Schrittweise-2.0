@@ -8,16 +8,11 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 # ---------- Auth ----------
 class MagicLinkRequest(BaseModel):
-    # "register" shadowt ein BaseModel-Attribut -> intern register_, im JSON weiterhin "register"
-    model_config = ConfigDict(populate_by_name=True)
+    """Anmelde-Link anfordern. Konten entstehen NUR ueber /api/auth/register –
+    frueher standen hier vier weitere Felder, die der Server stillschweigend
+    wegwarf (auth.py liest ausschliesslich die E-Mail)."""
 
     email: EmailStr
-    # True nur im «Neu hier»-Tab: erlaubt das Anlegen eines neuen Kontos.
-    register_: bool = Field(default=False, alias="register")
-    # Bei Erst-Registrierung optional mitgeben:
-    display_name: str | None = Field(default=None, max_length=80)
-    role: str = "student"  # "student" | "parent"
-    grade_level: str | None = None
 
 
 class MagicLinkResponse(BaseModel):
@@ -210,7 +205,6 @@ class AttemptOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     exercise_id: int
-    status: str
     hint_level: int
     own_attempts: int
     solved: bool
@@ -255,7 +249,6 @@ class AttemptStateOut(BaseModel):
 class OcrResult(BaseModel):
     text: str
     math_expression: str | None = None
-    confidence: float = 0.0
     image_path: str | None = None
 
 
@@ -308,10 +301,6 @@ class QuotaOut(BaseModel):
 
 
 # ---------- Parent ----------
-class ParentLinkCreate(BaseModel):
-    pass
-
-
 class ParentLinkOut(BaseModel):
     invite_code: str
     status: str

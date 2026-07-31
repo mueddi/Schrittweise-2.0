@@ -345,7 +345,7 @@ function AdminUpload({ topics, onDone }) {
 }
 
 function TopicManager({ topics, onChanged }) {
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const dialog = useDialog();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);

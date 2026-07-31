@@ -2,28 +2,13 @@
 :root {
   --indigo: #6366f1;
   --indigo-dark: #4f46e5;
-  --indigo-bg: #eef0fe;
-  --indigo-bg-2: #e7e8fb;
   --text: #1a1c22;
-  --gray: #6b7280;
   --gray-2: #9aa0ab;
   --gray-3: #b6bcc6;
-  --border: #e7e8ee;
   --border-2: #d2d4dd;
-  --line: #eef0f3;
-  --chat-bg: #f6f7fb;
   --panel: #fbfbfd;
-  --green: #1a7f3c;
-  --green-soft: #8be0a4;
-  --amber: #d9573a;
-  --red: #c0392b;
 
-  --r-card: 18px;
-  --r-card-lg: 22px;
   --r-btn: 12px;
-  --shadow-sm: 0 1px 2px rgba(40, 40, 90, 0.05);
-  --shadow-md: 0 6px 16px rgba(40, 40, 90, 0.06);
-  --shadow-lg: 0 30px 60px rgba(40, 40, 90, 0.16);
   --shadow-indigo: 0 2px 10px rgba(99, 102, 241, 0.32);
 }
 

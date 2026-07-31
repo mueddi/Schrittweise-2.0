@@ -6,7 +6,7 @@ import { useLang } from "../lib/i18n.jsx";
 // Admin-Auswertung der KI-Kosten: was kostet eine Aufgabe im Schnitt,
 // wo geht das Geld hin (Chat / Erkennung / Suche), welches Modell frisst wie viel.
 export default function Kosten() {
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const [tage, setTage] = useState(30);
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");

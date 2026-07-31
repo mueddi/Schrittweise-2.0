@@ -64,7 +64,4 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     }).then(handle),
-  // Streaming (SSE-artig, zeilenweise) fuer den Tutor-Chat
-  stream: (path, body) =>
-    fetch(`${BASE}${path}`, { method: "POST", headers: headers(), body: JSON.stringify(body || {}) }),
 };

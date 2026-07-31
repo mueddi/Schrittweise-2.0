@@ -48,11 +48,10 @@ class PytesseractOcr:
             text = pytesseract.image_to_string(img, config="--psm 6")
             text = text.strip()
             expr = _guess_math_expression(text)
-            conf = 0.7 if expr else (0.4 if text else 0.0)
-            return OcrResult(text=text, math_expression=expr, confidence=conf)
+            return OcrResult(text=text, math_expression=expr)
         except Exception:
             # tesseract fehlt oder Bild nicht lesbar -> leer, manueller Fallback im UI
-            return OcrResult(text="", math_expression=None, confidence=0.0)
+            return OcrResult(text="", math_expression=None)
 
 
 def _trim_and_cap(image_bytes: bytes, max_edge: int = 1400) -> bytes:
@@ -223,7 +222,7 @@ class ClaudeVisionOcr:
             if text.upper() == "LEER":
                 text = ""
             expr = _guess_math_expression(text)
-            return OcrResult(text=text, math_expression=expr, confidence=0.9 if text else 0.0)
+            return OcrResult(text=text, math_expression=expr)
         except Exception as exc:
             # KEIN stiller pytesseract-Fallback mehr: der kann Handschrift nicht
             # und ist auf dem Server gar nicht installiert – das ergab "Konnte
@@ -234,12 +233,6 @@ class ClaudeVisionOcr:
             alert.notify("ocr", f"{type(exc).__name__}: {exc}")
             raise OcrUnavailable()
 
-
-class MathpixOcr:  # pragma: no cover – Platzhalter fuer spaeteren Wechsel
-    name = "mathpix"
-
-    def recognize(self, image_bytes: bytes) -> OcrResult:
-        raise NotImplementedError("Mathpix noch nicht angebunden")
 
 
 def get_ocr_provider() -> OcrProvider:

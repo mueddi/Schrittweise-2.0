@@ -51,7 +51,6 @@ def _aufgaben_texte(db: Session, topic: Topic) -> list[str]:
 def _to_out(db: Session, ex: Exam) -> ExamOut:
     items = sorted(ex.items, key=lambda i: i.position)
     out = ExamOut.model_validate(ex)
-    out.items = [i for i in out.items]  # von model_validate befüllt
     out.total = len(items)
     out.richtig = sum(1 for i in items if i.verdict == "correct")
     if ex.status == ExamStatus.bewertet:

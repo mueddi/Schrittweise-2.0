@@ -158,7 +158,7 @@ export function DialogProvider({ children }) {
                   e.preventDefault(); // sonst loest derselbe Druck den Knopf dahinter aus
                   schliessen(wert.trim());
                 }}
-                maxLength={spec.maxLaenge || 120}
+                maxLength={120}
                 style={{ width: "100%", marginTop: 12, border: "1px solid #d2d4dd", borderRadius: 10, padding: "10px 12px", fontSize: 14, outline: "none" }}
               />
             )}

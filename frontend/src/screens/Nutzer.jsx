@@ -5,7 +5,7 @@ import { useLang } from "../lib/i18n.jsx";
 // Admin-Support-Werkzeug: Nutzer suchen, Guthaben einsehen und korrigieren
 // (Kulanz, Rückerstattung, verpasster Stripe-Webhook).
 export default function Nutzer() {
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const [q, setQ] = useState("");
   const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
@@ -66,7 +66,7 @@ export default function Nutzer() {
 }
 
 function UserCard({ u, onChanged }) {
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState("");
   const [grund, setGrund] = useState("");

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
 from ..database import get_db
-from ..deps import get_current_user, require_parent, require_student
+from ..deps import require_parent, require_student
 from ..models import ParentLink, Role, User
 from ..schemas import ParentChildSummary, ParentLinkOut, ParentRedeem
 from ..security import new_invite_code
@@ -105,7 +105,3 @@ def children(user: User = Depends(require_parent), db: Session = Depends(get_db)
         out.append(ParentChildSummary(**_summary_respecting_share(db, student)))
     return out
 
-
-@router.get("/role")
-def whoami(user: User = Depends(get_current_user)):
-    return {"role": user.role.value, "display_name": user.display_name}

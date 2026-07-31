@@ -130,7 +130,7 @@ function buildHtml(text) {
   return withLines(inlineMarkdown(parts.join("")));
 }
 
-export default function MathText({ text, style }) {
+export default function MathText({ text }) {
   const html = useMemo(() => buildHtml(text), [text]);
-  return <span style={style} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
 }

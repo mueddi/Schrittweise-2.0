@@ -29,7 +29,6 @@ class Verification:
     detail: str  # kurze technische Notiz (nur intern)
     solution: str | None = None  # interne Lösung, NIE ungefiltert an Schüler
     extracted: str | None = None  # was aus der Antwort erkannt wurde
-    score: float = 0.0  # feinkörnig intern
 
     def to_context(self) -> dict:
         """Kompakter Kontext fürs LLM (ohne die Lösung, ausser Stufe 4 erlaubt)."""
@@ -407,7 +406,7 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
                         pass
             if any(sp.simplify(v - expected) == 0 for v in values):
                 return Verification("correct", "Zahlenwert stimmt", solution=sol_str,
-                                    extracted=_attempted, score=1.0)
+                                    extracted=_attempted)
             if values:
                 return Verification("incorrect", "Zahlenwert stimmt nicht", solution=sol_str,
                                     extracted=_attempted)
@@ -425,7 +424,7 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
     sols = _solutions(lhs, rhs, sym)
     sol_str = ", ".join(f"{sym} = {sp.nsimplify(s)}" for s in sols) if sols else None
 
-    candidates = _extract_candidates(message)
+    candidates = _cands  # oben schon berechnet – nicht zweimal analysieren
     if not candidates:
         return Verification("unknown", "keine Antwort im Text erkannt", solution=sol_str)
 
@@ -448,10 +447,10 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
                 for s in sols:
                     try:
                         if sp.simplify(value - s) == 0:
-                            return Verification("correct", "Endwert stimmt", sol_str, cand, 1.0)
+                            return Verification("correct", "Endwert stimmt", sol_str, cand)
                     except Exception:
                         pass
-                return Verification("incorrect", "Endwert stimmt nicht", sol_str, cand, 0.0)
+                return Verification("incorrect", "Endwert stimmt nicht", sol_str, cand)
             # Reines Wiederholen der Aufgabe (gleiche Seiten, evtl. vertauscht) ist
             # KEIN eigener Schritt – sonst liesse sich die Stufe-4-Sperre durch
             # zweimaliges Abtippen der Aufgabe aushebeln.
@@ -473,10 +472,10 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
             try:
                 c_sols = _solutions(c_lhs, c_rhs, sym)
                 if c_sols and sols and set(map(sp.simplify, c_sols)) == set(map(sp.simplify, sols)):
-                    return Verification("partial", "gültiger Umformungsschritt", sol_str, cand, 0.6)
+                    return Verification("partial", "gültiger Umformungsschritt", sol_str, cand)
             except Exception:
                 pass
-            return Verification("incorrect", "Umformung nicht äquivalent", sol_str, cand, 0.0)
+            return Verification("incorrect", "Umformung nicht äquivalent", sol_str, cand)
 
         # Fall B: nackte Zahl -> gegen Lösungen prüfen
         try:
@@ -484,8 +483,8 @@ def verify(exercise_expr: str | None, message: str) -> Verification:
             if val.is_number:
                 for s in sols:
                     if sp.simplify(val - s) == 0:
-                        return Verification("correct", "Zahl stimmt", sol_str, cand, 1.0)
-                return Verification("incorrect", "Zahl stimmt nicht", sol_str, cand, 0.0)
+                        return Verification("correct", "Zahl stimmt", sol_str, cand)
+                return Verification("incorrect", "Zahl stimmt nicht", sol_str, cand)
         except Exception:
             continue
 

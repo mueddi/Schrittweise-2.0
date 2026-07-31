@@ -16,7 +16,8 @@ const num = (v, lo, hi) => {
 };
 const str = (v, max = 14) => (typeof v === "string" || typeof v === "number" ? String(v).slice(0, max) : null);
 
-function Box({ children, w = 320, h = 180 }) {
+function Box({ children, h = 180 }) {
+  const w = 320;
   return (
     <span style={{ display: "block", background: "#f7f8ff", border: "1px solid #e0e2fb", borderLeft: `3px solid ${INDIGO}`, borderRadius: 12, padding: "10px 12px", margin: "8px 0", maxWidth: "100%" }}>
       <svg viewBox={`0 0 ${w} ${h}`} style={{ display: "block", width: "100%", maxWidth: w, height: "auto", margin: "0 auto" }} role="img">

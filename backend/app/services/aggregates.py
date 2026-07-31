@@ -15,13 +15,12 @@ from sqlalchemy.orm import Session
 from ..models import Attempt, Exercise, ProgressAggregate, Topic
 from .timezone import LOCAL_TZ
 
-# grobe Trend-Labels statt Noten
-TREND_SITZT = "sitzt"
-TREND_BESSER = "wird_besser"
+# Die Liste heisst «top_struggles» – dort steht per Definition, woran es
+# hakt. Frueher standen hier zwei weitere Werte («sitzt», «wird besser»), die
+# nie vergeben wurden, weil die Liste sie gar nicht enthalten kann.
 TREND_UEBEN = "noch_ueben"
 
 
-_TREND_LABEL = {"sitzt": "Sitzt", "wird_besser": "Wird besser", "noch_ueben": "Noch üben"}
 
 
 def _week_start(d: date) -> date:
@@ -139,7 +138,7 @@ def build_summary(db: Session, student, ref: datetime | None = None) -> dict:
         if ratio is not None and before is not None and ratio < before:
             label = "Wird besser"
         else:
-            label = _TREND_LABEL.get(s.get("trend", ""), "Noch üben")
+            label = "Noch üben"  # top_struggles enthaelt nur Themen, die noch haken
         struggles.append({"topic": s.get("topic", "Thema"), "label": label,
                           "heavy": heavy, "total": s.get("total")})
 

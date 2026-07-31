@@ -448,10 +448,3 @@ def generate_exercise(payload: dict | None = None,
     db.flush()
     return _start_attempt_state(db, ex, user)
 
-
-@router.get("/{exercise_id}", response_model=ExerciseOut)
-def get_exercise(exercise_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
-    ex = db.get(Exercise, exercise_id)
-    if ex is None or ex.user_id != user.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, i18n.t(i18n.lang_of(user), "Aufgabe nicht gefunden", "Task not found"))
-    return ExerciseOut.model_validate(ex)
