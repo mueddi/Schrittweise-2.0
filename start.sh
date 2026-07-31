@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Schrittweise mit EINEM Befehl lokal starten (Mac/Linux):  ./start.sh
+# Kniff mit EINEM Befehl lokal starten (Mac/Linux):  ./start.sh
 # Richtet beim ersten Lauf alles ein, startet Backend + Frontend und
 # oeffnet http://localhost:5173
 set -e
@@ -29,6 +29,6 @@ sleep 3
 
 URL="http://localhost:5173"
 echo ""
-echo "✅ Schrittweise laeuft: $URL"
+echo "✅ Kniff laeuft: $URL"
 command -v open >/dev/null && open "$URL" || command -v xdg-open >/dev/null && xdg-open "$URL" || true
 wait

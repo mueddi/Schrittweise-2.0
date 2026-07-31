@@ -1,5 +1,5 @@
 @echo off
-REM Schrittweise mit EINEM Doppelklick lokal starten (Windows).
+REM Kniff mit EINEM Doppelklick lokal starten (Windows).
 REM Voraussetzungen: Python 3.11+ (python.org) und Node.js 18+ (nodejs.org)
 cd /d "%~dp0"
 
@@ -19,13 +19,13 @@ if not exist node_modules call npm install --no-audit --no-fund
 cd ..
 
 echo == Server starten ==
-start "Schrittweise API" cmd /k "cd backend && .venv\Scripts\uvicorn app.main:app --port 8000"
+start "Kniff API" cmd /k "cd backend && .venv\Scripts\uvicorn app.main:app --port 8000"
 timeout /t 3 /nobreak >nul
-start "Schrittweise Web" cmd /k "cd frontend && npm run dev"
+start "Kniff Web" cmd /k "cd frontend && npm run dev"
 timeout /t 4 /nobreak >nul
 start http://localhost:5173
 
 echo.
-echo Schrittweise laeuft: http://localhost:5173
+echo Kniff laeuft: http://localhost:5173
 echo Zum Beenden beide Konsolenfenster schliessen.
 pause

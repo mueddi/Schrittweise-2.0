@@ -1,9 +1,9 @@
-# Render-Blueprint fuer Schrittweise – Launch-Konfiguration.
+# Render-Blueprint fuer Kniff – Launch-Konfiguration.
 # Frontend = Static Site, Backend = Web Service (Docker, mit Tesseract).
 #
 # Datenbank: PostgreSQL bei SUPABASE (empfohlen – dauerhaft gratis, kein
 # 30-Tage-Ablauf wie bei Render-free-Postgres). Einrichtung siehe
-# SCHRITTWEISE.md -> Launch-Checkliste; die Connection-URL traegst du im
+# KNIFF.md -> Launch-Checkliste; die Connection-URL traegst du im
 # Render-Dashboard als DATABASE_URL ein (sync: false unten).
 # Wichtig: bei Supabase den «Session pooler»-Connection-String verwenden
 # (IPv4-kompatibel, unterstuetzt Prepared Statements).
@@ -62,7 +62,7 @@ services:
       - key: SMTP_PASSWORD
         sync: false
       - key: SMTP_FROM
-        value: Schrittweise <no-reply@schrittweise.ch>
+        value: Kniff <no-reply@schrittweise.ch>
       # 1 Token = 1 Rappen verrechnete KI-Leistung (nutzungsbasiertes Pricing)
       - key: FREE_MONTHLY_TOKENS
         value: "50"
