@@ -51,18 +51,54 @@ def get_db():
 
 
 def init_db() -> None:
-    """Erzeugt alle Tabellen (einfache Migration fuer den Start)."""
+    """Schema sicherstellen – aber NIE auf Kosten der Erreichbarkeit.
+
+    Das hier laeuft bei JEDEM Kaltstart der Serverless-Funktion, also sehr oft.
+    Zwei Dinge waren daran falsch:
+
+    1. Es lief UNGESCHUETZT. War die Datenbank in dem Moment kurz nicht
+       erreichbar, flog die Ausnahme bis in den Import von ``api/index.py`` –
+       und Vercel meldete FUNCTION_INVOCATION_FAILED: die ganze Seite weg,
+       nicht nur die eine Anfrage. Genau so ein 500er war am 31.07. zu sehen
+       (beim zweiten Aufruf war wieder alles normal).
+    2. Es fragte die Datenbank ueber ein Dutzend Mal, auch wenn nichts zu tun
+       war: einmal ``create_all`` (mit eigener Reflexion), einmal die
+       Tabellenliste und dann ``get_columns`` PRO Migrations-Eintrag.
+
+    Jetzt: eine Reflexion, eine Spaltenabfrage pro betroffener Tabelle, und ein
+    Fehler kostet hoechstens die Schema-Aktualisierung – nie den Start.
+    """
+    import logging
+
+    try:
+        _schema_sicherstellen()
+    except Exception:
+        logging.getLogger("schrittweise.db").exception(
+            "Schema-Pruefung beim Start fehlgeschlagen – die App startet trotzdem. "
+            "Fehlt eine Spalte, zeigen die betroffenen Anfragen das im Log."
+        )
+
+
+def _schema_sicherstellen() -> None:
     from sqlalchemy import inspect, text
 
     from . import models  # noqa: F401  – Modelle registrieren
 
-    Base.metadata.create_all(bind=engine)
+    import logging
+
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    # create_all reflektiert selbst nochmal ueber ALLE Tabellen – das lohnt nur,
+    # wenn wirklich eine fehlt (also beim allerersten Start und nach einer
+    # neuen Tabelle im Modell).
+    if set(Base.metadata.tables) - tables:
+        Base.metadata.create_all(bind=engine)
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
 
     # Mini-Migrationen: create_all ergaenzt keine Spalten in bestehenden Tabellen.
     # Fehler (z.B. fehlende Owner-Rechte) duerfen den Kaltstart nicht killen –
     # dann fehlt zwar die Spalte, aber der Rest der App laeuft und das Log zeigt warum.
-    import logging
-
     migrations = [
         ("users", "password_hash", "ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)"),
         ("users", "is_admin", "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE NOT NULL"),
@@ -82,15 +118,20 @@ def init_db() -> None:
          "ALTER TABLE topics ADD COLUMN learning_goals TEXT DEFAULT '' NOT NULL"),
         ("topics", "archived_at", "ALTER TABLE topics ADD COLUMN archived_at TIMESTAMP"),
     ]
-    inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
+    # Spalten EINMAL pro Tabelle holen statt einmal pro Migrations-Eintrag:
+    # 13 Eintraege verteilen sich auf 4 Tabellen.
+    spalten: dict[str, set[str]] = {}
     for table, column, ddl in migrations:
+        if table not in tables:
+            continue
         try:
-            if table in tables:
-                existing = {col["name"] for col in inspector.get_columns(table)}
-                if column not in existing:
-                    with engine.begin() as conn:
-                        conn.execute(text(ddl))
+            if table not in spalten:
+                spalten[table] = {col["name"] for col in inspector.get_columns(table)}
+            if column in spalten[table]:
+                continue
+            with engine.begin() as conn:
+                conn.execute(text(ddl))
+            spalten[table].add(column)
         except Exception:
             logging.getLogger("schrittweise.db").exception(
                 "Auto-Migration fehlgeschlagen (%s.%s)", table, column
