@@ -111,13 +111,24 @@ API für fünf Minuten lahmgelegt (`FUNCTION_INVOCATION_FAILED`, fehlendes
 | Vercel-Git-Verbindung | **Vorschau-Deploys** je Branch (alles ausser `main`) | – |
 | GitHub Actions | **Produktion** (`main`) | ja |
 
-Vorschau-Deploys brauchen ihre eigenen Werte unter **Vercel → Settings →
-Environment Variables → Preview**: mindestens `JWT_SECRET` (sonst verweigert
-`_check_production_config()` den Start) und `ANTHROPIC_API_KEY`. `DATABASE_URL`
-dort **bewusst weglassen** – dann fällt `api/index.py` auf eine leere
-Wegwerf-Datenbank (SQLite in `/tmp`) zurück und ein Testlauf kann die echten
-Schülerdaten nicht berühren. In Vercel gesetzte Variablen gewinnen über das
-Sidecar (`os.environ.setdefault`).
+Vorschau-Deploys bekommen das Sidecar nicht (das schreibt nur der GitHub-Ablauf)
+und brauchen deshalb **genau eine** Variable unter **Vercel → Settings →
+Environment Variables**, Umgebung **nur Preview**:
+
+| Variable | warum |
+|---|---|
+| `JWT_SECRET` | irgendein langer Zufallswert; ohne ihn verweigert `_check_production_config()` den Start (`VERCEL` gesetzt ⇒ `is_production`) |
+
+Bewusst **nicht** gesetzt: `DATABASE_URL` – dann fällt `api/index.py:56` auf eine
+leere Wegwerf-Datenbank (SQLite in `/tmp`) zurück und ein Testlauf kann die
+echten Schülerdaten nicht berühren. Ebenso `ANTHROPIC_API_KEY` – ohne Schlüssel
+antwortet der deterministische Mock, was für einen Start-Test genügt und nichts
+kostet.
+
+Für **Production** in Vercel bewusst **nichts** eintragen: die Werte kommen dort
+weiterhin aus dem Sidecar. (Falls doch einmal nötig – in Vercel gesetzte
+Variablen gewinnen über das Sidecar, weil `api/index.py` `os.environ.setdefault`
+benutzt.)
 
 **GitHub-Secrets** (Settings → Secrets and variables → Actions):
 
