@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .database import init_db
@@ -93,13 +92,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Upload-Verzeichnis fuer Foto-Aufgaben (auf Serverless via UPLOAD_DIR=/tmp/uploads)
-UPLOAD_DIR = settings.upload_path
-try:
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-except OSError:  # read-only Filesystem (Serverless ohne UPLOAD_DIR-Konfiguration)
-    logger.warning("Upload-Verzeichnis %s nicht beschreibbar – Foto-Upload deaktiviert.", UPLOAD_DIR)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR, check_dir=False), name="uploads")
+# Kein /uploads-Verzeichnis mehr: Bilder liegen seit dem Umbau in der
+# Datenbank und werden ueber /api/exercises/images/{token} ausgeliefert.
+# Auf Serverless war der Ordner ohnehin eine Attrappe – /tmp ueberlebt keinen
+# Deploy. Entfernt am 30.07.2026.
 
 
 @app.get("/api/health")

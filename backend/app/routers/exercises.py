@@ -35,11 +35,6 @@ try:
 except Exception:  # pragma: no cover
     pass
 
-UPLOAD_DIR = settings.upload_path
-try:
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-except OSError:  # read-only Filesystem (Serverless)
-    pass
 ALLOWED_IMG = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic"}
 MAX_UPLOAD = 8 * 1024 * 1024
 

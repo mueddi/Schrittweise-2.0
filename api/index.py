@@ -31,7 +31,6 @@ if _env_file.exists():
         pass
 
 # Serverless-Defaults: nur /tmp ist beschreibbar
-os.environ.setdefault("UPLOAD_DIR", "/tmp/uploads")
 # Sicherheits-Defaults: ohne explizite Env kein Dev-Login-Leak in Produktion.
 os.environ.setdefault("MAGIC_LINK_DEV_RETURN", "false")
 

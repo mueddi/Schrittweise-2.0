@@ -1,6 +1,5 @@
 """Zentrale Konfiguration via pydantic-settings (liest aus .env / Umgebung)."""
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -78,9 +77,6 @@ class Settings(BaseSettings):
     def payments_enabled(self) -> bool:
         return bool(self.stripe_secret_key and self.stripe_webhook_secret)
 
-    # Upload-Verzeichnis (leer = backend/uploads; auf Serverless z.B. /tmp/uploads)
-    upload_dir: str = ""
-
     @property
     def is_production(self) -> bool:
         """True auf Serverless-/Hosting-Plattformen (Vercel, Render)."""
@@ -92,11 +88,6 @@ class Settings(BaseSettings):
     def jwt_secret_is_placeholder(self) -> bool:
         return self.jwt_secret.startswith(("dev-secret", "change-me"))
 
-    @property
-    def upload_path(self) -> Path:
-        if self.upload_dir:
-            return Path(self.upload_dir)
-        return Path(__file__).resolve().parent.parent / "uploads"
 
     @property
     def cors_origin_list(self) -> list[str]:
