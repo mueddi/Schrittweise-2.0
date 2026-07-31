@@ -95,9 +95,40 @@ In der Sidebar sichtbar, sobald `users.is_admin = TRUE`:
 
 ## 🚀 Deployment (Vercel über GitHub Actions)
 
-**Der einzige Deploy-Weg:** Push auf `main` → `.github/workflows/deploy.yml`
-läuft automatisch (Backend-Tests + Frontend-Build → Vercel-Deploy →
-Smoke-Test gegen die Live-App). Es gibt KEIN manuelles Dashboard-Deployment.
+**Der einzige Deploy-Weg in die Produktion:** Push auf `main` →
+`.github/workflows/deploy.yml` läuft automatisch (Backend-Tests +
+Frontend-Build → Vercel-Deploy → Smoke-Test gegen die Live-App).
+
+Die Vercel-Git-Verbindung bleibt bewusst bestehen, deployt aber **nicht** die
+Produktion: `vercel.json` setzt `git.deploymentEnabled: {"main": false}`.
+Grund: Vercels eigener Deploy überspringt die Tests **und** bekommt das
+Secrets-Sidecar `api/runtime-env.json` nicht – am 31.07.2026 hat genau das die
+API für fünf Minuten lahmgelegt (`FUNCTION_INVOCATION_FAILED`, fehlendes
+`JWT_SECRET`). Die Aufgabenteilung ist deshalb:
+
+| Weg | Zuständig für | Tests davor |
+|---|---|---|
+| Vercel-Git-Verbindung | **Vorschau-Deploys** je Branch (alles ausser `main`) | – |
+| GitHub Actions | **Produktion** (`main`) | ja |
+
+Vorschau-Deploys bekommen das Sidecar nicht (das schreibt nur der GitHub-Ablauf)
+und brauchen deshalb **genau eine** Variable unter **Vercel → Settings →
+Environment Variables**, Umgebung **nur Preview**:
+
+| Variable | warum |
+|---|---|
+| `JWT_SECRET` | irgendein langer Zufallswert; ohne ihn verweigert `_check_production_config()` den Start (`VERCEL` gesetzt ⇒ `is_production`) |
+
+Bewusst **nicht** gesetzt: `DATABASE_URL` – dann fällt `api/index.py:56` auf eine
+leere Wegwerf-Datenbank (SQLite in `/tmp`) zurück und ein Testlauf kann die
+echten Schülerdaten nicht berühren. Ebenso `ANTHROPIC_API_KEY` – ohne Schlüssel
+antwortet der deterministische Mock, was für einen Start-Test genügt und nichts
+kostet.
+
+Für **Production** in Vercel bewusst **nichts** eintragen: die Werte kommen dort
+weiterhin aus dem Sidecar. (Falls doch einmal nötig – in Vercel gesetzte
+Variablen gewinnen über das Sidecar, weil `api/index.py` `os.environ.setdefault`
+benutzt.)
 
 **GitHub-Secrets** (Settings → Secrets and variables → Actions):
 
