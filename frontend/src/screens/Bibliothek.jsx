@@ -4,7 +4,6 @@ import { useAuth } from "../lib/auth.jsx";
 import { useLang, GRADE_KEYS, gradeLabel, gradeShort } from "../lib/i18n.jsx";
 import { useDialog } from "../lib/dialog.jsx";
 
-const BASE = import.meta.env.VITE_API_BASE || "";
 
 // Stabile Farbe pro Themen-Name (Themen sind frei benennbar)
 const PALETTE = ["#6366f1", "#e0993a", "#1a7f3c", "#c0392b", "#0e7490", "#7c3aed", "#b45309"];
@@ -108,7 +107,7 @@ export default function Bibliothek() {
 
   async function openDoc(doc) {
     try {
-      const res = await fetch(`${BASE}/api/library/${doc.id}/file`, {
+      const res = await fetch(`${api.base}/api/library/${doc.id}/file`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (!res.ok) throw new Error(t("Dokument konnte nicht geladen werden.", "The document could not be loaded."));

@@ -5,7 +5,6 @@ import { useShell } from "./AppShell.jsx";
 import DrawPad from "./DrawPad.jsx";
 import { useLang } from "../lib/i18n.jsx";
 
-const BASE = import.meta.env.VITE_API_BASE || "";
 
 // Neue Aufgabe: Foto-Upload mit OCR-Preview (Phase 3) + manuelle Eingabe.
 export default function NewTaskModal({ onClose, presetTopicId }) {
@@ -144,7 +143,7 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
           {(fileName || ocrBusy) && (
             <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#f6f7fb", border: "1px solid #eef0f3", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
               <div style={{ flex: "0 0 96px", height: 72, borderRadius: 10, background: "#fff", border: "1px solid #e7e8ee", display: "grid", placeItems: "center", fontFamily: "Georgia,serif", fontStyle: "italic", fontSize: 15, overflow: "hidden" }}>
-                {imagePath ? <img src={`${BASE}${imagePath}`} alt={t("Dein Foto", "Your photo")} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "…"}
+                {imagePath ? <img src={`${api.base}${imagePath}`} alt={t("Dein Foto", "Your photo")} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "…"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileName || t("wird erkannt …", "recognizing …")}</div>
