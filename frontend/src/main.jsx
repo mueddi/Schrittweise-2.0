@@ -1,15 +1,12 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, HashRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import { AuthProvider } from "./lib/auth.jsx";
 import { LanguageProvider } from "./lib/i18n.jsx";
 import { DialogProvider } from "./lib/dialog.jsx";
 import "./styles/theme.css";
 
-// Demo-Build (VITE_DEMO=1): Mock-Backend im Browser + HashRouter (kein Server-Rewrite noetig)
-const IS_DEMO = import.meta.env.VITE_DEMO === "1";
-const Router = IS_DEMO ? HashRouter : BrowserRouter;
 
 // Browser-Fehler an den Betreiber melden (Admin -> Kosten -> Stoerungen).
 // Best effort: nur eingeloggt, max. 3 Meldungen pro Seiten-Session,
@@ -17,7 +14,7 @@ const Router = IS_DEMO ? HashRouter : BrowserRouter;
 let errorReports = 0;
 function reportClientError(message) {
   try {
-    if (IS_DEMO || errorReports >= 3) return;
+    if (errorReports >= 3) return;
     const token = localStorage.getItem("sw_token");
     if (!token || !message) return;
     errorReports += 1;
@@ -76,13 +73,10 @@ class ErrorBoundary extends React.Component {
 }
 
 async function boot() {
-  if (IS_DEMO) {
-    await import("./lib/mockApi.js");
-  }
   ReactDOM.createRoot(document.getElementById("root")).render(
     <React.StrictMode>
       <ErrorBoundary>
-        <Router>
+        <BrowserRouter>
           <LanguageProvider>
             <AuthProvider>
               {/* Rueckfragen und Meldungen im Design der App – statt der
@@ -93,7 +87,7 @@ async function boot() {
               </DialogProvider>
             </AuthProvider>
           </LanguageProvider>
-        </Router>
+        </BrowserRouter>
       </ErrorBoundary>
     </React.StrictMode>
   );

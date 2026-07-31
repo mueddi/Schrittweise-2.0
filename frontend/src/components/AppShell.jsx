@@ -183,7 +183,14 @@ export default function AppShell() {
           </div>
 
           <div style={{ padding: "12px 16px 4px", fontSize: 11, fontWeight: 700, letterSpacing: ".1em", color: "#9aa0ab" }}>{t("MEHR", "MORE")}</div>
-          <div onClick={() => nav("/app/bibliothek")} style={{ ...navItem(isActive("bibliothek")), margin: "0 8px" }}>📚 {t("Bibliothek", "Library")}</div>
+          {/* Die Bibliothek ist leer (0 Arbeitsblaetter). Ein Menuepunkt, der
+              auf eine leere Seite fuehrt, enttaeuscht mehr als er nuetzt –
+              deshalb sieht ihn vorerst nur der Betreiber, der sie fuellt.
+              Sobald das erste Blatt drin ist: Bedingung entfernen, fertig.
+              Die Seite selbst bleibt unter /app/bibliothek erreichbar. */}
+          {user?.is_admin && (
+            <div onClick={() => nav("/app/bibliothek")} style={{ ...navItem(isActive("bibliothek")), margin: "0 8px" }}>📚 {t("Bibliothek", "Library")}</div>
+          )}
           <div onClick={() => nav("/app/eltern")} style={{ ...navItem(isActive("eltern")), margin: "0 8px" }}>👪 {t("Eltern verbinden", "Connect parents")}</div>
           <div onClick={() => setFbOpen(true)} style={{ ...navItem(false), margin: "0 8px" }}>💬 Feedback</div>
           {user?.is_admin && (

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import require_student
 from ..models import Grade, Topic, User
-from ..schemas import GradeIn, GradeOut, GradeUpdate, GradeVerlauf
+from ..schemas import GradeIn, GradeOut, GradeVerlauf
 
 router = APIRouter(prefix="/api/grades", tags=["grades"])
 
@@ -86,16 +86,6 @@ def note_anlegen(payload: GradeIn, user: User = Depends(require_student),
     return note
 
 
-@router.get("", response_model=list[GradeOut])
-def noten_liste(topic_id: int | None = Query(default=None),
-                user: User = Depends(require_student), db: Session = Depends(get_db)):
-    q = select(Grade).where(Grade.user_id == user.id)
-    if topic_id is not None:
-        q = q.where(Grade.topic_id == topic_id)
-    # neueste zuerst – so liest man eine Notenliste
-    return list(db.scalars(q.order_by(Grade.taken_on.desc(), Grade.id.desc())))
-
-
 @router.get("/verlauf", response_model=GradeVerlauf)
 def noten_verlauf(topic_id: int | None = Query(default=None),
                   user: User = Depends(require_student), db: Session = Depends(get_db)):
@@ -103,26 +93,6 @@ def noten_verlauf(topic_id: int | None = Query(default=None),
     if topic_id is not None:
         q = q.where(Grade.topic_id == topic_id)
     return berechne_verlauf(list(db.scalars(q)))
-
-
-@router.patch("/{grade_id}", response_model=GradeOut)
-def note_aendern(grade_id: int, payload: GradeUpdate,
-                 user: User = Depends(require_student), db: Session = Depends(get_db)):
-    note = _hole(db, grade_id, user)
-    if payload.taken_on is not None:
-        if payload.taken_on > date.today():
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Das Datum liegt in der Zukunft.")
-        note.taken_on = payload.taken_on
-    if payload.value is not None:
-        note.value = payload.value
-    if payload.label is not None:
-        note.label = payload.label.strip()
-    if payload.topic_id is not None:
-        _eigenes_thema(db, payload.topic_id, user)
-        note.topic_id = payload.topic_id
-    db.commit()
-    db.refresh(note)
-    return note
 
 
 @router.delete("/{grade_id}", status_code=204)

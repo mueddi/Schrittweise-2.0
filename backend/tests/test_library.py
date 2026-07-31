@@ -53,7 +53,6 @@ def test_admin_routes_forbidden_for_students(client):
     headers = register_pw(client, "schueler@test.ch")
     assert upload(client, headers).status_code == 403
     assert client.delete("/api/library/1", headers=headers).status_code == 403
-    assert client.patch("/api/library/1", headers=headers, json={"title": "x"}).status_code == 403
     # Lesen ohne Login -> 401
     assert client.get("/api/library").status_code == 401
 
@@ -141,16 +140,12 @@ def test_upload_validation(client):
     assert r.status_code == 400
 
 
-def test_update_and_delete(client):
+def test_delete(client):
+    """Korrigieren heisst loeschen und neu hochladen – einen Aender-Weg gibt es
+    bewusst nicht mehr (er hatte nie einen Knopf in der Bibliothek)."""
     admin = register_pw(client, "admin@test.ch")
     make_admin("admin@test.ch")
     doc = upload(client, admin).json()
-
-    r = client.patch(f"/api/library/{doc['id']}", headers=admin,
-                     json={"title": "Neuer Titel", "difficulty": "schwer"})
-    assert r.status_code == 200
-    assert r.json()["title"] == "Neuer Titel"
-    assert r.json()["difficulty"] == "schwer"
 
     assert client.delete(f"/api/library/{doc['id']}", headers=admin).status_code == 204
     assert client.get(f"/api/library/{doc['id']}/file", headers=admin).status_code == 404

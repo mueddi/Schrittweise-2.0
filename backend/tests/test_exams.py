@@ -247,7 +247,7 @@ def test_note_landet_im_verlauf(client, monkeypatch):
                            json={"antworten": antworten}).json()
 
     assert 1.0 <= ergebnis["grade_value"] <= 6.0
-    noten = client.get(f"/api/grades?topic_id={tid}", headers=headers).json()
+    noten = client.get(f"/api/grades/verlauf?topic_id={tid}", headers=headers).json()["noten"]
     assert len(noten) == 1
     assert noten[0]["source"] == "probe"
     assert noten[0]["exam_id"] == pruefung["id"]
@@ -284,7 +284,7 @@ def test_zweimal_abgeben_geht_nicht(client, monkeypatch):
     r = client.post(f"/api/exams/{pruefung['id']}/abgeben", headers=headers, json=leer)
     assert r.status_code == 409
     # und es entsteht keine zweite Note
-    assert len(client.get("/api/grades", headers=headers).json()) == 1
+    assert len(client.get("/api/grades/verlauf", headers=headers).json()["noten"]) == 1
 
 
 def test_pruefung_faesst_die_hilfe_leiter_nicht_an(client, monkeypatch):

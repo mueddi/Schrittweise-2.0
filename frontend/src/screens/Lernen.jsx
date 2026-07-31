@@ -178,8 +178,21 @@ function Bubble({ role, verifyStatus, hintLevel, children }) {
 // englische Knopf als blosses Reden ankam. Sichtbare Folge: der Knopf «Show me
 // the full solution» erschien – und die Loesung wurde dann verweigert. Der
 // Tutor antwortet trotzdem auf Englisch, das steuert die Regie-Anweisung.
+// Die drei «anders erklären»-Wege stehen hinter EINEM Knopf. Grund: alle drei
+// lösen im Backend genau denselben Zustand aus wie «Ich verstehe es nicht»
+// (Absicht «simpler») – sie unterscheiden sich nur im Satz, den sie schicken.
+// Vorne standen dafür fünf Chips nebeneinander, die für ein Kind gleich
+// aussahen und dieselbe Art Antwort brachten.
+const ANDERS = [
+  { label: ["🎨 Mit Skizze", "🎨 With a sketch"], text: "Kannst du es mir mit einer Skizze zeigen?" },
+  { label: ["🍕 Mit Alltagsbeispiel", "🍕 With an everyday example"], text: "Erklär es mir mit einem Beispiel aus dem Alltag." },
+  { label: ["🔢 Mit Zahlen statt x", "🔢 With numbers instead of x"], text: "Erklär es mir mit konkreten Zahlen statt mit x." },
+];
+
 function QuickReplies({ solved, unlocked, onSend, onNew, onVariant, fertigMoeglich }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const li = lang === "en" ? 1 : 0;
+  const [andersOffen, setAndersOffen] = useState(false);
   const items = solved
     ? [
         ...(onVariant ? [{ label: t("🔁 Nochmal so eine", "🔁 Another one like this"), act: onVariant, accent: true }] : []),
@@ -197,11 +210,9 @@ function QuickReplies({ solved, unlocked, onSend, onNew, onVariant, fertigMoegli
         { label: t("🤔 Ich verstehe es nicht", "🤔 I don't get it"), act: () => onSend("Ich verstehe es nicht.") },
         { label: t("💡 Gib mir einen Tipp", "💡 Give me a hint"), act: () => onSend("Gib mir bitte einen Tipp.") },
         { label: t("👣 Zeig mir den ersten Schritt", "👣 Show me the first step"), act: () => onSend("Zeig mir bitte den ersten Schritt.") },
-        // andere DARSTELLUNG derselben Stufe – Hilfe-Stufe steigt dabei nicht
-        { label: t("🎨 Mit Skizze", "🎨 With a sketch"), act: () => onSend("Kannst du es mir mit einer Skizze zeigen?") },
-        { label: t("🍕 Mit Alltagsbeispiel", "🍕 With an everyday example"), act: () => onSend("Erklär es mir mit einem Beispiel aus dem Alltag.") },
-        { label: t("🔢 Mit Zahlen statt x", "🔢 With numbers instead of x"), act: () => onSend("Erklär es mir mit konkreten Zahlen statt mit x.") },
-        { label: t("🐢 Erklär es einfacher", "🐢 Explain it more simply"), act: () => onSend("Kannst du es mir einfacher erklären?") },
+        ...(andersOffen
+          ? ANDERS.map((a) => ({ label: a.label[li], act: () => { setAndersOffen(false); onSend(a.text); } }))
+          : [{ label: t("🔄 Anders erklären", "🔄 Explain differently"), act: () => setAndersOffen(true) }]),
       ];
   return (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 2px 9px", WebkitOverflowScrolling: "touch" }}>
@@ -850,8 +861,10 @@ export default function Lernen() {
           </div>
         )}
         <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch" }}>
+          {/* «½» und «÷» fügten beide denselben Schrägstrich ein – zwei Knöpfe
+              für dieselbe Taste. Geblieben ist das Zeichen, das ein Kind aus
+              der Schule kennt. */}
           {[
-            ["½", "/", 1],
             ["x²", "^2"],
             ["√", "sqrt()", 5],
             ["×", "*"],

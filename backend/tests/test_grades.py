@@ -20,11 +20,13 @@ def test_note_anlegen_und_lesen(client):
     assert note["source"] == "selbst"      # nicht aus einer Probepruefung
     assert note["exam_id"] is None
 
-    liste = client.get("/api/grades", headers=headers).json()
+    # Die Liste steht im Verlauf – eine zweite, inhaltsgleiche Liste unter
+    # GET /api/grades gab es frueher, sie wurde von der App nie geholt.
+    liste = client.get("/api/grades/verlauf", headers=headers).json()["noten"]
     assert len(liste) == 1
     # Filter nach Thema
-    assert len(client.get(f"/api/grades?topic_id={tid}", headers=headers).json()) == 1
-    assert client.get("/api/grades?topic_id=999999", headers=headers).json() == []
+    assert len(client.get(f"/api/grades/verlauf?topic_id={tid}", headers=headers).json()["noten"]) == 1
+    assert client.get("/api/grades/verlauf?topic_id=999999", headers=headers).json()["noten"] == []
 
 
 def test_skala_grenzen(client):
@@ -58,27 +60,23 @@ def test_fremde_note_und_fremdes_thema_unerreichbar(client):
     note_a = client.post("/api/grades", headers=a,
                          json={"value": 5.0, "taken_on": "2026-06-01"}).json()["id"]
 
-    assert client.patch(f"/api/grades/{note_a}", headers=b, json={"value": 1.0}).status_code == 404
     assert client.delete(f"/api/grades/{note_a}", headers=b).status_code == 404
     # fremdes Thema referenzieren
     r = client.post("/api/grades", headers=b,
                     json={"value": 5.0, "taken_on": "2026-06-01", "topic_id": tid_a})
     assert r.status_code == 404
     # B sieht die Note von A gar nicht
-    assert client.get("/api/grades", headers=b).json() == []
+    assert client.get("/api/grades/verlauf", headers=b).json()["noten"] == []
 
 
-def test_aendern_und_loeschen(client):
+def test_note_loeschen(client):
+    """Korrigieren heisst loeschen und neu eintragen – einen Aender-Weg gibt es
+    bewusst nicht mehr (er hatte nie einen Knopf in der App)."""
     headers = register(client, "aendern@test.ch")
     nid = client.post("/api/grades", headers=headers,
                       json={"value": 3.5, "taken_on": "2026-06-01"}).json()["id"]
-    r = client.patch(f"/api/grades/{nid}", headers=headers, json={"value": 5.5, "label": "neu"})
-    assert r.status_code == 200 and r.json()["value"] == 5.5 and r.json()["label"] == "neu"
-    # ungueltiger Wert auch beim Aendern abgewiesen
-    assert client.patch(f"/api/grades/{nid}", headers=headers,
-                        json={"value": 7.0}).status_code == 422
     assert client.delete(f"/api/grades/{nid}", headers=headers).status_code == 204
-    assert client.get("/api/grades", headers=headers).json() == []
+    assert client.get("/api/grades/verlauf", headers=headers).json()["noten"] == []
 
 
 def test_verlauf_schnitt_und_trend(client):
@@ -116,7 +114,7 @@ def test_eltern_duerfen_keine_noten_schreiben(client):
     r = client.post("/api/grades", headers=eltern,
                     json={"value": 5.0, "taken_on": "2026-06-01"})
     assert r.status_code == 403
-    assert client.get("/api/grades", headers=eltern).status_code == 403
+    assert client.get("/api/grades/verlauf", headers=eltern).status_code == 403
 
 
 # ---- Archivieren statt Löschen (Teil B) ----
@@ -168,7 +166,7 @@ def test_loeschen_trotzdem_behaelt_die_noten(client):
 
     assert client.delete(f"/api/topics/{tid}?trotzdem=true", headers=headers).status_code == 204
     assert client.get("/api/topics", headers=headers).json() == []
-    noten = client.get("/api/grades", headers=headers).json()
+    noten = client.get("/api/grades/verlauf", headers=headers).json()["noten"]
     assert len(noten) == 2, "die Noten muessen erhalten bleiben"
     assert all(n["topic_id"] is None for n in noten)
     # und der Gesamt-Verlauf stimmt weiterhin

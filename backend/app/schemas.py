@@ -153,13 +153,6 @@ class GradeIn(BaseModel):
     label: str = Field(default="", max_length=120)
 
 
-class GradeUpdate(BaseModel):
-    value: float | None = Field(default=None, ge=1.0, le=6.0)
-    taken_on: date | None = None
-    topic_id: int | None = None
-    label: str | None = Field(default=None, max_length=120)
-
-
 class GradeOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -366,14 +359,6 @@ class LibraryTopicOut(BaseModel):
     id: int
     name: str
     doc_count: int = 0
-
-
-class LibraryDocUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=200)
-    description: str | None = Field(default=None, min_length=1, max_length=4000)
-    category: str | None = None
-    grade_levels: list[str] | None = None
-    difficulty: str | None = None
 
 
 TokenResponse.model_rebuild()

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import get_current_user, require_admin
 from ..models import LibraryDocument, LibraryTopic, User
-from ..schemas import LibraryDocOut, LibraryDocUpdate, LibraryTopicCreate, LibraryTopicOut
+from ..schemas import LibraryDocOut, LibraryTopicCreate, LibraryTopicOut
 from ..services import quota, usage
 from ..services.library_search import rank_documents
 
@@ -260,35 +260,6 @@ async def upload_document(
         content=data,
     )
     db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    return doc
-
-
-@router.patch("/{doc_id}", response_model=LibraryDocOut)
-def update_document(
-    doc_id: int,
-    payload: LibraryDocUpdate,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    doc = db.get(LibraryDocument, doc_id)
-    if doc is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dokument nicht gefunden.")
-    data = payload.model_dump(exclude_unset=True, exclude_none=True)
-    merged = {
-        "title": data.get("title", doc.title),
-        "description": data.get("description", doc.description),
-        "category": data.get("category", doc.category),
-        "grade_levels": data.get("grade_levels", doc.grade_levels.split(",")),
-        "difficulty": data.get("difficulty", doc.difficulty),
-    }
-    grades_str = _validate_meta(db, **merged)
-    doc.title = merged["title"].strip()[:200]
-    doc.description = merged["description"].strip()[:4000]
-    doc.category = merged["category"]
-    doc.grade_levels = grades_str
-    doc.difficulty = merged["difficulty"]
     db.commit()
     db.refresh(doc)
     return doc
