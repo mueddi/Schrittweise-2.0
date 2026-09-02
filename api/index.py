@@ -34,10 +34,14 @@ if _env_file.exists():
 # Sicherheits-Defaults: ohne explizite Env kein Dev-Login-Leak in Produktion.
 os.environ.setdefault("MAGIC_LINK_DEV_RETURN", "false")
 
-# Magic-Link-Mails brauchen die oeffentliche URL; von Vercel ableiten, falls nicht gesetzt.
-_vercel_url = os.environ.get("VERCEL_PROJECT_PRODUCTION_URL") or os.environ.get("VERCEL_URL")
-if _vercel_url and not os.environ.get("FRONTEND_BASE_URL"):
-    os.environ["FRONTEND_BASE_URL"] = f"https://{_vercel_url}"
+# Magic-Link-Mails brauchen die oeffentliche URL; von Vercel ableiten, falls nicht
+# gesetzt. In einer Vorschau ist das die Adresse der Vorschau – sonst zeigten
+# Links aus einem Testlauf auf die echte Seite.
+from app.plattform import oeffentliche_basis_url  # noqa: E402  (Pfad muss vorher stehen)
+
+_basis_url = oeffentliche_basis_url(os.environ)
+if _basis_url and not os.environ.get("FRONTEND_BASE_URL"):
+    os.environ["FRONTEND_BASE_URL"] = _basis_url
 
 
 def _clean_pg_url(url: str) -> str:
