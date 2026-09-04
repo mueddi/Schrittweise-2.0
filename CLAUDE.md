@@ -29,7 +29,7 @@ ersten Mal. Er trifft die Entscheidungen; du lieferst Belege, keine Vermutungen.
 
 ```
 Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
-       →  Pull Request  →  268 Tests  →  sein Merge-Klick  →  live
+       →  Pull Request  →  278 Tests  →  sein Merge-Klick  →  live
 ```
 
 * **Produktion ausschliesslich über `.github/workflows/deploy.yml`** (Test →
@@ -49,7 +49,7 @@ Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
 ## Tests
 
 ```
-cd backend && python -m pytest -q          # 268 Tests, müssen alle grün sein
+cd backend && python -m pytest -q          # 278 Tests, müssen alle grün sein
 cd frontend && npm run build               # enthält die Browser-Dialog-Bremse
 ```
 
@@ -84,8 +84,16 @@ Build abgewiesen (`frontend/scripts/keine-browser-dialoge.mjs`). Stattdessen
 * **Kein Zweig-Schutz auf `main`** – solange er fehlt, kann direkt live
   geschoben werden. Er will das ändern.
 * **Keine Überwachung von aussen.** Zwei Ausfälle blieben unbemerkt, bis er
-  zufällig hinschaute. UptimeRobot auf `/api/health`, plus eine echte
-  Datenbank-Prüfung in `main.py:health()`.
+  zufällig hinschaute. Er muss UptimeRobot einrichten – Typ «Keyword», Adresse
+  `…/api/health`, Stichwort `"status":"ok"`, Alarm wenn es FEHLT.
+  Die Gegenstelle dafür steht: `main.py:health()` fasst die Datenbank an und
+  antwortet bei einem Ausfall mit **503** und ohne das Wort `ok`.
+* **Vercel läuft auf `hobby`** – dieser Tarif ist laut Vercels Bedingungen für
+  nicht-kommerzielle Projekte. Vor dem Verkauf von Tokens klären.
+* **Die Zahlung wurde nie durchgeführt:** im Live-Stripe-Konto stehen
+  0 Checkout-Sitzungen. Vor dem Start einmal echt kaufen und nachzählen.
+* **Impressum ohne Postadresse** (`frontend/src/screens/Rechtliches.jsx`) –
+  nur Name und E-Mail. Für ein kommerzielles Schweizer Angebot zu wenig.
 
 ## Bekannte Schwächen (belegt, nicht behoben)
 

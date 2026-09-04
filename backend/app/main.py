@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .database import init_db
+from .database import SessionLocal, init_db
 from .routers import (admin, auth, topics, exercises, attempts, parents, quota, library,
                       pay, feedback, stats, grades, exams)
 
@@ -98,8 +98,31 @@ app.add_middleware(
 # Deploy. Entfernt am 30.07.2026.
 
 
+def _datenbank_erreichbar() -> bool:
+    """Ein billiger Anschlag auf die Datenbank: laeuft sie ueberhaupt?
+
+    Bewusst ``SELECT 1`` und nichts Teureres – die Ueberwachung ruft das alle
+    paar Minuten auf. Kein Zaehlen, keine Aggregate.
+
+    Bewusst OHNE ``alert.notify``: der Alarm wuerde selbst eine Zeile in die
+    Datenbank schreiben – also genau dorthin, wo es gerade klemmt. Der Fehler
+    geht ins Log, gemeldet wird er von der Ueberwachung VON AUSSEN, die den
+    503er sieht. Sonst haetten wir eine Alarmanlage, die nur funktioniert,
+    solange nichts brennt.
+    """
+    from sqlalchemy import text
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        logger.exception("Health-Pruefung: Datenbank nicht erreichbar")
+        return False
+
+
 @app.get("/api/health")
-def health() -> dict:
+def health():
     # "mail": kann die App E-Mails verschicken (Passwort-vergessen /
     # E-Mail-Bestaetigung)? "zahlung": sind beide Stripe-Schluessel gesetzt?
     # Nur Booleans – niemals Konfigurationsdetails oder Schluessel selbst.
@@ -108,13 +131,27 @@ def health() -> dict:
     # haeufigste Konfigurationsfehler: steht sie falsch – oder fehlt sie in der
     # Freigabeliste von Supabase – landet der Klick im Mail auf einer
     # unerreichbaren Seite. Sichtbar machen erspart das Raten.
-    return {
-        "status": "ok",
+    # "datenbank": ohne sie kann sich niemand anmelden, keine Aufgabe speichern,
+    # keinen Chat fuehren. Vorher meldete diese Auskunft froehlich "ok", waehrend
+    # der Dienst in Wahrheit tot war – eine Ueberwachung darauf haette nichts
+    # gemerkt. Faellt sie aus, antwortet die Auskunft mit 503 und OHNE das Wort
+    # "ok", damit ein Monitor ueberhaupt anschlagen kann.
+    datenbank = _datenbank_erreichbar()
+    auskunft = {
+        "status": "ok" if datenbank else "datenbank-nicht-erreichbar",
         "app": "schrittweise",
+        "datenbank": datenbank,
         "mail": bool(settings.supabase_auth_enabled or settings.smtp_enabled),
         "zahlung": settings.payments_enabled,
         "rueckkehr_adresse": settings.frontend_base_url,
     }
+    if not datenbank:
+        from fastapi.responses import JSONResponse
+
+        # Keine Einzelheiten nach aussen: kein Fehlertext, keine
+        # Verbindungszeichenfolge. Die stehen im Log.
+        return JSONResponse(status_code=503, content=auskunft)
+    return auskunft
 
 
 app.include_router(auth.router)
