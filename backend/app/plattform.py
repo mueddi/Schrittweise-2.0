@@ -8,6 +8,23 @@ App liefe gegen die falsche Datenbank.
 from collections.abc import Mapping
 
 
+def vorschau_defaults(env: Mapping[str, str]) -> dict[str, str]:
+    """Standardwerte, die AUSSCHLIESSLICH in einer Vorschau gelten.
+
+    ``REQUIRE_EMAIL_VERIFICATION`` waere dort eine Sackgasse: die Vorschau hat
+    eine leere Wegwerf-Datenbank, man muss sich also neu registrieren – und
+    wartet dann auf eine Bestaetigungsmail, deren Link auf eine Adresse zeigt,
+    die Supabase gar nicht freigegeben hat. Ergebnis: man kommt nicht hinein
+    und kann nichts pruefen.
+
+    Ausserhalb einer Vorschau ist das Ergebnis leer – an der echten Seite
+    aendert sich nichts.
+    """
+    if env.get("VERCEL_ENV") != "preview":
+        return {}
+    return {"REQUIRE_EMAIL_VERIFICATION": "false"}
+
+
 def oeffentliche_basis_url(env: Mapping[str, str]) -> str | None:
     """Die Adresse, unter der Nutzer *diese* Instanz erreichen.
 

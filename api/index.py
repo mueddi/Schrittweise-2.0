@@ -34,6 +34,13 @@ if _env_file.exists():
 # Sicherheits-Defaults: ohne explizite Env kein Dev-Login-Leak in Produktion.
 os.environ.setdefault("MAGIC_LINK_DEV_RETURN", "false")
 
+# Sonderregeln, die NUR in einer Vorschau gelten (siehe app/plattform.py).
+# setdefault, damit eine ausdrueckliche Vercel-Variable weiterhin gewinnt.
+from app.plattform import vorschau_defaults  # noqa: E402  (Pfad muss vorher stehen)
+
+for _schluessel, _wert in vorschau_defaults(os.environ).items():
+    os.environ.setdefault(_schluessel, _wert)
+
 # Magic-Link-Mails brauchen die oeffentliche URL; von Vercel ableiten, falls nicht
 # gesetzt. In einer Vorschau ist das die Adresse der Vorschau – sonst zeigten
 # Links aus einem Testlauf auf die echte Seite.

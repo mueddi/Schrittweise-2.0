@@ -4,7 +4,7 @@ Der Fehler, den diese Tests festhalten: eine Vorschau-Instanz verschickte
 Links auf die ECHTE Seite. Wer in der Vorschau eine Registrierung
 durchspielte, landete beim Klick auf die Mail in der Produktion.
 """
-from app.plattform import oeffentliche_basis_url
+from app.plattform import oeffentliche_basis_url, vorschau_defaults
 
 
 PRODUKTION = "schrittweise-2-0.vercel.app"
@@ -59,3 +59,19 @@ def test_lokal_verraet_die_plattform_nichts():
     """Ohne Vercel-Variablen bleibt es beim Wert aus der Konfiguration."""
     assert oeffentliche_basis_url({}) is None
     assert oeffentliche_basis_url({"VERCEL_URL": "   "}) is None
+
+
+# --- Sonderregeln der Vorschau ---
+def test_vorschau_verlangt_keine_mail_bestaetigung():
+    """Sonst ist die Vorschau eine Sackgasse: leere Datenbank, also neu
+    registrieren – und dann auf eine Mail warten, die dort nie ankommt."""
+    assert vorschau_defaults({"VERCEL_ENV": "preview"}) == {
+        "REQUIRE_EMAIL_VERIFICATION": "false"
+    }
+
+
+def test_die_echte_seite_bekommt_keine_sonderregeln():
+    """Gegenprobe – der wichtigste Test der beiden."""
+    assert vorschau_defaults({"VERCEL_ENV": "production"}) == {}
+    assert vorschau_defaults({}) == {}
+    assert vorschau_defaults({"VERCEL_ENV": "development"}) == {}
