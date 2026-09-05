@@ -10,7 +10,12 @@ import { useDialog } from "../lib/dialog.jsx";
 // aus Versehen ausgeben.
 const KASTEN = { background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 18 };
 
-export default function PruefungStart({ topicId }) {
+// `lernziele` ist der Text der Lernziele des Themas. Er wird hier nicht
+// angezeigt – er dient als Signal: aendert er sich, muss die Vorschau neu
+// geholt werden. Ohne das blieb nach dem Eintragen der Ziele die alte Auskunft
+// «Trag zuerst Lernziele beim Thema ein» stehen, obwohl sie laengst eingetragen
+// waren. Es half nur ein Neuladen der Seite – und niemand sagte einem das.
+export default function PruefungStart({ topicId, lernziele = "" }) {
   const { t } = useLang();
   const nav = useNavigate();
   const shell = useShell();
@@ -31,7 +36,7 @@ export default function PruefungStart({ topicId }) {
     } catch {
       setVorschau(null);
     }
-  }, [topicId]);
+  }, [topicId, lernziele]);
   useEffect(() => { laden(); }, [laden]);
 
   async function starten() {
