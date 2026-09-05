@@ -28,8 +28,17 @@ function headers(extra = {}) {
   return h;
 }
 
+// Ein 401 heisst zweierlei, und der Unterschied ist fuer den Benutzer alles:
+// entweder ist eine bestehende Anmeldung abgelaufen – dann muss der Token weg
+// und die App zum Login springen. Oder der Anmeldeversuch SELBST ist
+// gescheitert. Im zweiten Fall gehoert die Meldung des Servers auf den Schirm
+// ("E-Mail oder Passwort falsch"); frueher schluckte der Client sie und zeigte
+// stattdessen "Sitzung abgelaufen" – wer sich vertippte, dachte, die App sei
+// kaputt. Diese Wege verlangen keine Anmeldung, ihr 401 ist nie ein Ablauf:
+const OFFENE_WEGE = /\/api\/auth\/(login|register|request-link|verify|verify-supabase)(\?|$)/;
+
 async function handle(res) {
-  if (res.status === 401) {
+  if (res.status === 401 && !OFFENE_WEGE.test(res.url || "")) {
     setToken(null);
     onUnauthorized?.();
     throw new Error("Sitzung abgelaufen – bitte neu anmelden.");
