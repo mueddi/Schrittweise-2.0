@@ -220,6 +220,14 @@ class ProgressAggregate(Base):
 
     autonomy_rate: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # 0..1
     solved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Bearbeitet» statt «geloest» als Hauptzahl: nur 12 % aller Versuche werden
+    # ueberhaupt abgehakt, ein Elternteil saehe sonst fast immer eine Null.
+    worked_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Summe der eigenen Rechenschritte des Kindes – Aufwand statt Ergebnis.
+    own_steps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Bearbeitete Aufgaben ohne Themen-Zuordnung. Nicht als «Stolperstein»
+    # zeigen, sondern zum Zuordnen auffordern.
+    ohne_thema: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Top-Stolperthemen als grobe Trends: [{"topic": "...", "trend": "noch_ueben"}]
     top_struggles: Mapped[list | None] = mapped_column(JSON, nullable=True)

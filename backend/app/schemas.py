@@ -307,8 +307,19 @@ class ParentWeek(BaseModel):
     """Eine Woche im Verlauf der Elternansicht (nur Zaehlwerte)."""
     week_start: date
     solved_count: int
+    worked_count: int = 0
     autonomy_rate: int  # in %
     active_days: int
+
+
+class ParentWorkedOn(BaseModel):
+    """Eine Aufgabe, an der diese Woche gearbeitet wurde. Nur Aufgabentext und
+    Zustand – nie Chat-Nachrichten."""
+    aufgabe: str
+    thema: str | None = None
+    wann: datetime | None = None
+    geloest: bool = False
+    viel_hilfe: bool = False
 
 
 class ParentChildSummary(BaseModel):
@@ -316,8 +327,15 @@ class ParentChildSummary(BaseModel):
     grade_level: str | None
     autonomy_rate: int  # in %
     solved_count: int
+    # Hauptzahl: bearbeitete Aufgaben. «geloest» entsteht zu selten, um allein
+    # zu tragen (12 % in der Produktion).
+    worked_count: int = 0
+    own_steps: int = 0          # eigene Rechenschritte des Kindes
+    ohne_thema: int = 0         # bearbeitete Aufgaben ohne Themen-Zuordnung
     active_days: int
-    dranbleiben_delta: int  # % vs. Vorwoche
+    # None = zu wenig Daten fuer einen ehrlichen Wochenvergleich.
+    dranbleiben_delta: int | None = None
+    worked_on: list[ParentWorkedOn] = []
     # Eintraege: {topic, label, heavy?, total?} – heavy/total fehlen bei
     # Aggregat-Zeilen aus der Zeit vor dieser Erweiterung.
     top_struggles: list[dict]

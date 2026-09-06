@@ -117,6 +117,16 @@ def _schema_sicherstellen() -> None:
         ("topics", "learning_goals",
          "ALTER TABLE topics ADD COLUMN learning_goals TEXT DEFAULT '' NOT NULL"),
         ("topics", "archived_at", "ALTER TABLE topics ADD COLUMN archived_at TIMESTAMP"),
+        # Elternansicht: «bearbeitet» statt «geloest» als Hauptzahl, plus
+        # Aufwand und die Aufgaben ohne Thema. DEFAULT 0, damit alte
+        # Wochenzeilen gueltig bleiben (sie zeigen dann 0 – ehrlich, denn
+        # damals wurde nichts erhoben).
+        ("progress_aggregates", "worked_count",
+         "ALTER TABLE progress_aggregates ADD COLUMN worked_count INTEGER DEFAULT 0 NOT NULL"),
+        ("progress_aggregates", "own_steps",
+         "ALTER TABLE progress_aggregates ADD COLUMN own_steps INTEGER DEFAULT 0 NOT NULL"),
+        ("progress_aggregates", "ohne_thema",
+         "ALTER TABLE progress_aggregates ADD COLUMN ohne_thema INTEGER DEFAULT 0 NOT NULL"),
     ]
     # Spalten EINMAL pro Tabelle holen statt einmal pro Migrations-Eintrag:
     # 13 Eintraege verteilen sich auf 4 Tabellen.

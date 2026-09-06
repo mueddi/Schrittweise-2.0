@@ -35,70 +35,106 @@ export function Tile({ label, value, unit, sub, color = "#1a1c22" }) {
 
 // Klartext-Zusammenfassung aus den echten Wochendaten – das Wichtigste in
 // einem Satz, ohne Prozent-Jargon.
+// Klartext-Satz aus den Wochenzahlen. Traegt bewusst «bearbeitet», nicht
+// «gelöst»: nur 12 % aller Aufgaben werden ueberhaupt abgehakt, ein Satz auf
+// dieser Grundlage haette fast immer «noch keine Aufgabe gelöst» gemeldet –
+// obwohl das Kind gearbeitet hat.
 function summarySentence(d, t) {
   const name = d.student_display_name;
-  if (!d.solved_count && !d.active_days) {
+  const bearbeitet = d.worked_count ?? 0;
+  if (!bearbeitet && !d.active_days) {
     return t(`${name} hat diese Woche noch nicht geübt.`, `${name} hasn't practiced yet this week.`);
   }
-  const autonomous = Math.round((d.autonomy_rate / 100) * d.solved_count);
   let s = t(
-    `${name} hat diese Woche an ${d.active_days} ${d.active_days === 1 ? "Tag" : "Tagen"} geübt`,
-    `${name} practiced on ${d.active_days} ${d.active_days === 1 ? "day" : "days"} this week`
+    `${name} hat diese Woche an ${d.active_days} ${d.active_days === 1 ? "Tag" : "Tagen"} an ${bearbeitet} ${bearbeitet === 1 ? "Aufgabe" : "Aufgaben"} gearbeitet`,
+    `${name} worked on ${bearbeitet} ${bearbeitet === 1 ? "task" : "tasks"} on ${d.active_days} ${d.active_days === 1 ? "day" : "days"} this week`
   );
-  s += d.solved_count
-    ? t(
-        ` und ${d.solved_count} ${d.solved_count === 1 ? "Aufgabe" : "Aufgaben"} gelöst – ${autonomous} davon fast ohne Hilfe.`,
-        ` and solved ${d.solved_count} ${d.solved_count === 1 ? "task" : "tasks"} – ${autonomous} of them almost without help.`
-      )
-    : t(", aber noch keine Aufgabe fertig gelöst.", ", but hasn't fully solved a task yet.");
-  const worst = (d.top_struggles || [])[0];
-  if (worst) {
-    s += t(
-      ` Beim Thema «${worst.topic}» war mehrmals viel Hilfe nötig.`,
-      ` The topic "${worst.topic}" needed a lot of help several times.`
-    );
+  s += (d.own_steps ?? 0) > 0
+    ? t(` und dabei ${d.own_steps} eigene Rechenschritte geschrieben.`,
+        ` and wrote ${d.own_steps} own calculation steps.`)
+    : ".";
+  if (d.solved_count) {
+    s += t(` ${d.solved_count} davon ${d.solved_count === 1 ? "wurde" : "wurden"} fertig gelöst.`,
+           ` ${d.solved_count} of them ${d.solved_count === 1 ? "was" : "were"} fully solved.`);
   }
   return s;
 }
 
-// Regelbasierte, konkrete Hilfe-Tipps aus den Wochen-Zahlen (max. 2).
+// Hilfe-Tipps – nur wenn sie sich auf ein konkretes Thema oder eine konkrete
+// Zahl stuetzen. Frueher gab es hier eine Auffang-Regel, die immer feuerte;
+// das Ergebnis war jede Woche derselbe Satz. Lieber KEIN Tipp als ein
+// beliebiger: ein Ratschlag, den man schon dreimal gelesen hat, entwertet
+// auch die uebrige Ansicht.
 function helpTips(d, t) {
   const tips = [];
   const worst = (d.top_struggles || [])[0];
-  if (worst) {
-    const topicLabel = worst.topic === "Ohne Thema"
-      ? t("den Aufgaben ohne Thema", "the tasks without a topic")
-      : `«${worst.topic}»`;
+  if (worst && worst.heavy >= 2) {
     tips.push(t(
-      `Setzen Sie bei ${topicLabel} an: Lassen Sie sich 2–3 gelöste Aufgaben Schritt für Schritt erklären – wer erklärt, festigt das Verständnis am stärksten.`,
-      `Start with ${topicLabel}: have your child explain 2–3 solved tasks step by step – explaining is the strongest way to consolidate understanding.`
+      `Bei «${worst.topic}» war ${worst.heavy}× viel Hilfe nötig. Lassen Sie sich eine dieser Aufgaben erklären – wer erklärt, merkt selbst am schnellsten, wo es hakt.`,
+      `"${worst.topic}" needed a lot of help ${worst.heavy} times. Have your child explain one of these tasks – explaining reveals the gap fastest.`
     ));
   }
-  if ((d.active_days ?? 0) <= 1) {
+  if ((d.ohne_thema ?? 0) >= 3) {
     tips.push(t(
-      "Regelmässigkeit schlägt Länge: 3× pro Woche 15 Minuten bringen mehr als eine lange Sitzung. Ein fester Übungsmoment (z.B. nach dem Znacht) hilft.",
-      "Consistency beats length: 15 minutes 3× a week beats one long session. A fixed practice moment (e.g. after dinner) helps."
+      `${d.ohne_thema} Aufgaben sind keinem Thema zugeordnet. Wenn Ihr Kind sie einsortiert, zeigt diese Seite, woran es wirklich hakt.`,
+      `${d.ohne_thema} tasks have no topic. Once your child sorts them, this page can show where the real difficulty lies.`
     ));
   }
-  if ((d.autonomy_rate ?? 0) < 40 && (d.solved_count ?? 0) >= 3) {
+  if ((d.worked_count ?? 0) >= 3 && (d.active_days ?? 0) === 1) {
     tips.push(t(
-      "Viel Hilfe genutzt: Ermutigen Sie Ihr Kind, vor jedem Tipp zuerst einen eigenen Versuch zu schreiben – der Tutor gibt die Lösung nie direkt vor.",
-      "A lot of help was used: encourage your child to write an own attempt before each hint – the tutor never gives the answer away."
-    ));
-  }
-  if (tips.length === 0) {
-    tips.push(t(
-      "Läuft rund! Benennen Sie den Fortschritt konkret («Du hast das diese Woche selbständig gelöst») – das wirkt stärker als Lob fürs Resultat.",
-      "Going well! Name the progress specifically (“you solved that on your own this week”) – that works better than praising results."
+      `Alles an einem Tag: ${d.worked_count} Aufgaben in einer Sitzung. Dreimal 15 Minuten über die Woche verteilt bleibt deutlich besser hängen.`,
+      `All on one day: ${d.worked_count} tasks in a single session. Three 15-minute sessions across the week stick far better.`
     ));
   }
   return tips.slice(0, 2);
 }
 
+// Trend. `null` heisst «zu wenig Daten» – und genau das wird dann auch
+// hingeschrieben. Frueher stand hier bei leerer Vorwoche «etwa gleich viel wie
+// letzte Woche», obwohl gar nicht geuebt worden war.
 function trendText(delta, t) {
+  if (delta == null) {
+    return { value: t("—", "—"), sub: t("zu wenig Daten für einen Vergleich", "not enough data to compare"), color: "#9aa0ab" };
+  }
   if (delta > 15) return { value: t("mehr", "more"), sub: t("geübt als letzte Woche", "practice than last week"), color: "#1a7f3c" };
   if (delta < -15) return { value: t("weniger", "less"), sub: t("geübt als letzte Woche", "practice than last week"), color: "#c0392b" };
   return { value: t("etwa gleich", "about the same"), sub: t("viel wie letzte Woche", "amount as last week"), color: "#4f46e5" };
+}
+
+// Woran diese Woche gearbeitet wurde – konkret statt abstrakt. Ein Elternteil
+// kann mit «Bruchrechnen, Mittwoch, noch offen» etwas anfangen, mit
+// «Selbständigkeit 67 %» nicht.
+function WoranGearbeitet({ eintraege, lang, t }) {
+  if (!eintraege || eintraege.length === 0) return null;
+  return (
+    <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t("Woran gearbeitet wurde", "What was worked on")}</div>
+      <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>
+        {t("diese Woche · fragen Sie danach, nicht nach den Zahlen", "this week · ask about these, not about the numbers")}
+      </div>
+      <div>
+        {eintraege.map((e, i) => {
+          const tag = e.wann
+            ? new Date(e.wann).toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { weekday: "short" })
+            : null;
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "9px 0", borderTop: i ? "1px solid #f4f5f8" : "none" }}>
+              <span style={{ flex: "0 0 auto", fontSize: 11.5, color: "#9aa0ab", width: 30 }}>{tag}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, overflowWrap: "anywhere" }}>
+                {e.aufgabe}
+                {e.thema && <span style={{ color: "#9aa0ab" }}> · {e.thema}</span>}
+              </span>
+              <span style={{ flex: "0 0 auto", fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 10px",
+                             background: e.geloest ? "#e8f6ec" : e.viel_hilfe ? "#fdecec" : "#f1f2f6",
+                             color: e.geloest ? "#1a7f3c" : e.viel_hilfe ? "#c0392b" : "#6b7280" }}>
+                {e.geloest ? t("fertig", "done") : e.viel_hilfe ? t("viel Hilfe", "lots of help") : t("dran", "in progress")}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function ChildDashboard({ data }) {
@@ -107,7 +143,9 @@ export function ChildDashboard({ data }) {
   const struggles = data.top_struggles || [];
   const daily = data.daily_activity || [0, 0, 0, 0, 0, 0, 0];
   const maxV = Math.max(...daily, 1);
-  const trend = trendText(data.dranbleiben_delta || 0, t);
+  // Bewusst nicht `|| 0`: null heisst «zu wenig Daten» und muss null bleiben.
+  const trend = trendText(data.dranbleiben_delta ?? null, t);
+  const tipps = helpTips(data, t);
   // «Woche vom …»: Montag der angezeigten Woche, lokal formatiert
   const weekLabel = data.week_start
     ? new Date(data.week_start).toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { day: "numeric", month: "long" })
@@ -119,16 +157,32 @@ export function ChildDashboard({ data }) {
         {summarySentence(data, t)}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 20 }} className="eltern-tiles">
-        <Tile label={t("Gelöste Aufgaben", "Tasks solved")} value={data.solved_count} sub={t("diese Woche", "this week")} />
-        <Tile label={t("Löst selbständig", "Solves independently")} value={data.autonomy_rate} unit="%" sub={t("der gelösten Aufgaben fast ohne Hilfe", "of solved tasks almost without help")} color="#1a7f3c" />
+        {/* Hauptzahl ist «bearbeitet»: sie entsteht immer, wenn gearbeitet
+            wurde. «Gelöst» steht daneben, traegt die Ansicht aber nicht mehr
+            allein – es wird nur in 12 % der Faelle ueberhaupt vergeben. */}
+        <Tile label={t("Bearbeitete Aufgaben", "Tasks worked on")} value={data.worked_count ?? 0}
+              sub={data.solved_count
+                ? t(`davon ${data.solved_count} fertig gelöst`, `${data.solved_count} of them fully solved`)
+                : t("diese Woche", "this week")} />
+        <Tile label={t("Eigene Rechenschritte", "Own steps written")} value={data.own_steps ?? 0}
+              sub={t("selbst geschrieben, nicht nur gelesen", "written by your child, not just read")} color="#1a7f3c" />
         <Tile label={t("Übungstage", "Practice days")} value={data.active_days} unit={t(" von 7", " of 7")} sub={t("diese Woche", "this week")} />
         <Tile label={t("Trend", "Trend")} value={trend.value} sub={trend.sub} color={trend.color} />
       </div>
+
+      <WoranGearbeitet eintraege={data.worked_on} lang={lang} t={t} />
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }} className="eltern-charts">
         <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t("Themen mit viel Hilfebedarf", "Topics needing a lot of help")}</div>
           <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 14 }}>{t("hier lohnt sich gemeinsames Üben", "practicing together pays off here")}</div>
-          {struggles.length === 0 && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("Kein Thema auffällig – läuft rund.", "No topic stands out – everything is going smoothly.")}</div>}
+          {struggles.length === 0 && (
+            <div style={{ fontSize: 13, color: "#9aa0ab", lineHeight: 1.6 }}>
+              {(data.ohne_thema ?? 0) > 0
+                ? t(`Kein Thema auffällig. ${data.ohne_thema} bearbeitete ${data.ohne_thema === 1 ? "Aufgabe ist" : "Aufgaben sind"} keinem Thema zugeordnet – erst dann kann hier etwas stehen.`,
+                    `No topic stands out. ${data.ohne_thema} ${data.ohne_thema === 1 ? "task has" : "tasks have"} no topic – only then can something appear here.`)
+                : t("Kein Thema auffällig – läuft rund.", "No topic stands out – everything is going smoothly.")}
+            </div>
+          )}
           {struggles.map((s) => {
             const chip = labelChip(s.label, t);
             // Sammel-Eintrag fuer Aufgaben ohne Themen-Zuordnung uebersetzen
@@ -168,33 +222,44 @@ export function ChildDashboard({ data }) {
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16, marginTop: 16 }} className="eltern-charts">
-        {/* Konkrete Handlungsempfehlungen aus den Wochen-Zahlen */}
-        <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 16, padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("💡 So können Sie helfen", "💡 How you can help")}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {helpTips(data, t).map((tip, i) => (
-              <div key={i} style={{ display: "flex", gap: 9, fontSize: 13.5, lineHeight: 1.55, color: "#3a3d46" }}>
-                <span style={{ color: "#4f46e5", fontWeight: 800 }}>→</span>
-                <span>{tip}</span>
-              </div>
-            ))}
+        {/* Tipps nur, wenn eine Regel wirklich greift – siehe helpTips(). */}
+        {tipps.length > 0 ? (
+          <div style={{ background: "#f8f8ff", border: "1px solid #e0e2fb", borderRadius: 16, padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("💡 So können Sie helfen", "💡 How you can help")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {tipps.map((tip, i) => (
+                <div key={i} style={{ display: "flex", gap: 9, fontSize: 13.5, lineHeight: 1.55, color: "#3a3d46" }}>
+                  <span style={{ color: "#4f46e5", fontWeight: 800 }}>→</span>
+                  <span>{tip}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div style={{ background: "#fff", border: "1px dashed #e7e8ee", borderRadius: 16, padding: 20, display: "grid", placeItems: "center", fontSize: 12.5, color: "#9aa0ab", textAlign: "center", lineHeight: 1.6 }}>
+            {t("Diese Woche fällt nichts auf, das einen Rat rechtfertigt. Fragen Sie einfach nach einer Aufgabe aus der Liste.",
+               "Nothing this week warrants advice. Just ask about one of the tasks in the list.")}
+          </div>
+        )}
         {/* Verlauf ueber die letzten Wochen (nur mit genug Daten) */}
         {(data.history || []).length >= 2 ? (
           <div style={{ background: "#fff", border: "1px solid #e7e8ee", borderRadius: 16, padding: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t("Verlauf", "Trend over time")}</div>
-            <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>{t("Gelöste Aufgaben pro Woche · Zahl = Selbständigkeit", "Tasks solved per week · number = independence")}</div>
+            {/* Balken = bearbeitete Aufgaben. Frueher stand hier «gelöst» –
+                bei 0 gelösten Aufgaben in mehreren Wochen war das eine Reihe
+                leerer Balken, obwohl durchgehend geuebt wurde. */}
+            <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>{t("Bearbeitete Aufgaben pro Woche", "Tasks worked on per week")}</div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 104 }}>
               {[...data.history].reverse().map((w, i, arr) => {
-                const maxSolved = Math.max(...arr.map((x) => x.solved_count), 1);
-                const h = Math.max(Math.round((w.solved_count / maxSolved) * 62), w.solved_count > 0 ? 10 : 2);
+                const wert = w.worked_count ?? 0;
+                const maxWert = Math.max(...arr.map((x) => x.worked_count ?? 0), 1);
+                const h = Math.max(Math.round((wert / maxWert) * 62), wert > 0 ? 10 : 2);
                 const isCurrent = i === arr.length - 1;
                 const label = new Date(w.week_start).toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { day: "numeric", month: "numeric" });
                 return (
                   <div key={w.week_start} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: isCurrent ? "#4f46e5" : "#9aa0ab" }}>{w.solved_count > 0 ? `${w.autonomy_rate}%` : "–"}</span>
-                    <div title={`${w.solved_count} ${t("gelöst", "solved")}`} style={{ width: "100%", height: h, background: w.solved_count > 0 ? (isCurrent ? "#6366f1" : "#e7e8fb") : "#eef0f3", borderRadius: 6 }} />
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: isCurrent ? "#4f46e5" : "#9aa0ab" }}>{wert > 0 ? wert : "–"}</span>
+                    <div title={`${wert} ${t("bearbeitet", "worked on")} · ${w.solved_count} ${t("gelöst", "solved")}`} style={{ width: "100%", height: h, background: wert > 0 ? (isCurrent ? "#6366f1" : "#e7e8fb") : "#eef0f3", borderRadius: 6 }} />
                     <span style={{ fontSize: 10, color: "#9aa0ab" }}>{label}</span>
                   </div>
                 );
