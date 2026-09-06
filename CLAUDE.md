@@ -12,15 +12,21 @@ ersten Mal. Er trifft die Entscheidungen; du lieferst Belege, keine Vermutungen.
 1. **Keine Geheimnisse ins Repository und keine in den Chat.** Weder
    `api/runtime-env.json` noch `.env` noch Token, Schlüssel oder Passwörter –
    auch nicht als Ausschnitt. Schlüssel*namen* sind in Ordnung, Werte nie.
-2. **Nie ungefragt einen Pull Request anlegen.** Nur wenn er ausdrücklich
+2. **NIEMALS auf `main` pushen, mergen oder rebasen.** Nicht nach einem «ok»,
+   nicht nach einer Ankündigung, nicht «weil es fertig ist». Arbeit geht
+   ausschliesslich auf einen Zweig und wird dorthin gepusht. Der Zusammenführer
+   ist **immer der Betreiber**, von Hand auf github.com. Am 31.07. habe ich
+   zweimal nach einem «ok» selbst gemergt – er wollte das nicht. Es gibt keinen
+   Fall, in dem dieser Punkt zur Diskussion steht.
+3. **Nie ungefragt einen Pull Request anlegen.** Nur wenn er ausdrücklich
    darum bittet.
-3. **Riskantes zuerst in die Vorschau.** Alles, was das Startverhalten, die
+4. **Riskantes zuerst in die Vorschau.** Alles, was das Startverhalten, die
    Datenbank oder die Konfiguration betrifft, geht auf einen Zweig und wird
    dort geprüft, bevor es `main` sieht.
-4. **Ein Commit, ein Thema.** Am 31.07. musste eine Änderung zurückgerollt
+5. **Ein Commit, ein Thema.** Am 31.07. musste eine Änderung zurückgerollt
    werden und riss zwei fertige, geprüfte Aufräumungen mit. Riskantes und
    Harmloses gehören nicht zusammen.
-5. **Messen statt vermuten.** Produktions-Datenbank (Supabase), Vercel-Laufzeit-
+6. **Messen statt vermuten.** Produktions-Datenbank (Supabase), Vercel-Laufzeit-
    protokolle und GitHub-Actions-Läufe sind zugänglich. Eine Behauptung ohne
    Beleg ist keine Antwort. Der Betreiber hat ausdrücklich erlaubt, die
    gespeicherten Chats in der Datenbank zu lesen.
@@ -37,11 +43,17 @@ Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
   false}`, damit Vercel `main` nicht an den Tests vorbei deployt – genau das
   hat am 31.07. einen fünfminütigen Ausfall verursacht.
 * **In Vercel niemals «Promote to Production»** benutzen. Das umgeht die Tests.
-* **Vorschau-Umgebung:** `JWT_SECRET` ist in Vercel für *Preview* gesetzt;
-  `DATABASE_URL` bewusst **nicht** – dann greift der Rückfall auf eine leere
-  Wegwerf-Datenbank (`api/index.py`), und ein Testlauf kann die echten
-  Schülerdaten nicht berühren. Ebenso kein `ANTHROPIC_API_KEY`: der
-  deterministische Mock genügt und kostet nichts.
+* **Vorschau-Umgebung** (Vercel → Environment Variables, Umgebung *Preview*):
+  `JWT_SECRET` (ein **anderer** als in Produktion – gleicher Wert hiesse, ein
+  Ausweis aus der Vorschau gälte auch live), `DATABASE_URL` auf das eigene
+  Supabase-Projekt **kniff-vorschau** (`fdgbeicshpttcqnhinso`, leer, eigene
+  Tabellen) und `ANTHROPIC_API_KEY` (eigener Schlüssel, damit die Testkosten
+  getrennt sichtbar sind – jede Testantwort kostet echtes Geld).
+  E-Mail-Bestätigung ist dort abgeschaltet (`app/plattform.vorschau_defaults`),
+  sonst käme man nicht hinein.
+  **Vorher lief die Vorschau auf SQLite in `/tmp`** – die gehört jeweils nur
+  einer Serverless-Instanz, also warf sie einen nach dem Anmelden sofort wieder
+  raus. Nicht dorthin zurück.
 * Vorschau-Adressen liegen hinter dem Vercel-Login. Aus einer Cloud-Sitzung
   sind sie oft nur per GET erreichbar oder gar nicht – dann den Betreiber
   bitten, die Zeile zu kopieren, statt zu raten.
