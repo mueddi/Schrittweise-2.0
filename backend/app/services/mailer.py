@@ -1,7 +1,7 @@
 """Mailversand fuer den Magic-Link.
 
 Ohne SMTP-Konfiguration wird nichts verschickt – der Aufrufer gibt den Link im
-Dev-Modus stattdessen direkt zurueck. So laeuft die App auf Render free tier
+Dev-Modus stattdessen direkt zurueck. So laeuft die App auch ohne Mailserver
 ohne Mailserver, und ein echter Provider ist spaeter reine Config.
 """
 import smtplib

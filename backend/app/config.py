@@ -79,10 +79,16 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        """True auf Serverless-/Hosting-Plattformen (Vercel, Render)."""
+        """True, sobald die App auf Vercel laeuft – also auch in einer Vorschau.
+
+        Absichtlich streng: die Vorschau soll dieselben Sicherheits-Riegel
+        durchlaufen wie die echte Seite (Platzhalter-JWT_SECRET verweigert den
+        Start, kein Dev-Login-Leak). Sonst prueft man in der Vorschau etwas
+        anderes, als spaeter live steht.
+        """
         import os
 
-        return bool(os.environ.get("VERCEL") or os.environ.get("RENDER"))
+        return bool(os.environ.get("VERCEL"))
 
     @property
     def jwt_secret_is_placeholder(self) -> bool:

@@ -8,7 +8,7 @@ from sqlalchemy.pool import NullPool
 from .config import settings
 
 def _normalize_url(url: str) -> str:
-    """Render/Heroku liefern postgres:// – SQLAlchemy braucht postgresql+psycopg://."""
+    """Manche Anbieter liefern postgres:// – SQLAlchemy braucht postgresql+psycopg://."""
     if url.startswith("postgres://"):
         return url.replace("postgres://", "postgresql+psycopg://", 1)
     if url.startswith("postgresql://"):

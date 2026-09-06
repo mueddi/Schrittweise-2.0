@@ -15,7 +15,7 @@ logger = logging.getLogger("schrittweise")
 
 
 def _check_production_config() -> None:
-    """Verhindert unsichere Konfiguration in Produktion (Vercel/Render).
+    """Verhindert unsichere Konfiguration in Produktion (Vercel).
 
     Ein Default-JWT-Secret erlaubt Token-Faelschung, ein Dev-Login-Leak den
     Account-Takeover – in Produktion beides ein harter Startfehler statt Warnung.
