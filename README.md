@@ -46,7 +46,7 @@ wenn Schüler:innen um die Lösung betteln.
 | KI | Anthropic API (Haiku als Standard, Sonnet für komplexe Aufgaben, Prompt-Caching) |
 | Datenbank | SQLite → Postgres/Supabase via SQLAlchemy (nur Config-Wechsel) |
 | Auth | E-Mail + Passwort (scrypt) + JWT; Magic-Link-Flows als Alternative im Code |
-| Deployment | Vercel (Serverless + Static Build) oder Render (`render.yaml`-Blueprint) |
+| Deployment | Vercel (Serverless + Static Build), ausgelöst über GitHub Actions nach den Tests |
 
 ## Schnellstart
 
@@ -89,13 +89,12 @@ frontend/         React + Vite
   src/screens/    Landing, Login, Lernen, Themen, Eltern, Preise, Einstellungen
 design/referenz.html   Visueller Massstab
 api/index.py      Vercel-Serverless-Einstieg
-render.yaml       Render-Blueprint (Alternative; Produktion läuft auf Vercel)
 vercel.json       Vercel Build & Routing
 ```
 
 ## Deployment & Launch
 
-Ausführliche Anleitungen (Vercel, Render, Supabase-Postgres, SMTP,
+Ausführliche Anleitungen (Vercel, Supabase-Postgres, SMTP,
 Launch-Checkliste, Sicherheits-Guards) stehen in
 [KNIFF.md](KNIFF.md).
 

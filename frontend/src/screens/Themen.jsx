@@ -325,7 +325,10 @@ function TopicDetail({ topicId }) {
 
         <Noten topicId={topicId} />
         <Lernziele topicId={topicId} start={topic?.learning_goals || ""} onSaved={shell.reloadTopics} />
-        <PruefungStart topicId={topicId} />
+        {/* Lernziele mitgeben: sobald sie gespeichert sind, holt die
+            Pruefungs-Karte ihre Vorschau neu – sonst haelt sie an ihrer
+            veralteten Auskunft fest. */}
+        <PruefungStart topicId={topicId} lernziele={topic?.learning_goals || ""} />
 
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{t("Aufgaben", "Tasks")}</div>
         {exercises.length === 0 && (

@@ -102,6 +102,22 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy
     steps:
+      # Zuerst die Auskunft: sie fasst jetzt auch die Datenbank an. Ist sie
+      # beim Deploy nicht erreichbar, soll der Deploy scheitern, statt eine
+      # Version live zu stellen, in der sich niemand anmelden kann.
+      - name: Auskunft meldet eine erreichbare Datenbank
+        run: |
+          code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+            "https://schrittweise-2-0.vercel.app/api/health")
+          echo "Health: HTTP $code"; cat /tmp/health.json; echo ""
+          [ "$code" = "200" ] || exit 1
+          python3 -c "
+          import json
+          d = json.load(open('/tmp/health.json'))
+          assert d['status'] == 'ok', d
+          assert d['datenbank'] is True, 'Datenbank nicht erreichbar'
+          "
+
       - name: Registrierung (200 beim ersten Mal, 409 danach – beides ok)
         run: |
           code=$(curl -sS -o /tmp/reg.json -w "%{http_code}" -X POST \
