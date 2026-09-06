@@ -91,10 +91,29 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          # pipefail ist hier kein Detail, sondern der Kern: ohne ihn meldet
+          # eine Verkettung den Status des LETZTEN Befehls – und `tee` gelingt
+          # immer. Am 06.09. lief der Deploy in einen ungueltigen VERCEL_TOKEN,
+          # lieferte nichts aus, und der Schritt meldete trotzdem "erfolgreich".
+          # Aufgefallen ist es nur, weil der Smoke-Test die Datenbank-Auskunft
+          # prueft. Ein Deploy, der luegt, ist schlimmer als gar keiner.
+          set -o pipefail
           npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN" | tee deploy-url.txt
+
+          # Zweiter Riegel: auch ein Befehl mit Status 0 muss eine Adresse
+          # geliefert haben, sonst ging nichts live.
+          url=$(tail -n 1 deploy-url.txt)
+          case "$url" in
+            https://*) ;;
+            *)
+              echo "::error::Vercel hat keine Deployment-Adresse geliefert: $url"
+              exit 1
+              ;;
+          esac
+
           {
             echo "### Produktions-URL"
-            tail -n 1 deploy-url.txt
+            echo "$url"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Nach dem Deploy die Live-App anstupsen: Registrierung/Login muessen gehen.
