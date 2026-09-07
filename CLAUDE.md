@@ -111,10 +111,13 @@ Build abgewiesen (`frontend/scripts/keine-browser-dialoge.mjs`). Stattdessen
 
 ## Bekannte Schwächen (belegt, nicht behoben)
 
-* **Die Bilderkennung ist das grösste Problem.** Von den letzten drei
-  fotografierten Aufgaben waren zwei unbrauchbar gelesen (`Fg=` statt einer
-  Physikaufgabe). Der Tutor kann nichts dafür – er bekommt nur, was die
-  Texterkennung liefert.
+* **Bilderkennung – Befund vom 7.9., nach Sichtung der Bilder selbst:** alle
+  124 gespeicherten Bilder sind Stift-Zeichnungen aus der App, kein einziges
+  echtes Foto. Der Foto-Weg ist in der Produktion nie benutzt worden. Von den
+  letzten vier Zeichnungen wurden drei korrekt gelesen; `Fg=` war ein
+  Gekritzel, das auch ein Mensch nicht lesen kann. Das eigentliche Loch: der
+  erkannte Text ist vor dem Start kaum sichtbar, und bei «nichts erkannt» darf
+  man trotzdem starten. Erst das ändern, dann mit zehn echten Fotos messen.
 * **Die Mathe-Prüfung urteilt selten:** 94 % der Antworten kommen als «nicht
   prüfbar» zurück, weil nur 15 von 52 Aufgaben einen Prüfausdruck haben.
   Symbolische Antworten (`x = 7y/3`) kann sie ohnehin nicht beurteilen.
