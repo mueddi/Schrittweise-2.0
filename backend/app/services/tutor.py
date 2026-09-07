@@ -38,7 +38,14 @@ except Exception:  # pragma: no cover
 # ---- Betriebs-Konstanten ----
 
 # Kontext-/Kostendeckel: nur die juengsten Nachrichten gehen an die API.
+# Zwei Werte statt einem, damit der Verlaufs-Cache stabil bleibt: gekuerzt
+# wird erst ab HISTORY_MAX, und dann auf HISTORY_LIMIT. Ein Schnitt bei jedem
+# Turn (vorher: ab 12 Nachrichten jeden Turn neu) verschob den Praefix jedes
+# Mal, und der Cache traf nicht mehr – in der Vorschau belegt: Lesen blieb bei
+# 7964 Token, Schreiben 650–830 pro Turn. Jetzt bleibt der Praefix sechs Turns
+# lang identisch; gecachte Verlaufs-Token kosten ein Zehntel.
 HISTORY_LIMIT = 12
+HISTORY_MAX = 24
 
 # Sicherheitsnetz, kein Ziel: der Prompt verlangt ~350 Zeichen auf Stufe 1/2
 # und ~600 auf Stufe 3. Bei 400 Tokens wurden laengere Antworten mitten im Wort
@@ -695,9 +702,14 @@ def _gekuerzter_verlauf(history: list[dict]) -> list[dict]:
     An der Schnittstelle koennen sonst zwei User-Nachrichten aufeinander
     folgen; die API nimmt das hin, verlassen sollte man sich nicht darauf.
     """
-    if len(history) <= HISTORY_LIMIT:
+    n = len(history)
+    if n <= HISTORY_MAX:
         return list(history)
-    rest = history[-(HISTORY_LIMIT - 1):]
+    # In ganzen Bloecken kuerzen, nicht gleitend: zwischen zwei Schnitten
+    # bleibt der Anfang des Verlaufs identisch, und der Cache trifft.
+    block = HISTORY_MAX - HISTORY_LIMIT
+    drop = ((n - HISTORY_MAX + block - 1) // block) * block
+    rest = history[1 + drop:]
     if rest and rest[0].get("role") != "tutor" and history[0].get("role") != "tutor":
         rest = rest[1:]
     return [history[0]] + rest

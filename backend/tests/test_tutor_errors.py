@@ -262,6 +262,32 @@ def test_kompletter_ausfall_meldet_fehler_zurueck(monkeypatch):
     assert "usage" not in usage_out, "ohne Antwort darf nichts verrechnet werden"
 
 
+def test_verlauf_wird_in_bloecken_gekuerzt_nicht_jeden_turn():
+    """In der Vorschau belegt: ab 12 Nachrichten wurde der Verlauf jeden Turn
+    neu zugeschnitten, der Praefix verschob sich, und der Verlaufs-Cache traf
+    nie mehr (Lesen blieb bei 7964 Token, Schreiben 650–830 pro Turn).
+    Jetzt: bis HISTORY_MAX unveraendert, dann auf HISTORY_LIMIT – der Praefix
+    bleibt zwischen zwei Schnitten identisch."""
+    def verlauf(n):
+        return [{"role": "tutor" if i % 2 == 0 else "student", "text": f"m{i}"} for i in range(n)]
+
+    assert tutor.HISTORY_MAX > tutor.HISTORY_LIMIT
+    unveraendert = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX))
+    assert [m["text"] for m in unveraendert] == [f"m{i}" for i in range(tutor.HISTORY_MAX)]
+
+    erster_schnitt = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX + 1))
+    assert erster_schnitt[0]["text"] == "m0"                 # Eroeffnung bleibt
+    assert len(erster_schnitt) <= tutor.HISTORY_MAX
+    # Fuenf Turns spaeter: der Anfang ist noch derselbe – nur hinten kam dazu
+    spaeter = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX + 11))
+    assert [m["text"] for m in spaeter[:len(erster_schnitt)]] == [m["text"] for m in erster_schnitt]
+    assert len(spaeter) <= tutor.HISTORY_MAX
+    # Erst beim naechsten vollen Block verschiebt sich der Anfang wieder
+    zweiter_schnitt = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX + 13))
+    assert zweiter_schnitt[1]["text"] != erster_schnitt[1]["text"]
+    assert len(zweiter_schnitt) <= tutor.HISTORY_MAX
+
+
 def test_zeitlimit_liegt_unter_dem_deckel_der_plattform():
     """Vercel bricht nach 60 s ab. Wartet der Client laenger, wird die Funktion
     von aussen abgeschossen, bevor die freundliche Meldung ueberhaupt
