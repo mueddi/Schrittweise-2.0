@@ -128,9 +128,11 @@ def test_regie_erzwingt_englisch_und_system_bleibt_cachebar():
 
     # System besteht nur noch aus dem statischen, gecachten Prompt-Block –
     # die Regie wandert in die letzte User-Nachricht (Cache-Praefix stabil).
+    # Die Lebensdauer (5 min oder 1 h) ist eine Kostenentscheidung, die hier
+    # nicht festgenagelt wird – nur DASS der Block gecacht ist.
     system = _build_system()
     assert len(system) == 1
-    assert system[0]["cache_control"] == {"type": "ephemeral"}
+    assert system[0]["cache_control"]["type"] == "ephemeral"
 
 
 def test_regie_traegt_loesung_als_orientierung():
@@ -156,7 +158,7 @@ def test_regie_landet_in_letzter_user_nachricht():
     msgs = _history_to_messages(history, image=(b"TASK", "image/jpeg"),
                                 regie="REGIE-ANWEISUNG: ...")
     # Bild-Nachricht traegt den Cache-Breakpoint auf dem letzten Block
-    assert msgs[0]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert msgs[0]["content"][-1]["cache_control"]["type"] == "ephemeral"
     last = msgs[-1]
     assert last["role"] == "user"
     assert last["content"][0]["text"].startswith("REGIE-ANWEISUNG")
@@ -216,7 +218,7 @@ def test_aufgabentext_steht_beim_bild():
     assert "3x + 5 = 20" in bloecke[2]["text"]
     assert "(Aufgabe gestartet)" not in bloecke[2]["text"]
     # Cache-Breakpoint bleibt auf dem letzten Block der Bild-Nachricht
-    assert bloecke[-1]["cache_control"] == {"type": "ephemeral"}
+    assert bloecke[-1]["cache_control"]["type"] == "ephemeral"
 
     # ohne Aufgabentext bleibt die alte Fuellung (kein leerer Block)
     ohne = _history_to_messages(history, image=(b"TASK", "image/jpeg"))

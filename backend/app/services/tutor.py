@@ -14,7 +14,7 @@ nicht mehr in der Regie: dort steht nur noch, WELCHER Fall gilt.
 Zweitens: Claude Haiku 4.5 cacht erst ab 4096 Token Praefix. Darunter passiert
 gar nichts – ohne Fehlermeldung. Der Prompt ist bewusst laenger gehalten als
 noetig; die zusaetzlichen Token stecken in Beispielen, die dem Modell wirklich
-helfen. Vor jeder Kuerzung: scripts/pruefe_prompt_tokens.py laufen lassen.
+helfen. Vor jeder Kuerzung: backend/scripts/pruefe_prompt_tokens.py laufen lassen.
 """
 from __future__ import annotations
 
@@ -55,6 +55,10 @@ MAX_TOKENS_TRANSKRIPT = 350
 CLIENT_TIMEOUT = 20.0
 GESAMT_BUDGET = 45.0
 MIN_RESTZEIT = 8.0
+# Spaetester Zeitpunkt, an dem ein zweiter Anlauf mit dem anderen Modell noch
+# beginnen darf: Budget minus Mindest-Restzeit. Zusammen mit CLIENT_TIMEOUT
+# muss das unter Vercels 60 s bleiben (Test in test_tutor_errors).
+AUSWEICH_DEADLINE = GESAMT_BUDGET - MIN_RESTZEIT
 
 # Cache-Lebensdauer. Kinder denken lange nach: sechs Minuten Gruebeln ueber
 # einem Tipp sprengen die 5-Minuten-Frist, und der naechste Turn zahlt einen
@@ -75,13 +79,13 @@ STUFEN = {1: "aktivierende Frage", 2: "kleiner Tipp",
 
 SYSTEM_PROMPT = """Du bist «Kniff», ein geduldiger Mathe-Tutor fuer Schweizer Schueler:innen – Mittelstufe, Oberstufe (Sek I, Lehrplan 21) und Gymnasium bis zur Matura. Die REGIE nennt dir pro Nachricht die Klassenstufe, den Modus und die erlaubte Hinweis-Stufe.
 
-DEINE EISERNE REGEL: Du verraetst die Loesung NIEMALS, ausser die REGIE nennt ausdruecklich Stufe 4. Zweite unverhandelbare Regel: Du bestaetigst NIE eine falsche Antwort als richtig, und nie eine Antwort, die der Schueler so gar nicht gegeben hat. Alles andere in diesem Text sind Leitplanken, kein Korsett – klingt eine Regel im konkreten Moment falsch, folge deinem Urteil als Lehrperson.
+DEINE EISERNE REGEL: Du verraetst die Loesung NIEMALS, ausser die REGIE nennt ausdruecklich Stufe 4. Zweite unverhandelbare Regel: Du bestaetigst NIE eine falsche Antwort als richtig, und nie eine Antwort, die der Schueler so gar nicht gegeben hat. Alles andere in diesem Text sind LEITPLANKEN, KEIN KORSETT – klingt eine Regel im konkreten Moment falsch, folge deinem Urteil als Lehrperson.
 
 DIE VIER STUFEN (die REGIE sagt dir, welche gilt):
 1 – Aktivierende Frage. Stell eine Frage, die zum ersten Schritt hinfuehrt. Hoechstens ~350 Zeichen.
 2 – Kleiner Tipp. Ein konkreter, kleiner Hinweis, ohne zu rechnen. Hoechstens ~350 Zeichen.
 3 – Teilschritt vorgemacht. Mach EINEN Rechenschritt vor, nicht die ganze Loesung. Hoechstens ~600 Zeichen.
-4 – Volle Loesung. Jetzt darfst du den Loesungsweg Schritt fuer Schritt zeigen, so lang wie er wirklich braucht.
+4 – Volle Loesung. Jetzt darfst du den Loesungsweg Schritt fuer Schritt zeigen, so lang wie der Loesungsweg wirklich braucht.
 Immer gilt: eine Frage oder ein Hinweis pro Antwort, keine Wiederholung der Aufgabenstellung, keine Floskeln. Braucht das Kind mehr, gib es im naechsten Turn statt alles auf einmal.
 
 DIE KLASSENSTUFEN (die REGIE nennt dir eine):
@@ -101,14 +105,14 @@ MODUS talk – Er redet mit dir: Rueckfrage, Kommentar, Zwischenbemerkung. Das i
 MODUS post_solved – Die Aufgabe ist schon geloest. Beantworte Verstaendnisfragen kurz oder gratuliere, lade zu einer neuen Aufgabe ein.
 
 SO KLINGT EINE GUTE ANTWORT.
-Die Beispiele zeigen HALTUNG, TIEFE und LAENGE – NICHT den Wortlaut. Schreib immer deine eigenen Saetze, passend zu DIESER Aufgabe und DIESEM Kind; kopiere die Formulierungen nicht und benutz nicht immer dieselbe Eroeffnung.
+Die Beispiele zeigen HALTUNG, TIEFE und LAENGE – NICHT den Wortlaut. Schreib immer deine eigenen Saetze, passend zu DIESER Aufgabe und DIESEM Kind; kopiere die Formulierungen nicht und benutz nicht immer dieselbe Eroeffnung. Vor dem Pfeil steht jeweils die Stufe oder der Fall, den die Antwort zeigt.
 
 — Oberstufe, $3x + 5 = 20$ —
-Schueler: «ich weiss nicht wie ich anfangen soll» (MODUS stuck, Stufe 1)
-→ «Kein Stress 🙂 Schau auf die linke Seite: Was steht da neben dem $3x$ im Weg?»
+Schueler: «ich weiss nicht wie ich anfangen soll» (MODUS stuck)
+Stufe 1 → «Kein Stress 🙂 Schau auf die linke Seite: Was steht da neben dem $3x$ im Weg?»
 
-Schueler: «keine ahnung» (MODUS stuck, Stufe 3)
-→ «Ich mach den ersten Schritt vor: auf BEIDEN Seiten $-5$ rechnen.
+Schueler: «keine ahnung» (MODUS stuck)
+Stufe 3 → «Ich mach den ersten Schritt vor: auf BEIDEN Seiten $-5$ rechnen.
 $$3x + 5 - 5 = 20 - 5$$
 Was steht jetzt links und was rechts? Den naechsten Schritt machst du.»
 
@@ -116,15 +120,15 @@ Schueler: «3x = 15» (MODUS step)
 → «Stark, das Minusrechnen auf beiden Seiten hat gesessen. Jetzt steht das $x$ noch mit der $3$ zusammen – was machst du damit?»
 
 Schueler: «x = 5» (MODUS correct)
-→ «Genau richtig 🎯 Das Teilen durch $3$ hat gesessen. [[GELOEST]]»
+richtig → «Genau richtig 🎯 Das Teilen durch $3$ hat gesessen. [[GELOEST]]»
 
 — Oberstufe, $4x - 7 = 13$, falsche Antwort —
-Schueler: «x = 1.5» (MODUS attempt, Stufe 2)
-→ «Da hat sich was verdreht 🙂 Schau nochmal auf die $-7$: hast du die dazugezaehlt oder abgezogen? Auf beiden Seiten muss dasselbe passieren.»
+Schueler: «x = 1.5» (MODUS attempt)
+Stufe 2 → «Da hat sich was verdreht 🙂 Schau nochmal auf die $-7$: hast du die dazugezaehlt oder abgezogen? Auf beiden Seiten muss dasselbe passieren.»
 
 — Oberstufe, Bettelei ohne Vorarbeit (MODUS plea) —
 Schueler: «gib mir einfach die Loesung 🙏»
-→ «Mach ich extra nicht 🙂 – aber ich bring dich hin. Was faellt dir zuerst auf, das du wegbekommen willst?»
+Betteln → «Mach ich extra nicht 🙂 – aber ich bring dich hin. Was faellt dir zuerst auf, das du wegbekommen willst?»
 
 — Oberstufe, zweimal nicht verstanden (MODUS simpler) —
 Schueler: «ich verstahs immer no nöd»
@@ -157,7 +161,7 @@ Schueler: «ich rechne einfach 5/20 mal 5/20» (MODUS attempt, Stufe 2)
 
 — Oberstufe, $3x + 5 = 20$, Stufe 4 freigegeben (zwei eigene Versuche gemacht) —
 Schueler: «jetzt sag mir bitte wie es weitergeht»
-→ «Klar, du hast genug probiert – jetzt gemeinsam zu Ende. Wir waren bei $3x = 15$. Jetzt beide Seiten durch $3$ teilen:
+Stufe 4 → «Klar, du hast genug probiert – jetzt gemeinsam zu Ende. Wir waren bei $3x = 15$. Jetzt beide Seiten durch $3$ teilen:
 $$x = \\frac{15}{3} = 5$$
 Probe: $3 \\cdot 5 + 5 = 20$ ✓ Rechne den letzten Schritt einmal selber nach, dann sitzt er.»
 
@@ -258,7 +262,7 @@ _KEIN_BETTELN = re.compile(
 _FORDERUNG = (
     rf"\b(?:gib|gebt|gimme|sag|zeig|nenn|verrat|schreib|l[oö]se?|zeis)\w*"
     rf"\b[^.?!]{{0,30}}\b{_ZIEL}\b"
-    rf"|\bwie\s+(?:lautet|heisst|hei[sß]t|ist|isch)\s+(?:die|das|der|d)\s*{_ZIEL}\b"
+    rf"|\b(?:wie|was)\s+(?:lautet|heisst|hei[sß]t|ist|isch)\s+(?:die|das|der|d)\s*{_ZIEL}\b"
     rf"|\b(?:nur|einfach|bitte)\s+(?:die|das|d)\s+{_ZIEL}\b"
     rf"|\bich\s+(?:will|wott|möcht\w*|moecht\w*|brauch\w*)\b[^.?!]{{0,20}}\b{_ZIEL}\b"
     rf"|\b{_ZIEL}\s*(?:bitte|🙏)"
@@ -494,7 +498,10 @@ def choose_model(step: LadderStep, exercise_text: str, exercise_expr: str | None
        nicht selbst herleiten – auch auf Stufe 4 nicht, wo er sie nur noch
        sauber praesentiert. Das ist der bessere Schwierigkeits-Klassifikator
        als jede Stichwortliste: was SymPy loest, ist mechanisch.
-    4. Sonst die Textheuristik.
+    4. Stufe 4 OHNE verifizierte Loesung -> starkes Modell: hier muss der
+       Tutor den ganzen Loesungsweg selbst herleiten und vorrechnen; ein
+       Rechenfehler an dieser Stelle ist der teuerste, den es gibt.
+    5. Sonst die Textheuristik.
     """
     if last_image is not None:
         return settings.anthropic_model_smart
@@ -502,6 +509,8 @@ def choose_model(step: LadderStep, exercise_text: str, exercise_expr: str | None
         return settings.anthropic_model_smart
     if verification is not None and verification.solution:
         return settings.anthropic_model_default
+    if step.allowed_stage >= 4 or step.permit_solution:
+        return settings.anthropic_model_smart
     return pick_model(exercise_text, exercise_expr)
 
 
@@ -537,29 +546,58 @@ def _klasse(grade_level: str | None) -> str:
     return "OBERSTUFE"
 
 
-def _regie(step: LadderStep, verification: Verification, exercise_expr: str | None,
-           grade_level: str | None = None, language: str = "de",
-           from_image: bool = False) -> str:
+_KLASSE_ZUSATZ = {
+    "GYMNASIUM": "Gymnasium/Matura-Niveau",
+    "MITTELSTUFE": "Mittelstufe, einfache Sprache",
+    "OBERSTUFE": "Oberstufe/Sek I",
+}
+
+# Die eine Zeile pro Modus, die dem Modell den ENTSCHEIDENDEN Handgriff nennt.
+# Das ausfuehrliche Playbook steht im SYSTEM_PROMPT (gecacht); hier steht nur
+# der Kern, den das Modell in genau diesem Turn nicht uebersehen darf –
+# insbesondere die Abhak-Entscheidung, die frueher in der Regie fehlte und
+# fertig geloeste Aufgaben offen liess.
+_MODUS_KERN = {
+    "step": ("Der Schueler hat SELBST gerechnet. Entscheide zuerst: steht da schon die "
+             "VOLLSTAENDIGE Loesung? Wenn JA: bestaetigen und [[GELOEST]] ans Ende. Wenn NEIN: "
+             "konkret bestaetigen und zum naechsten Schritt ermutigen, KEINE zusaetzliche Hilfe."),
+    "fertig": ("Der Schueler sagt, er sei FERTIG. Pruef, was er wirklich gerechnet hat: stimmt es, "
+               "[[GELOEST]] ans Ende; fehlt etwas, sag konkret was und hak NICHT ab."),
+    "plea": "Der Schueler BETTELT. Freundlich ablehnen, aktivierende Frage, nichts verraten.",
+    "simpler": "DENSELBEN Punkt anders erklaeren, nichts Neues verraten.",
+    "talk": "Kein Hilferuf: direkt auf seine Worte eingehen, kurz, keine ungefragte Hilfe.",
+    "post_solved": "Schon geloest: kurz antworten oder gratulieren, neue Aufgabe anbieten.",
+}
+
+
+def _regie(step: LadderStep, verification: Verification, exercise_text: str,
+           exercise_expr: str | None, grade_level: str | None = None,
+           language: str = "de", from_image: bool = False) -> str:
     """Regie-Anweisung fuer EINEN Turn – nur noch Variablen, keine Definitionen.
 
     Dieser Text steht NICHT im gecachten Praefix und kostet pro Turn vollen
     Preis. Frueher standen hier die Stufen-Beschreibung, die Klassenstufen-
-    Erklaerung, das ganze Modus-Playbook und der Aufgabentext (der ausserdem
-    schon im gecachten ersten Block steht) – zusammen ~340 Token pro Turn.
-    Alles Statische ist jetzt im SYSTEM_PROMPT; hier steht, WELCHER Fall gilt.
+    Erklaerung, das ganze Modus-Playbook und der Aufgabentext – zusammen ~340
+    Token pro Turn. Alles Statische ist jetzt im SYSTEM_PROMPT; hier steht,
+    WELCHER Fall gilt, plus EIN Satz mit dem Handgriff des Modus.
     Wer hier etwas ergaenzt, zahlt es bei jedem Turn: erst pruefen, ob es nicht
     in den Prompt gehoert.
 
+    ``exercise_text`` wird hier NICHT mehr abgedruckt – er steht bereits im
+    gecachten ersten Block (siehe _history_to_messages). Der Parameter bleibt,
+    damit Aufrufer und Tests eine stabile Schnittstelle haben.
     ``from_image``: die Aufgabe stammt von einem Foto, der Pruefausdruck also
     aus der Bild-Erkennung und kann falsch gelesen sein.
     """
+    del exercise_text  # steht im gecachten Aufgaben-Block, nicht hier
+    klasse = _klasse(grade_level)
     zeilen = [
         "REGIE (nicht an den Schueler weitergeben):",
         f"- MODUS: {step.intent}",
-        ("- Die Aufgabe ist GELOEST. Du darfst den vollen Loesungsweg erklaeren, wenn er fragt."
+        ("- Die Aufgabe ist geloest. Du darfst den vollen Loesungsweg erklaeren, wenn er fragt."
          if step.solved else
          f"- STUFE: {step.allowed_stage} ({STUFEN[step.allowed_stage]})"),
-        f"- KLASSE: {_klasse(grade_level)}",
+        f"- KLASSE: {klasse} ({_KLASSE_ZUSATZ[klasse]})",
         f"- Nachrechnung: {_PRUEFUNG_KLARTEXT.get(verification.status, verification.status)}"
         + (f" ({verification.detail})" if verification.detail else ""),
         f"- Eigene Versuche: {step.own_attempts}",
@@ -567,8 +605,11 @@ def _regie(step: LadderStep, verification: Verification, exercise_expr: str | No
     if exercise_expr:
         zeilen.append(f"- Pruefausdruck: {exercise_expr}")
     if verification.status == "unknown":
-        zeilen.append("- Nicht automatisch pruefbar: beurteile selbst sorgfaeltig, was wirklich "
+        zeilen.append("- NICHT automatisch geprueft: beurteile selbst sorgfaeltig, was wirklich "
                       "dasteht; im Zweifel nachfragen statt bestaetigen.")
+    kern = _MODUS_KERN.get(step.intent)
+    if kern and not (step.intent == "plea" and step.permit_solution):
+        zeilen.append(f"- {kern}")
 
     if verification.solution:
         unsicher = ("  ACHTUNG: aus der Bild-Erkennung, kann auf einer falsch gelesenen Aufgabe "
@@ -578,13 +619,25 @@ def _regie(step: LadderStep, verification: Verification, exercise_expr: str | No
         # genau dem Moment, in dem das Kind loeste, beides gleichzeitig da:
         # «Die Aufgabe ist geloest, erklaer den Weg» UND «NIEMALS nennen».
         if step.solved or step.allowed_stage >= 4 or step.permit_solution:
-            zeilen.append(f"- Stufe 4 frei. Interne Loesung (zeigbar): {verification.solution}{unsicher}")
+            zeilen.append(f"- Stufe 4 frei. Interne Loesung (jetzt zeigbar): {verification.solution}{unsicher}")
         else:
-            zeilen.append(f"- Interne Loesung NUR als Kompass, NICHT nennen: {verification.solution}{unsicher}")
+            zeilen.append(f"- Interne Loesung NUR als Kompass, NIEMALS nennen: {verification.solution}{unsicher}")
 
     if (language or "de").startswith("en"):
         zeilen.append("- Der Schueler nutzt die App auf ENGLISCH. Antworte IMMER auf Englisch.")
+    # Ohne maschinelle Pruefung ist der Tutor der einzige Richter darueber, ob
+    # die Aufgabe fertig ist. Bei step/fertig steht die Frage schon im Kern,
+    # bei einer Bettelei hat das Kind nichts geloest.
+    if (not step.solved and verification.status != "correct"
+            and step.intent not in ("plea", "step", "fertig")):
+        zeilen.append("- ZUM SCHLUSS ENTSCHEIDEN: hat der Schueler das Ergebnis selbst "
+                      "hingeschrieben? Wenn ja, [[GELOEST]] als Allerletztes; wenn nein, weglassen.")
     return "\n".join(zeilen)
+
+
+def _build_system() -> list[dict]:
+    """Der System-Teil des Aufrufs: genau EIN statischer, gecachter Block."""
+    return SYSTEM_BLOCKS
 
 
 # ---- Nachrichten-Aufbau ----
@@ -665,12 +718,13 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
     if not msgs or msgs[0]["role"] != "user":
         msgs.insert(0, {"role": "user", "content": "(Aufgabe gestartet)"})
 
-    # --- Cache-Praefix: Aufgabe (+ Bild) IMMER als erster Block ---
+    # --- Cache-Praefix: Aufgabe (+ Bild) als erster Block ---
     # Der Aufgabentext stand frueher zusaetzlich in jeder Regie und wurde damit
     # jeden Turn voll bezahlt. Hier steht er genau einmal, im gecachten Teil.
-    kopf = [{"type": "text",
-             "text": "AUFGABE (gilt fuer das ganze Gespraech):\n"
-                     + (ohne_steuer_marker(exercise_text or "").strip() or "(kein Text)")}]
+    # Ohne Aufgabentext und ohne Bild bleibt die erste Nachricht schlichter
+    # Text – ein Kopf mit «(kein Text)» wuerde nur Token kosten.
+    aufgabe = ohne_steuer_marker(exercise_text or "").strip()
+    kopf: list[dict] = []
     if image is not None:
         # Aufgaben-Figur: das Modell sieht sie damit in jedem Turn (wichtig fuer
         # Geometrie), BESCHRIFTET, sonst weiss es bei zwei Bildern nicht,
@@ -678,11 +732,15 @@ def _history_to_messages(history: list[dict], image: tuple[bytes, str] | None = 
         # Bei reinen Text-/Gleichungsaufgaben soll der Aufrufer image=None
         # uebergeben: das OCR-Transkript ist dann vollstaendig, und ein
         # mitgeschlepptes Foto kostet nur.
-        kopf = [{"type": "text", "text": BILD_AUFGABE}, _image_block(image)] + kopf
-    erster = msgs[0]["content"]
-    kopf[-1]["cache_control"] = CACHE_LANG   # Breakpoint 2: System + Aufgabe + Bild
-    msgs[0]["content"] = kopf + ([{"type": "text", "text": erster}]
-                                 if isinstance(erster, str) else list(erster))
+        kopf += [{"type": "text", "text": BILD_AUFGABE}, _image_block(image)]
+    if aufgabe:
+        kopf.append({"type": "text", "text": f"AUFGABE (gilt fuer das ganze Gespraech):\n{aufgabe}"})
+    if kopf:
+        erster = msgs[0]["content"]
+        bloecke = kopf + ([{"type": "text", "text": erster}]
+                          if isinstance(erster, str) else list(erster))
+        bloecke[-1]["cache_control"] = CACHE_LANG   # Breakpoint 2: System + Aufgabe + Bild
+        msgs[0]["content"] = bloecke
 
     if last_image is not None:
         # Zeichnung der AKTUELLEN Nachricht. Nur das juengste Bild geht mit –
@@ -907,7 +965,7 @@ def stream_reply(history, step: LadderStep, verification: Verification,
 
     client = _client()
     model = choose_model(step, exercise_text, exercise_expr, verification, last_image, eskalation)
-    regie = _regie(step, verification, exercise_expr, grade_level, language,
+    regie = _regie(step, verification, exercise_text, exercise_expr, grade_level, language,
                    from_image=image is not None)
     messages = _history_to_messages(history, image, last_image, regie=regie,
                                     exercise_text=exercise_text)
