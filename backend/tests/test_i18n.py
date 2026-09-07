@@ -16,8 +16,12 @@ def test_opener_und_mock_tutor_auf_englisch(client):
     ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
     state = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()
     opener = state["messages"][0]["text"]
-    assert "Let's go" in opener
-    assert "Los geht" not in opener
+    # Der Eroeffnungssatz wechselt von Aufgabe zu Aufgabe durch; entscheidend
+    # ist hier nur, dass er ENGLISCH ist.
+    from app.routers.exercises import ANREDE_MIT_TEXT, EINSTIEGSFRAGEN
+    assert any(en in opener for _, en in ANREDE_MIT_TEXT), opener
+    assert any(en in opener for _, en in EINSTIEGSFRAGEN), opener
+    assert not any(de in opener for de, _ in ANREDE_MIT_TEXT), "deutscher Satz im englischen Opener"
 
     aid = state["attempt"]["id"]
     with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
@@ -46,7 +50,9 @@ def test_deutsch_bleibt_standard(client):
     ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
     opener = client.post(f"/api/exercises/{ex['id']}/attempts",
                          headers=headers).json()["messages"][0]["text"]
-    assert "Los geht's" in opener
+    from app.routers.exercises import ANREDE_MIT_TEXT, EINSTIEGSFRAGEN
+    assert any(de in opener for de, _ in ANREDE_MIT_TEXT), opener
+    assert any(de in opener for de, _ in EINSTIEGSFRAGEN), opener
 
 
 def test_meta_bitte_erzeugt_echte_aufgabe(client):
@@ -237,3 +243,34 @@ def test_loesung_aus_bilderkennung_wird_als_unsicher_markiert():
     assert "Bild-Erkennung" not in ohne_bild
     # die Orientierung selbst bleibt in BEIDEN Faellen erhalten
     assert "x = 5" in mit_bild and "x = 5" in ohne_bild
+
+
+def test_eroeffnung_klingt_nicht_bei_jeder_aufgabe_gleich(client):
+    """Gemeldet: «antwortet immer wie ein Roboter mit demselben Starter».
+    Stimmte – der Eroeffnungssatz war ein fester String. Die erste Zeile ist
+    das Erste, was ein Kind vom Tutor liest; bei der dritten Aufgabe wirkte
+    sie wie eine Maschine."""
+    headers = register_pw(client, "vielfalt@test.ch")
+
+    openers = []
+    for i in range(4):
+        ex = client.post("/api/exercises", headers=headers,
+                         json={"text": f"{i + 2}x + 1 = 9"}).json()
+        openers.append(client.post(f"/api/exercises/{ex['id']}/attempts",
+                                   headers=headers).json()["messages"][0]["text"])
+
+    assert len(set(openers)) >= 3, f"zu wenig Abwechslung: {openers}"
+
+
+def test_eroeffnung_bleibt_fuer_dieselbe_aufgabe_stabil(client):
+    """Gegenprobe zur Abwechslung: beim Neuladen derselben Uebung darf der
+    Satz NICHT wechseln – sonst wirkt es, als schreibe der Tutor die
+    Begruessung staendig um. Die Variante haengt deshalb an der
+    Attempt-Nummer, nicht am Zufall."""
+    headers = register_pw(client, "stabil@test.ch")
+    ex = client.post("/api/exercises", headers=headers, json={"text": "4x = 12"}).json()
+    state = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()
+    aid = state["attempt"]["id"]
+
+    erneut = client.get(f"/api/attempts/{aid}", headers=headers).json()
+    assert erneut["messages"][0]["text"] == state["messages"][0]["text"]

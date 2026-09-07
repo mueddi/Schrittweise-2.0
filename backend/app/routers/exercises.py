@@ -258,6 +258,56 @@ def create_exercise(payload: ExerciseCreate, user: User = Depends(require_studen
     return ExerciseOut.model_validate(ex)
 
 
+# --------------------------------------------------------------------------
+# Eroeffnungsnachricht
+#
+# Frueher stand hier EIN fester Satz. Bei der dritten Aufgabe klang der Tutor
+# damit wie ein Automat – gemeldet als «roboterhaft», und zu Recht: die erste
+# Zeile ist das Erste, was ein Kind von ihm liest.
+#
+# Die Auswahl haengt an der Attempt-Nummer, nicht am Zufall. Damit bleibt sie
+# fuer dieselbe Aufgabe stabil (kein Wechsel beim Neuladen der Seite), wechselt
+# aber von Aufgabe zu Aufgabe durch.
+# --------------------------------------------------------------------------
+
+ANREDE_MIT_TEXT = [
+    ("Los geht's! Deine Aufgabe:", "Let's go! Your task:"),
+    ("Schauen wir sie uns an:", "Let's take a look:"),
+    ("Neue Aufgabe:", "New task:"),
+    ("Die hier nehmen wir uns vor:", "Here's the one we'll tackle:"),
+]
+
+ANREDE_MIT_BILD = [
+    ("Los geht's! Deine Aufgabe ist auf dem Bild oben 📷.",
+     "Let's go! Your task is in the picture above 📷."),
+    ("Dein Foto ist da 📷 – schauen wir es uns an.",
+     "Your photo is here 📷 – let's take a look."),
+    ("Ich hab dein Bild 📷.", "I've got your picture 📷."),
+]
+
+ANREDE_SCHLICHT = [
+    ("Los geht's!", "Let's go!"),
+    ("Fangen wir an.", "Let's begin."),
+    ("Bereit?", "Ready?"),
+]
+
+EINSTIEGSFRAGEN = [
+    ("Wie würdest du anfangen? Kein Stress – ich helf dir Schritt für Schritt.",
+     "How would you start? No stress – I'll help you step by step."),
+    ("Was fällt dir als Erstes auf?", "What do you notice first?"),
+    ("Wo würdest du ansetzen? Wenn du nicht weiterweisst, frag einfach.",
+     "Where would you start? Just ask if you get stuck."),
+    ("Magst du einen ersten Versuch? Falsch ist völlig okay.",
+     "Want to give it a first try? Getting it wrong is completely fine."),
+    ("Erzähl mir, was du schon siehst.", "Tell me what you can already see."),
+]
+
+
+def _variante(saetze: list[tuple[str, str]], nummer: int, lang: str) -> str:
+    de, en = saetze[nummer % len(saetze)]
+    return i18n.t(lang, de, en)
+
+
 def _strip_figure_notes(text: str) -> str:
     """Entfernt OCR-Beschreibungszeilen ([Figur: …]/[Graph: …]) fuer die Anzeige.
 
@@ -315,18 +365,17 @@ def _start_attempt_state(db: Session, ex: Exercise, user: User) -> AttemptStateO
     if ex.image_path and not _meaningful_task_text(shown):
         shown = ""
     if shown and shown != "(Aufgabe auf dem Foto)":
-        intro = i18n.t(lang, "Los geht's! Deine Aufgabe:", "Let's go! Your task:") + f"\n\n{shown}"
+        intro = _variante(ANREDE_MIT_TEXT, attempt.id, lang) + f"\n\n{shown}"
     elif ex.image_path:
-        intro = i18n.t(lang, "Los geht's! Deine Aufgabe ist auf dem Bild oben 📷.",
-                       "Let's go! Your task is in the picture above 📷.")
+        intro = _variante(ANREDE_MIT_BILD, attempt.id, lang)
     else:
-        intro = i18n.t(lang, "Los geht's!", "Let's go!")
+        intro = _variante(ANREDE_SCHLICHT, attempt.id, lang)
     opener = Message(
         attempt_id=attempt.id,
         role=MessageRole.tutor,
-        text=intro + i18n.t(lang,
-                            "\n\nWie würdest du anfangen? Kein Stress – ich helf dir Schritt für Schritt.",
-                            "\n\nHow would you start? No stress – I'll help you step by step."),
+        # Andere Verschiebung als bei der Anrede, damit sich nicht immer
+        # dieselben zwei Saetze paaren.
+        text=intro + "\n\n" + _variante(EINSTIEGSFRAGEN, attempt.id + 2, lang),
     )
     db.add(opener)
     db.commit()
