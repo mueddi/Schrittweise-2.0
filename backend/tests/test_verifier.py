@@ -60,6 +60,22 @@ def test_reine_rechenaufgabe_wird_erkannt_und_geprueft():
     assert verify("2 + 4", "keine ahnung").status == "unknown"
 
 
+def test_sympy_wird_erst_beim_rechnen_geladen():
+    """Kaltstart der Vercel-Funktion: der SymPy-Import kostet 1.56 s und lief
+    bei JEDER Anfrage mit, auch beim Anmelden. Jetzt erst beim ersten Rechnen.
+    Frischer Interpreter, damit kein anderer Test das Modul schon geladen hat."""
+    import subprocess
+    import sys
+
+    code = ("import sys; import app.services.sympy_verifier as v; "
+            "assert 'sympy' not in sys.modules, 'SymPy schon beim Import geladen'; "
+            "assert v.verify('3x + 5 = 20', 'x = 5').status == 'correct'; "
+            "assert 'sympy' in sys.modules; print('ok')")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "ok"
+
+
 def test_wurzel_und_kreiszahl_bleiben_im_pruefausdruck():
     """Beim Fuellen der Bibliothek entdeckt: aus «sqrt(6^2 + 8^2)» wurde
     «(6^2 + 8^2)» = 100 statt 10, aus «pi * 5^2» wurde «5^2». Die Nachrechnung
