@@ -252,10 +252,44 @@ def create_exercise(payload: ExerciseCreate, user: User = Depends(require_studen
     )
     db.add(ex)
     db.flush()
+    if payload.image_path:
+        _erkennung_der_aufgabe_zuordnen(db, user.id, ex.id)
     # Anlegen kostet nichts mehr – abgerechnet wird pro KI-Antwort im Chat.
     db.commit()
     db.refresh(ex)
     return ExerciseOut.model_validate(ex)
+
+
+# Wie lange nach dem Foto darf die Aufgabe angelegt werden, damit die
+# Erkennung noch ihr zugeordnet wird? Gemessen: zwischen Foto und Aufgabe
+# liegen Sekunden; 30 Minuten decken auch den Fall «zuerst Text korrigiert».
+ERKENNUNG_ZUORDNUNG_MINUTEN = 30
+
+
+def _erkennung_der_aufgabe_zuordnen(db: Session, user_id: int, exercise_id: int) -> None:
+    """Die juengste Foto-Erkennung dieses Nutzers an die neue Aufgabe haengen.
+
+    Die Erkennung laeuft, BEVOR es die Aufgabe gibt – ihre Kostenzeile hatte
+    deshalb nie eine exercise_id, und die Kostenauswertung «pro Aufgabe» sah
+    nur den Chat. Gemessen in der Produktion: das Foto kostet so viel wie
+    drei Chat-Runden und fehlte in jeder Aufgaben-Summe (116 von 116
+    Erkennungen ohne Aufgabe). Nur die juengste, noch nicht zugeordnete
+    Zeile aus den letzten 30 Minuten – eine Erkennung, ein Foto, eine Aufgabe.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from ..models import ApiUsage
+
+    seit = datetime.now(timezone.utc) - timedelta(minutes=ERKENNUNG_ZUORDNUNG_MINUTEN)
+    zeile = db.scalars(
+        select(ApiUsage)
+        .where(ApiUsage.user_id == user_id, ApiUsage.kind == "ocr",
+               ApiUsage.exercise_id.is_(None), ApiUsage.created_at >= seit)
+        .order_by(ApiUsage.created_at.desc())
+        .limit(1)
+    ).first()
+    if zeile is not None:
+        zeile.exercise_id = exercise_id
 
 
 # --------------------------------------------------------------------------

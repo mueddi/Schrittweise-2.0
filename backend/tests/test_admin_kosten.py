@@ -91,6 +91,41 @@ def _insert_usage(exercise_id, cost, kind="chat", model="claude-haiku-4-5", days
         db.commit()
 
 
+def test_foto_erkennung_wird_der_aufgabe_zugeordnet(client):
+    """In der Produktion hatte KEINE der 116 Erkennungs-Zeilen eine Aufgabe:
+    das Foto wird erkannt, bevor die Aufgabe existiert. Beim Anlegen der
+    Aufgabe mit Bild wird die juengste offene Erkennung nachtraeglich
+    zugeordnet – nur die eigene, nur die juengste, nur aus den letzten
+    30 Minuten."""
+    from app.models import User
+
+    headers = register_pw(client, "mia@test.ch")
+    fremd = register_pw(client, "leo@test.ch")
+    with SessionLocal() as db:
+        mia = db.query(User).filter(User.email == "mia@test.ch").one().id
+        leo = db.query(User).filter(User.email == "leo@test.ch").one().id
+        jetzt = datetime.now(timezone.utc)
+        db.add(ApiUsage(user_id=mia, kind="ocr", model="claude-sonnet-5", cost_usd=0.004,
+                        created_at=jetzt - timedelta(hours=2)))         # zu alt
+        db.add(ApiUsage(user_id=mia, kind="ocr", model="claude-sonnet-5", cost_usd=0.004,
+                        created_at=jetzt - timedelta(minutes=3)))       # aelter
+        db.add(ApiUsage(user_id=mia, kind="ocr", model="claude-sonnet-5", cost_usd=0.004,
+                        created_at=jetzt - timedelta(seconds=10)))      # die juengste
+        db.add(ApiUsage(user_id=leo, kind="ocr", model="claude-sonnet-5", cost_usd=0.004,
+                        created_at=jetzt))                              # fremdes Konto
+        db.commit()
+
+    ex = client.post("/api/exercises", headers=headers,
+                     json={"text": "3x + 5 = 20", "image_path": "/api/exercises/images/abc"}).json()
+    # Eine Aufgabe OHNE Bild ordnet nichts zu
+    client.post("/api/exercises", headers=headers, json={"text": "2x = 10"})
+    client.post("/api/exercises", headers=fremd, json={"text": "x = 1"})
+
+    with SessionLocal() as db:
+        zeilen = db.query(ApiUsage).order_by(ApiUsage.created_at).all()
+        assert [z.exercise_id for z in zeilen] == [None, None, ex["id"], None]
+
+
 def test_kosten_nur_fuer_admin(client):
     headers = register_pw(client, "mia@test.ch")
     assert client.get("/api/admin/kosten", headers=headers).status_code == 403
