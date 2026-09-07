@@ -167,6 +167,95 @@ def test_kosten_aggregate_stimmen(client):
     assert modelle["claude-sonnet-4-6"]["aufrufe"] == 2
 
 
+def _insert_tokens(exercise_id, *, kind="chat", model="claude-haiku-4-5", user_id=None,
+                   input_tokens=0, output_tokens=0, cache_read=0, cache_write=0, cache_write_1h=0,
+                   charged=0):
+    from app.services.usage import cost_usd
+    usage = {"input_tokens": input_tokens, "output_tokens": output_tokens,
+             "cache_read_input_tokens": cache_read, "cache_creation_input_tokens": cache_write,
+             "cache_creation": {"ephemeral_1h_input_tokens": cache_write_1h}}
+    with SessionLocal() as db:
+        db.add(ApiUsage(kind=kind, model=model, exercise_id=exercise_id, user_id=user_id,
+                        input_tokens=input_tokens, output_tokens=output_tokens,
+                        cache_read_tokens=cache_read, cache_write_tokens=cache_write,
+                        cache_write_1h_tokens=cache_write_1h,
+                        cost_usd=cost_usd(model, usage), charged_tokens=charged,
+                        created_at=datetime.now(timezone.utc)))
+        db.commit()
+
+
+def test_auswertung_erklaert_woher_die_kosten_kommen(client):
+    """Die Auswertung soll nicht nur sagen, WIE VIEL es kostet, sondern
+    WOHER: Bestandteile, Foto-Anteil pro Aufgabe, Cache netto, Marge nur auf
+    verrechnete Aufrufe – und Klartext-Hinweise dazu."""
+    from app.models import User
+
+    admin = register_pw(client, "chef@test.ch")
+    make_admin("chef@test.ch")
+    schueler = register_pw(client, "mia@test.ch")
+    with SessionLocal() as db:
+        chef = db.query(User).filter(User.email == "chef@test.ch").one().id
+        mia = db.query(User).filter(User.email == "mia@test.ch").one().id
+    ex = client.post("/api/exercises", headers=schueler, json={"text": "3x + 5 = 20"}).json()
+
+    # Aufgabe: ein Foto (Sonnet) + zwei Chat-Runden (Haiku), die zweite aus dem Cache
+    _insert_tokens(ex["id"], kind="ocr", model="claude-sonnet-5", user_id=mia,
+                   input_tokens=2000, output_tokens=20, charged=2)
+    _insert_tokens(ex["id"], user_id=mia, input_tokens=300, output_tokens=100,
+                   cache_write=7000, cache_write_1h=7000, charged=3)
+    _insert_tokens(ex["id"], user_id=mia, input_tokens=300, output_tokens=100,
+                   cache_read=7000, cache_write=100, charged=1)
+    # Sechs Fotos, aus denen nie eine Aufgabe wurde (Betreiber-Konto, gratis)
+    for _ in range(6):
+        _insert_tokens(None, kind="ocr", model="claude-sonnet-5", user_id=chef,
+                       input_tokens=1300, output_tokens=10)
+
+    data = client.get("/api/admin/kosten?tage=7", headers=admin).json()
+
+    # Bestandteile summieren sich zu den Gesamtkosten
+    a = data["anteile"]
+    summe = a["eingabe_chf"] + a["cache_lesen_chf"] + a["cache_schreiben_chf"] + a["ausgabe_chf"]
+    assert abs(summe - data["gesamt"]["kosten_chf"]) < 0.001
+    for row in data["nach_typ"] + data["nach_modell"]:
+        teile = row["eingabe_chf"] + row["cache_lesen_chf"] + row["cache_schreiben_chf"] + row["ausgabe_chf"]
+        assert abs(teile - row["kosten_chf"]) < 0.001, row
+
+    # Pro Aufgabe zaehlt das Foto mit
+    pa = data["pro_aufgabe"]
+    assert pa["anzahl_aufgaben"] == 1
+    assert pa["fotos_pro_aufgabe"] == 1.0 and pa["chats_pro_aufgabe"] == 2.0
+    typen = {r["typ"]: r for r in data["nach_typ"]}
+    assert abs(pa["durchschnitt_rappen"] - (typen["chat"]["kosten_chf"] * 100 + 2000 * 3 / 1e6 * 0.9 * 100 + 20 * 15 / 1e6 * 0.9 * 100)) < 0.05
+
+    # Cache: 7000 gelesen (spart 0.9x), 7000 mit Stundenfrist geschrieben (kostet +1.0x)
+    # -> netto praktisch null, brutto und Mehrkosten getrennt sichtbar
+    c = data["cache"]
+    assert c["schreiben_1h_tokens"] == 7000 and c["lesen_tokens"] == 7000
+    assert c["brutto_chf"] > 0 and c["mehrkosten_chf"] > c["brutto_chf"]
+    assert c["netto_chf"] < 0
+    haiku = next(r for r in data["nach_modell"] if r["modell"] == "claude-haiku-4-5")
+    assert haiku["cache_netto_chf"] < 0
+
+    # Marge nur auf die verrechneten Aufrufe (die sechs Gratis-Fotos verzerren sie nicht)
+    g = data["gesamt"]
+    assert g["verrechnete_aufrufe"] == 3 and g["verrechnet_tokens"] == 6
+    assert g["kosten_gratis_chf"] > 0
+    assert abs(g["kosten_verrechnet_chf"] + g["kosten_gratis_chf"] - g["kosten_chf"]) < 0.001
+    assert abs(g["marge_ist"] - 6 / (g["kosten_verrechnet_chf"] * 100)) < 0.01
+
+    # Fotos ohne Aufgabe als eigener Posten
+    assert data["fotos_ohne_aufgabe"]["aufrufe"] == 6
+    teuerste = data["teuerste_aufgaben"]
+    assert teuerste[0]["exercise_id"] == ex["id"] and teuerste[0]["fotos"] == 1 and teuerste[0]["chats"] == 2
+    assert teuerste[0]["text"].startswith("3x + 5")
+
+    # Klartext-Hinweise: Fotos ohne Aufgabe, Gratis-Anteil, Cache-Netto negativ
+    texte = " ".join(h["text"] for h in data["hinweise"])
+    assert "6 Foto-Erkennungen" in texte
+    assert "niemandem verrechnet" in texte
+    assert "kostet der Cache mehr" in texte
+
+
 def test_kosten_leer_ohne_daten(client):
     admin = register_pw(client, "chef@test.ch")
     make_admin("chef@test.ch")
