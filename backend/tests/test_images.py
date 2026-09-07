@@ -199,7 +199,10 @@ def test_eroeffnung_zitiert_keine_figurbeschreibung(client):
     ex2 = client.post("/api/exercises", headers=headers,
                       json={"text": "(Aufgabe auf dem Foto)", "image_path": image_path}).json()
     opener2 = client.post(f"/api/exercises/{ex2['id']}/attempts", headers=headers).json()["messages"][0]
-    assert "auf dem Bild" in opener2["text"]
+    # Der Eroeffnungssatz wechselt durch (sonst klingt der Tutor ab der dritten
+    # Aufgabe wie ein Automat) – gemeinsam ist allen Bild-Varianten der Verweis
+    # aufs Foto.
+    assert "📷" in opener2["text"]
     assert "(Aufgabe auf dem Foto)" not in opener2["text"]
 
 
@@ -219,7 +222,7 @@ def test_eroeffnung_zitiert_keine_losen_figur_fragmente(client):
 
     # Nur lose Fragmente + Bild -> Bild-Hinweis, keine «30»
     t = opener_for({"text": "30\nx", "image_path": image_path})
-    assert "auf dem Bild" in t
+    assert "📷" in t, "muss aufs Bild verweisen, egal welche Eroeffnungs-Variante"
     assert "30" not in t
 
     # Echter Satz + Bild -> wird zitiert

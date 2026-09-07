@@ -8,7 +8,7 @@ from app.models import ApiUsage, Attempt, Message, MessageRole, User
 from app.services.sympy_verifier import Verification
 from app.services.tutor import detect_intent
 
-from .test_library import make_admin, register_pw, upload
+from .test_library import anlegen, make_admin, register_pw
 
 _UNKNOWN = Verification("unknown", "test")
 
@@ -24,8 +24,11 @@ def test_gymnasium_stufe_registrierbar_und_bibliothek(client):
 
     admin = register_pw(client, "chef@test.ch")
     make_admin("chef@test.ch")
-    assert upload(client, admin, title="Ableitungen Basics",
-                  grades="Gymnasium 1./2.,Gymnasium 3./4.").status_code == 201
+    assert anlegen(client, admin, text="Leite f(x) = x^2 ab", category="Analysis",
+                   grades=("gymnasium",)).status_code == 201
+    # Der Gymi-Schueler sieht die Aufgabe unter seiner Stufe
+    gymi = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert len(client.get("/api/library?grade=gymnasium", headers=gymi).json()) == 1
 
 
 def test_gymnasium_regie_und_modellwahl():

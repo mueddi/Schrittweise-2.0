@@ -117,6 +117,29 @@ def _schema_sicherstellen() -> None:
         ("topics", "learning_goals",
          "ALTER TABLE topics ADD COLUMN learning_goals TEXT DEFAULT '' NOT NULL"),
         ("topics", "archived_at", "ALTER TABLE topics ADD COLUMN archived_at TIMESTAMP"),
+        # Elternansicht: «bearbeitet» statt «geloest» als Hauptzahl, plus
+        # Aufwand und die Aufgaben ohne Thema. DEFAULT 0, damit alte
+        # Wochenzeilen gueltig bleiben (sie zeigen dann 0 – ehrlich, denn
+        # damals wurde nichts erhoben).
+        ("progress_aggregates", "worked_count",
+         "ALTER TABLE progress_aggregates ADD COLUMN worked_count INTEGER DEFAULT 0 NOT NULL"),
+        ("progress_aggregates", "own_steps",
+         "ALTER TABLE progress_aggregates ADD COLUMN own_steps INTEGER DEFAULT 0 NOT NULL"),
+        ("progress_aggregates", "ohne_thema",
+         "ALTER TABLE progress_aggregates ADD COLUMN ohne_thema INTEGER DEFAULT 0 NOT NULL"),
+        # Kostenerfassung: Cache-Schreiben mit 1-Stunden-Frist kostet 2x statt
+        # 1.25x. DEFAULT 0: alle Zeilen davor stammen aus dem 5-Minuten-Cache.
+        ("api_usage", "cache_write_1h_tokens",
+         "ALTER TABLE api_usage ADD COLUMN cache_write_1h_tokens INTEGER DEFAULT 0 NOT NULL"),
+        # Bibliothek: aus welcher Bibliotheks-Aufgabe eine Schueler-Aufgabe stammt.
+        ("exercises", "library_id", "ALTER TABLE exercises ADD COLUMN library_id INTEGER"),
+        # «Problem melden»: Kategorie und Zusammenhang zur Meldung.
+        ("feedback", "kind", "ALTER TABLE feedback ADD COLUMN kind VARCHAR(20) DEFAULT 'feedback' NOT NULL"),
+        ("feedback", "category", "ALTER TABLE feedback ADD COLUMN category VARCHAR(30)"),
+        ("feedback", "attempt_id", "ALTER TABLE feedback ADD COLUMN attempt_id INTEGER"),
+        ("feedback", "image_path", "ALTER TABLE feedback ADD COLUMN image_path VARCHAR(255)"),
+        ("feedback", "context", "ALTER TABLE feedback ADD COLUMN context TEXT"),
+        ("feedback", "resolved_at", "ALTER TABLE feedback ADD COLUMN resolved_at TIMESTAMP"),
     ]
     # Spalten EINMAL pro Tabelle holen statt einmal pro Migrations-Eintrag:
     # 13 Eintraege verteilen sich auf 4 Tabellen.

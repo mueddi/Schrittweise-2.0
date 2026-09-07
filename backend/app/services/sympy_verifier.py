@@ -204,11 +204,19 @@ def _arithmetic_expression(text: str) -> str | None:
     label = re.match(r"^\s*[A-Za-zÀ-ÿ ]+:\s*(.+)$", msg)
     if label:
         msg = label.group(1)
-    m = re.search(r"[-+]?[0-9(][0-9+\-*/^(). ]*", msg)
+    # Wurzel und Kreiszahl gehoeren zum Ausdruck. Frueher fielen alle
+    # Buchstaben weg: aus «sqrt(6^2 + 8^2)» wurde «(6^2 + 8^2)» = 100 statt
+    # 10, aus «pi * 5^2» wurde «5^2» – und die Nachrechnung haette eine
+    # RICHTIGE Antwort des Kindes als falsch gestempelt. Alle anderen Woerter
+    # (Prosa) bleiben draussen.
+    msg = re.sub(r"\b(?!sqrt\b|pi\b)[A-Za-zÀ-ÿ]+\b", " ", msg)
+    m = re.search(r"[-+]?(?:[0-9(]|sqrt\(|pi\b)[0-9+\-*/^(). ]*(?:(?:sqrt\(|pi\b)[0-9+\-*/^(). ]*)*", msg)
     if not m:
         return None
     frag = m.group(0).strip().rstrip("+-*/^(. ")
-    if not re.search(r"[0-9)]\s*[+\-*/^]\s*[-+]?[0-9(]", frag):
+    hat_operator = re.search(r"[0-9)]\s*[+\-*/^]\s*[-+]?[0-9(]", frag)
+    hat_funktion = re.search(r"sqrt\(|pi\b", frag)
+    if not (hat_operator or (hat_funktion and re.search(r"[0-9]", frag))):
         return None  # einzelne Zahl ist keine Aufgabe
     try:
         value = _parse(frag)

@@ -147,3 +147,31 @@ def test_prompt_gibt_dem_tutor_vorrang_vor_falscher_nachrechnung():
     sp = tutor.SYSTEM_PROMPT
     assert "gilt DEINE Rechnung" in sp
     assert "NIE als falsch" in sp
+
+
+# --------------------------- Der Tutor redet nicht ueber sich selbst
+
+def test_prompt_verbietet_meta_gerede_ueber_sich_selbst():
+    """Gemeldet aus dem echten Chat: auf einen Vorhalt hin antwortete der Tutor
+    mit «I'm trained to recognize common problem types quickly» und einer
+    laengeren Aufarbeitung seiner eigenen Fehlerursachen. Ein Kind sitzt vor
+    seinen Hausaufgaben – es will rechnen, nicht ueber ein Sprachmodell
+    diskutieren."""
+    sp = tutor.SYSTEM_PROMPT
+    assert "REDE NIE UEBER DICH SELBST" in sp
+    for verboten in ("Training", "Sprachmodelle", "Mustererkennung"):
+        assert verboten in sp, f"«{verboten}» sollte ausdruecklich untersagt sein"
+    # Und der Ersatz: kurz zugeben, dann weiterarbeiten.
+    assert "EIN kurzer Satz" in sp
+    assert "Keine Selbstanalyse" in sp
+
+
+def test_prompt_verbietet_raten_bei_unleserlichem_bild():
+    """Ebenfalls gemeldet: der Tutor nahm ein Gleichheitszeichen an, das auf
+    dem Bild gar nicht stand – die «uebliche» Aufgabenform statt der echten.
+    Die bestehende Regel («weicht der Text ab, gilt das BILD») trieb ihn dazu,
+    etwas zu lesen, auch wenn nichts sicher lesbar war."""
+    sp = tutor.SYSTEM_PROMPT
+    assert "nicht SICHER lesen" in sp
+    assert "kein Gleichheitszeichen" in sp
+    assert "abzutippen" in sp or "abtippen" in sp

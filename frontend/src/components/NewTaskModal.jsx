@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useShell } from "./AppShell.jsx";
 import DrawPad from "./DrawPad.jsx";
+import { ProblemButton } from "./ProblemMelden.jsx";
+import MathText from "../lib/MathText.jsx";
 import { useLang } from "../lib/i18n.jsx";
 
 
@@ -49,10 +51,10 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
       if (res.math_expression) setExpr(res.math_expression);
       if (res.text) {
         setOcrText(res.text);
-        setOcrNote(t("✓ erkannt – ich lese das Foto direkt mit.", "✓ recognized – I read the photo directly too."));
+        setOcrNote(t("✓ gelesen – prüf unten, ob es stimmt.", "✓ read – check below whether it's right."));
       } else {
         setOcrText("");
-        setOcrNote(t("Nichts sicher erkannt – du kannst trotzdem starten, ich schaue mir das Foto direkt an.", "Nothing recognized with confidence – you can still start, I'll look at the photo directly."));
+        setOcrNote(t("Ich konnte nichts lesen. Tipp die Aufgabe unten kurz ab – oder mach ein schärferes Foto.", "I couldn't read anything. Type the task below – or take a sharper photo."));
       }
     } catch (e) {
       setError(e.message);
@@ -81,9 +83,20 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
   }
 
   async function start() {
-    // Mit Foto darf der Text leer bleiben – der Tutor schaut sich das Bild an.
     if (!text.trim() && !imagePath) {
       setError(t("Schreib zuerst die Aufgabe auf (oder lad ein Foto hoch).", "Write down the task first (or upload a photo)."));
+      return;
+    }
+    // Ein Foto ohne lesbaren Text startete frueher trotzdem – der Tutor bekam
+    // dann Gekritzel als Aufgabe (real passiert: «Fg=»). Jetzt muss das Kind
+    // abtippen, was die Erkennung nicht lesen konnte.
+    if (imagePath && !ocrText.trim() && !text.trim()) {
+      setError(t("Ich konnte auf dem Bild nichts lesen. Tipp die Aufgabe bitte kurz ab.", "I couldn't read anything on the image. Please type the task briefly."));
+      return;
+    }
+    if (ocrText.includes("[?]")) {
+      setError(t("Bei [?] war ich mir nicht sicher – ersetze die Stellen bitte durch das, was wirklich dasteht.", "I wasn't sure at [?] – please replace those spots with what is really there."));
+      setOcrOpen(true);
       return;
     }
     const finalText = imagePath
@@ -148,11 +161,12 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fileName || t("wird erkannt …", "recognizing …")}</div>
                 <div style={{ fontSize: 12, color: ocrNote?.startsWith("✓") ? "#1a7f3c" : "#9aa0ab", lineHeight: 1.45 }}>{ocrBusy ? t("erkenne …", "recognizing …") : ocrNote}</div>
-                {!ocrBusy && ocrText && (
-                  // So habe ich es gelesen: Lesart sofort sichtbar machen,
-                  // damit Fehl-Erkennungen nicht erst im Chat auffallen.
-                  <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11.5, color: "#4b4f5c", background: "#fff", border: "1px solid #e7e8ee", borderRadius: 8, padding: "4px 8px", marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {ocrText}
+                {!ocrBusy && imagePath && (
+                  // Falsch gelesen? Bild und erkannter Text gehen mit der
+                  // Meldung mit – so sieht der Betreiber, was die Erkennung
+                  // wirklich bekommen hat.
+                  <div style={{ marginTop: 6 }}>
+                    <ProblemButton klein attemptId={null} imagePath={imagePath} context={ocrText || "(nichts erkannt)"} />
                   </div>
                 )}
                 {!ocrBusy && !imagePath && lastFile && (
@@ -173,17 +187,31 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
             </div>
           )}
 
-          {imagePath && ocrText && (
-            <div style={{ marginBottom: 12 }}>
-              <button onClick={() => setOcrOpen(!ocrOpen)} style={{ border: "none", background: "transparent", color: "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
-                {t("Erkannten Text korrigieren", "Correct the recognized text")} {ocrOpen ? "▴" : "▾"}
+          {imagePath && ocrText && !ocrBusy && (
+            // «So habe ich es gelesen – stimmt das?» Die Lesart steht GROSS und
+            // als Formel da, bevor der Chat beginnt. Frueher lag sie zugeklappt
+            // in einem grauen Kasten, und Fehl-Erkennungen fielen erst im
+            // Gespraech auf – wenn der Tutor schon damit rechnete.
+            <div style={{ background: ocrText.includes("[?]") ? "#fdf8ec" : "#f8f8ff", border: `1px solid ${ocrText.includes("[?]") ? "#f0dcae" : "#e0e2fb"}`, borderRadius: 14, padding: "12px 14px", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", color: "#4f46e5", marginBottom: 6 }}>
+                {t("SO HABE ICH ES GELESEN – STIMMT DAS?", "THIS IS HOW I READ IT – IS IT RIGHT?")}
+              </div>
+              <div style={{ fontSize: 15, lineHeight: 1.55, marginBottom: 8 }}><MathText text={ocrText} /></div>
+              {ocrText.includes("[?]") && (
+                <div style={{ fontSize: 12.5, color: "#8a5a00", marginBottom: 8 }}>
+                  {t("Bei [?] war ich mir nicht sicher. Bitte ersetze diese Stellen durch das, was wirklich dasteht.", "I wasn't sure at [?]. Please replace those spots with what is really there.")}
+                </div>
+              )}
+              <button onClick={() => setOcrOpen(!ocrOpen)} style={{ border: "none", background: "transparent", color: "#4f46e5", fontSize: 12.5, fontWeight: 700, cursor: "pointer", padding: 0 }}>
+                {ocrOpen ? t("▴ Korrektur schliessen", "▴ Close correction") : t("✎ Stimmt nicht ganz – korrigieren", "✎ Not quite – correct it")}
               </button>
               {ocrOpen && (
                 <textarea
                   value={ocrText}
                   onChange={(e) => { setOcrText(e.target.value); setExpr(""); }}
                   rows={3}
-                  style={{ width: "100%", marginTop: 6, border: "1px solid #e7e8ee", borderRadius: 10, padding: "9px 11px", fontSize: 12.5, color: "#6b7280", resize: "vertical", outline: "none", background: "#fbfbfd" }}
+                  autoFocus
+                  style={{ width: "100%", marginTop: 8, border: "1px solid #c9ccf6", borderRadius: 10, padding: "9px 11px", fontSize: 13.5, resize: "vertical", outline: "none", background: "#fff", boxSizing: "border-box" }}
                 />
               )}
             </div>
@@ -261,8 +289,8 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
                 setFileName(t("Zeichnung", "Drawing"));
                 setLastFile(null);
                 setOcrText(txt || "");
-                setOcrNote(txt ? t("✓ erkannt – ich lese die Zeichnung direkt mit.", "✓ recognized – I read the drawing directly too.")
-                               : t("Nichts sicher erkannt – du kannst trotzdem starten, ich schaue mir die Zeichnung direkt an.", "Nothing recognized with confidence – you can still start, I'll look at the drawing directly."));
+                setOcrNote(txt ? t("✓ gelesen – prüf unten, ob es stimmt.", "✓ read – check below whether it's right.")
+                               : t("Ich konnte nichts lesen. Tipp die Aufgabe unten kurz ab – oder zeichne grösser und deutlicher.", "I couldn't read anything. Type the task below – or draw bigger and clearer."));
                 setExpr("");
               } else if (txt) {
                 setText((prev) => (prev.trim() ? `${prev.trim()}\n${txt}` : txt));

@@ -60,6 +60,23 @@ def test_reine_rechenaufgabe_wird_erkannt_und_geprueft():
     assert verify("2 + 4", "keine ahnung").status == "unknown"
 
 
+def test_wurzel_und_kreiszahl_bleiben_im_pruefausdruck():
+    """Beim Fuellen der Bibliothek entdeckt: aus «sqrt(6^2 + 8^2)» wurde
+    «(6^2 + 8^2)» = 100 statt 10, aus «pi * 5^2» wurde «5^2». Die Nachrechnung
+    haette die RICHTIGE Antwort des Kindes als falsch gestempelt."""
+    from app.services.sympy_verifier import extract_expression, verify
+
+    assert extract_expression("sqrt(6^2 + 8^2)") == "sqrt(6^2 + 8^2)"
+    assert verify("sqrt(6^2 + 8^2)", "10").status == "correct"
+    assert verify("sqrt(6^2 + 8^2)", "100").status == "incorrect"
+    assert extract_expression("Berechne den Umfang: 2*pi*5") == "2*pi*5"
+    assert extract_expression("pi * 5^2") == "pi * 5^2"
+    assert extract_expression("sqrt(16)") == "sqrt(16)"
+    # Prosa bleibt draussen, eine nackte Zahl ist keine Aufgabe
+    assert extract_expression("Wie viel ist 3 + 4?") == "3 + 4"
+    assert extract_expression("Ein Velo kostet 240 Franken") is None
+
+
 def test_lineare_schreibweise_von_links_nach_rechts():
     """Schul-Lesart: «3/2y» = (3/2)·y, nicht 3/(2y); Klassiker bleibt korrekt."""
     from app.services.sympy_verifier import verify

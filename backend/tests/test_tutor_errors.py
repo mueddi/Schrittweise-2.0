@@ -89,6 +89,55 @@ def _run(monkeypatch, ctx, versuche=None, usage_out=None):
                                       usage_out=usage_out))
 
 
+def test_vordenk_schalter_geht_als_extra_body_mit(monkeypatch):
+    """Im Vercel-Log der Vorschau (7.9.): «Messages.stream() got an unexpected
+    keyword argument 'thinking'». Das SDK 0.42 kennt das Feld nicht – jeder
+    Sonnet-Aufruf des Tutors scheiterte seit dem 26.7. VOR der API und wich
+    still auf Haiku aus. Als extra_body kommt das Feld in jeder Version an."""
+    gesehen = []
+
+    class _Messages:
+        def stream(self, **kwargs):
+            gesehen.append(kwargs)
+            return _OkStream()
+
+    class _Client:
+        def __init__(self, api_key, **kwargs):
+            self.messages = _Messages()
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
+    monkeypatch.setattr(tutor, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    stufe4 = tutor.LadderStep("plea", 4, 2, False, True)      # geht ans starke Modell
+    "".join(tutor.stream_reply([], stufe4, _VER, "Beweise: ...", None))
+    assert gesehen[0]["model"] == settings.anthropic_model_smart
+    assert "thinking" not in gesehen[0]
+    assert gesehen[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+def test_ausweich_meldung_nennt_den_fehler(client, monkeypatch):
+    """«Modell nicht verfuegbar» sah bei Ueberlastung und bei einem
+    Programmierfehler gleich aus – 44 Tage lang wich der Tutor bei jedem
+    Sonnet-Aufruf aus, und die Meldung sagte «es ist nichts ausgefallen».
+    Der Fehlertyp gehoert in die Meldung, damit man den Unterschied sieht."""
+    from app.database import SessionLocal
+    from app.models import Alert
+    from app.services import alert as alert_svc
+
+    alert_svc._last_sent.clear()
+    versuche = []
+    # _STEP geht ans Standardmodell; das faellt aus, das starke antwortet
+    out = _run(monkeypatch,
+               lambda m: _FailingCtx() if m == settings.anthropic_model_default else _OkStream(),
+               versuche)
+    assert "Alles gut" in out
+    assert versuche == [settings.anthropic_model_default, settings.anthropic_model_smart]
+    with SessionLocal() as db:
+        meldung = db.query(Alert).filter(Alert.kind == "ki").order_by(Alert.id.desc()).first()
+    assert meldung is not None
+    assert "RuntimeError: api down" in meldung.detail
+    assert "ausgewichen" in meldung.detail
+
+
 def test_api_error_yields_honest_message(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR, logger="schrittweise.tutor"):
         out = _run(monkeypatch, _FailingCtx())
@@ -211,6 +260,32 @@ def test_kompletter_ausfall_meldet_fehler_zurueck(monkeypatch):
     assert usage_out.get("fehler") is True
     assert len(versuche) == 2, "beide Modelle muessen probiert worden sein"
     assert "usage" not in usage_out, "ohne Antwort darf nichts verrechnet werden"
+
+
+def test_verlauf_wird_in_bloecken_gekuerzt_nicht_jeden_turn():
+    """In der Vorschau belegt: ab 12 Nachrichten wurde der Verlauf jeden Turn
+    neu zugeschnitten, der Praefix verschob sich, und der Verlaufs-Cache traf
+    nie mehr (Lesen blieb bei 7964 Token, Schreiben 650–830 pro Turn).
+    Jetzt: bis HISTORY_MAX unveraendert, dann auf HISTORY_LIMIT – der Praefix
+    bleibt zwischen zwei Schnitten identisch."""
+    def verlauf(n):
+        return [{"role": "tutor" if i % 2 == 0 else "student", "text": f"m{i}"} for i in range(n)]
+
+    assert tutor.HISTORY_MAX > tutor.HISTORY_LIMIT
+    unveraendert = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX))
+    assert [m["text"] for m in unveraendert] == [f"m{i}" for i in range(tutor.HISTORY_MAX)]
+
+    erster_schnitt = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX + 1))
+    assert erster_schnitt[0]["text"] == "m0"                 # Eroeffnung bleibt
+    assert len(erster_schnitt) <= tutor.HISTORY_MAX
+    # Fuenf Turns spaeter: der Anfang ist noch derselbe – nur hinten kam dazu
+    spaeter = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX + 11))
+    assert [m["text"] for m in spaeter[:len(erster_schnitt)]] == [m["text"] for m in erster_schnitt]
+    assert len(spaeter) <= tutor.HISTORY_MAX
+    # Erst beim naechsten vollen Block verschiebt sich der Anfang wieder
+    zweiter_schnitt = tutor._gekuerzter_verlauf(verlauf(tutor.HISTORY_MAX + 13))
+    assert zweiter_schnitt[1]["text"] != erster_schnitt[1]["text"]
+    assert len(zweiter_schnitt) <= tutor.HISTORY_MAX
 
 
 def test_zeitlimit_liegt_unter_dem_deckel_der_plattform():

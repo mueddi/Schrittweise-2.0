@@ -12,9 +12,11 @@ import math
 
 log = logging.getLogger("schrittweise.usage")
 
-# Preise in USD pro Million Tokens (input, output) – Stand Juli 2026,
+# Preise in USD pro Million Tokens (input, output) – Stand September 2026,
 # platform.claude.com/docs. Cache-Lesen kostet 0.1x des Input-Preises,
-# Cache-Schreiben (5-Min-TTL) 1.25x.
+# Cache-Schreiben mit 5-Minuten-Frist 1.25x, mit 1-Stunden-Frist 2x.
+# (Sonnet 5 hatte bis 31.08.2026 einen Einfuehrungspreis von 2/10 USD –
+# Zeilen aus dieser Zeit sind hier mit 3/15 bewertet, also eher zu hoch.)
 PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5": (1.00, 5.00),
     "claude-sonnet-5": (3.00, 15.00),
@@ -23,7 +25,8 @@ PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
     "claude-opus-4-6": (5.00, 25.00),
 }
 CACHE_READ_FACTOR = 0.10
-CACHE_WRITE_FACTOR = 1.25
+CACHE_WRITE_FACTOR = 1.25       # Cache mit 5-Minuten-Frist
+CACHE_WRITE_1H_FACTOR = 2.00    # Cache mit 1-Stunden-Frist (Tutor-Prompt + Aufgabe)
 # Fallback, falls ein Modellname nicht in der Tabelle steht: lieber leicht
 # ueberschaetzen (Sonnet-Preis) als Kosten verschlucken.
 _FALLBACK = (3.00, 15.00)
@@ -54,20 +57,49 @@ def _tok(usage, field: str) -> int:
     return int(value or 0)
 
 
+def cache_write_split(usage) -> tuple[int, int]:
+    """Geschriebene Cache-Tokens getrennt nach Frist: (5 Minuten, 1 Stunde).
+
+    Die API liefert die Aufteilung unter ``usage.cache_creation`` als
+    ``ephemeral_5m_input_tokens`` / ``ephemeral_1h_input_tokens``. Das SDK
+    kennt das Feld als Zusatz (extra="allow"); fehlt es ganz, gilt alles als
+    5-Minuten-Schreiben – der Fall vor dem 1h-Cache und bei Antworten ohne
+    Aufteilung. Gerechnet wird mit dem Gesamtwert als Obergrenze: der ist
+    verlaesslich, die Aufteilung nur eine Verfeinerung.
+    """
+    gesamt = _tok(usage, "cache_creation_input_tokens")
+    if gesamt <= 0:
+        return 0, 0
+    detail = usage.get("cache_creation") if isinstance(usage, dict) else getattr(usage, "cache_creation", None)
+    if detail is None:
+        return gesamt, 0
+    eine_stunde = min(gesamt, max(0, _tok(detail, "ephemeral_1h_input_tokens")))
+    return gesamt - eine_stunde, eine_stunde
+
+
+def kosten_anteile(model: str, input_t: int, output_t: int, cache_read: int,
+                   cache_write_5m: int, cache_write_1h: int) -> dict[str, float]:
+    """Die vier Kostenbestandteile eines Aufrufs (oder einer Summe) in USD.
+
+    Eine Funktion fuer beide Wege – die Erfassung (cost_usd) und die
+    Auswertung im Admin-Bereich rechnen damit garantiert gleich.
+    """
+    in_rate, out_rate = _rates(model)
+    return {
+        "eingabe": input_t * in_rate / 1_000_000,
+        "cache_lesen": cache_read * in_rate * CACHE_READ_FACTOR / 1_000_000,
+        "cache_schreiben": (cache_write_5m * CACHE_WRITE_FACTOR
+                            + cache_write_1h * CACHE_WRITE_1H_FACTOR) * in_rate / 1_000_000,
+        "ausgabe": output_t * out_rate / 1_000_000,
+    }
+
+
 def cost_usd(model: str, usage) -> float:
     """Kosten eines Aufrufs in USD aus Modellname + Usage-Objekt/dict."""
-    in_rate, out_rate = _rates(model)
-    input_t = _tok(usage, "input_tokens")
-    output_t = _tok(usage, "output_tokens")
-    cache_read = _tok(usage, "cache_read_input_tokens")
-    cache_write = _tok(usage, "cache_creation_input_tokens")
-    usd = (
-        input_t * in_rate
-        + output_t * out_rate
-        + cache_read * in_rate * CACHE_READ_FACTOR
-        + cache_write * in_rate * CACHE_WRITE_FACTOR
-    ) / 1_000_000
-    return usd
+    write_5m, write_1h = cache_write_split(usage)
+    anteile = kosten_anteile(model, _tok(usage, "input_tokens"), _tok(usage, "output_tokens"),
+                             _tok(usage, "cache_read_input_tokens"), write_5m, write_1h)
+    return sum(anteile.values())
 
 
 def charged_tokens(usd: float) -> int:
@@ -97,6 +129,7 @@ def record(db, kind: str, model: str, usage,
             return
         from ..models import ApiUsage
 
+        _, write_1h = cache_write_split(usage)
         db.add(ApiUsage(
             user_id=user_id,
             exercise_id=exercise_id,
@@ -106,6 +139,7 @@ def record(db, kind: str, model: str, usage,
             output_tokens=_tok(usage, "output_tokens"),
             cache_read_tokens=_tok(usage, "cache_read_input_tokens"),
             cache_write_tokens=_tok(usage, "cache_creation_input_tokens"),
+            cache_write_1h_tokens=write_1h,
             cost_usd=cost_usd(model, usage),
             charged_tokens=charged,
         ))

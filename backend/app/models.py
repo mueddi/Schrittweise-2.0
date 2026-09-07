@@ -163,6 +163,10 @@ class Exercise(Base):
     image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # erkannter / eingegebener Mathe-Ausdruck (z.B. "3*x + 5 = 20")
     math_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Stammt die Aufgabe aus der Bibliothek: Nummer der Bibliotheks-Aufgabe.
+    # Kein Fremdschluessel – eine geloeschte Bibliotheks-Aufgabe darf die
+    # Arbeit des Schuelers nicht mitreissen.
+    library_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
     user: Mapped[User] = relationship(back_populates="exercises")
@@ -220,6 +224,14 @@ class ProgressAggregate(Base):
 
     autonomy_rate: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)  # 0..1
     solved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # «Bearbeitet» statt «geloest» als Hauptzahl: nur 12 % aller Versuche werden
+    # ueberhaupt abgehakt, ein Elternteil saehe sonst fast immer eine Null.
+    worked_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Summe der eigenen Rechenschritte des Kindes – Aufwand statt Ergebnis.
+    own_steps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Bearbeitete Aufgaben ohne Themen-Zuordnung. Nicht als «Stolperstein»
+    # zeigen, sondern zum Zuordnen auffordern.
+    ohne_thema: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     active_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Top-Stolperthemen als grobe Trends: [{"topic": "...", "trend": "noch_ueben"}]
     top_struggles: Mapped[list | None] = mapped_column(JSON, nullable=True)
@@ -252,6 +264,16 @@ class Feedback(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     # von welcher Seite abgeschickt (z.B. /app/lernen) – hilft beim Einordnen
     page: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # "feedback" (freier Text) oder "problem" (Knopf «Problem melden» mit
+    # Kategorie und automatisch mitgegebenem Zusammenhang)
+    kind: Mapped[str] = mapped_column(String(20), default="feedback", nullable=False)
+    category: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    attempt_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Aufgabentext, letzte Schueler- und Tutor-Nachricht, erkannter Text –
+    # vom Server gefuellt, damit der Betreiber sieht, was schiefging
+    context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 
@@ -294,6 +316,9 @@ class ApiUsage(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Teilmenge von cache_write_tokens mit 1-Stunden-Frist (kostet 2x statt
+    # 1.25x). Der Tutor cacht System-Prompt und Aufgabe eine Stunde lang.
+    cache_write_1h_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     charged_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
@@ -324,27 +349,28 @@ class TokenAdjustment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 
-class LibraryDocument(Base):
-    """Vom Betreiber hochgeladenes Aufgaben-Dokument (Arbeitsblatt, meist PDF).
+class LibraryExercise(Base):
+    """Eine Aufgabe der Bibliothek – vom Betreiber gepflegt, von Schuelern
+    mit einem Klick im Tutor gestartet.
 
-    Die Datei-Bytes liegen direkt in Postgres (Supabase) – auf Vercel ist /tmp
-    fluechtig und Uploads sind ohnehin auf ~4 MB begrenzt. ``content`` ist
-    deferred, damit Listen-/Such-Queries nie die Dokumente mitladen.
+    Frueher lagen hier PDF-Arbeitsblaetter (library_documents, nie befuellt).
+    Ein Blatt zum Anschauen hilft niemandem; eine Aufgabe als Text hat einen
+    Pruefausdruck, kann nachgerechnet werden und landet direkt im Chat.
     """
 
-    __tablename__ = "library_documents"
+    __tablename__ = "library_exercises"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    category: Mapped[str] = mapped_column(String(40), default="andere", nullable=False)
-    # komma-verbunden, z.B. "1. Oberstufe,2. Oberstufe"
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    # maschinell loesbarer Ausdruck fuer die Nachrechnung (z.B. "3*x + 5 = 20")
+    math_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Themen-Name aus library_topics (frei benennbar)
+    category: Mapped[str] = mapped_column(String(120), nullable=False)
+    # komma-verbunden aus mittelstufe / oberstufe / gymnasium
     grade_levels: Mapped[str] = mapped_column(String(80), nullable=False)
     difficulty: Mapped[str] = mapped_column(String(20), default="mittel", nullable=False)
-    file_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    mime_type: Mapped[str] = mapped_column(String(80), nullable=False)
-    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
-    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    # Herkunft / Lizenzhinweis (z.B. «Serlo, CC BY-SA 4.0», «eigene», «KI»)
+    source: Mapped[str] = mapped_column(String(200), default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 

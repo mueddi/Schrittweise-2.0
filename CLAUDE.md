@@ -35,7 +35,7 @@ ersten Mal. Er trifft die Entscheidungen; du lieferst Belege, keine Vermutungen.
 
 ```
 Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
-       →  Pull Request  →  280 Tests  →  sein Merge-Klick  →  live
+       →  Pull Request  →  303 Tests  →  sein Merge-Klick  →  live
 ```
 
 * **Produktion ausschliesslich über `.github/workflows/deploy.yml`** (Test →
@@ -61,7 +61,7 @@ Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
 ## Tests
 
 ```
-cd backend && python -m pytest -q          # 280 Tests, müssen alle grün sein
+cd backend && python -m pytest -q          # 303 Tests, müssen alle grün sein
 cd frontend && npm run build               # enthält die Browser-Dialog-Bremse
 ```
 
@@ -78,6 +78,8 @@ Fehlen die Abhängigkeiten im Container: `uv venv /tmp/kniff-venv` und
 | Anweisung an den Tutor (deutscher Fliesstext) | `backend/app/services/tutor.py` |
 | Mathe-Prüfung | `backend/app/services/sympy_verifier.py` |
 | Chat-Bildschirm | `frontend/src/screens/Lernen.jsx` |
+| Aufgaben-Bibliothek (Aufgaben, nicht PDFs; Start im Tutor, KI-Vorschau) | `backend/app/routers/library.py`, `frontend/src/screens/Bibliothek.jsx` |
+| Störungen mit Einordnung «handeln / prüfen / keine» | `backend/app/services/stoerungen.py` |
 | App-Dialoge (nie `window.confirm`!) | `frontend/src/lib/dialog.jsx` |
 | Preise, Kontingent | `backend/app/config.py` |
 | Farben, Schriften | `frontend/src/styles/theme.css` |
@@ -109,16 +111,27 @@ Build abgewiesen (`frontend/scripts/keine-browser-dialoge.mjs`). Stattdessen
 
 ## Bekannte Schwächen (belegt, nicht behoben)
 
-* **Die Bilderkennung ist das grösste Problem.** Von den letzten drei
-  fotografierten Aufgaben waren zwei unbrauchbar gelesen (`Fg=` statt einer
-  Physikaufgabe). Der Tutor kann nichts dafür – er bekommt nur, was die
-  Texterkennung liefert.
+* **Bilderkennung – Befund vom 7.9., nach Sichtung der Bilder selbst:** alle
+  124 gespeicherten Bilder sind Stift-Zeichnungen aus der App, kein einziges
+  echtes Foto. Der Foto-Weg ist in der Produktion nie benutzt worden. Von den
+  letzten vier Zeichnungen wurden drei korrekt gelesen; `Fg=` war ein
+  Gekritzel, das auch ein Mensch nicht lesen kann. Das eigentliche Loch: der
+  erkannte Text ist vor dem Start kaum sichtbar, und bei «nichts erkannt» darf
+  man trotzdem starten. Erst das ändern, dann mit zehn echten Fotos messen.
 * **Die Mathe-Prüfung urteilt selten:** 94 % der Antworten kommen als «nicht
   prüfbar» zurück, weil nur 15 von 52 Aufgaben einen Prüfausdruck haben.
   Symbolische Antworten (`x = 7y/3`) kann sie ohnehin nicht beurteilen.
-* **Das «günstige» Modell ist teurer:** gemessen an 89 Chat-Runden kostet
-  `claude-haiku-4-5` 1.29 Rappen pro Antwort, `claude-sonnet-5` 0.98 – Haikus
-  Zwischenspeicher greift erst ab 4096 Token, unser Vorlauf liegt darunter.
+* **Kosten – wo sie herkommen (gemessen 7.9., Produktion seit 11.7.):**
+  Das Foto ist der teuerste Einzelposten: eine Erkennung (Sonnet, ~1700 Token
+  Eingabe) kostet ~0.45 Rp., eine Chat-Runde mit Haiku und warmem Cache
+  0.15–0.25 Rp., der erste Turn einer Aufgabe ~1.2 Rp. (schreibt ~6700 Token
+  in den 1-Stunden-Cache). 58 von 116 Erkennungen kamen von EINEM Schul-Plan-
+  Konto (Nr. 2), das nie eine Aufgabe angelegt hat. Bis August lag der
+  Tutor-Prompt unter Haikus Cache-Schwelle (4096 Token) – seit dem Umbau vom
+  6.9. liegt er bei ~6300 und der Cache greift auch über Aufgaben hinweg.
+  Noch offen: nach 6 Chat-Runden schneidet `HISTORY_LIMIT = 12` den Verlauf
+  jeden Turn neu zu, und der Verlaufs-Cache trifft nicht mehr (in der
+  Vorschau belegt: Lesen bleibt bei 7964, Schreiben 650–830 pro Turn).
 * **`attempts.status` und `exams.model`** sehen tot aus, sind aber `NOT NULL`
   ohne Standardwert in der Produktion. Werden sie aus dem Modell entfernt,
   schlagen Einfügungen fehl. **Nicht anfassen.**

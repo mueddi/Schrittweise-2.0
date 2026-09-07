@@ -1,75 +1,126 @@
-"""Aufgaben-Bibliothek: Betreiber lädt Dokumente hoch, Schüler:innen suchen und öffnen sie.
+"""Aufgaben-Bibliothek: der Betreiber pflegt Aufgaben, Schueler starten sie im Tutor.
 
-Die Datei-Bytes liegen in Postgres (LargeBinary, deferred) – auf Vercel ist
-/tmp flüchtig und Request/Response sind ohnehin auf ~4.5 MB begrenzt.
+Frueher war das ein PDF-Regal (nie befuellt: 0 Dokumente in der Produktion).
+Ein Blatt zum Anschauen bringt in einer Tutor-App nichts – die Aufgabe muss
+in den Chat. Deshalb sind Bibliotheks-Eintraege jetzt einzelne Aufgaben als
+Text mit Pruefausdruck; «Mit Kniff loesen» legt dem Schueler eine Kopie an
+und startet einen Versuch, genau wie bei einer selbst eingetippten Aufgabe.
+
+Fuellen kann der Betreiber auf drei Wegen: einzeln, mehrere auf einmal
+(Zeilen aus einer Tabelle) oder per KI-Erzeugung mit Vorschau. Die KI-Kosten
+tragen das Betreiber-Konto (Typ «generiert» auf der Kostenseite).
 """
-import io
-import re
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from .. import i18n
+from ..config import settings
 from ..database import get_db
-from ..deps import get_current_user, require_admin
-from ..models import LibraryDocument, LibraryTopic, User
-from ..schemas import LibraryDocOut, LibraryTopicCreate, LibraryTopicOut
+from ..deps import get_current_user, require_admin, require_student
+from ..models import Attempt, Exercise, LibraryExercise, LibraryTopic, User
+from ..schemas import (
+    AttemptStateOut,
+    LibraryExerciseIn,
+    LibraryExerciseOut,
+    LibraryExerciseUpdate,
+    LibraryGeneratedOut,
+    LibraryGenerate,
+    LibraryImport,
+    LibraryTopicCreate,
+    LibraryTopicOut,
+)
 from ..services import quota, usage
-from ..services.library_search import rank_documents
+from ..services.sympy_verifier import extract_expression
 
-# Drossel fuer die KI-Suche: mehr als so viele echte KI-Aufrufe pro Nutzer
-# und Stunde -> stiller ILIKE-Fallback (Suche bleibt benutzbar, kostet aber
-# den Betreiber nichts mehr).
-SEARCH_AI_MAX_PER_HOUR = 30
-
+log = logging.getLogger("schrittweise.library")
 router = APIRouter(prefix="/api/library", tags=["library"])
 
-MAX_LIB_UPLOAD = 4 * 1024 * 1024  # Vercel-Function: ~4.5 MB Body-Limit
-ALLOWED_LIB = {"application/pdf", "image/png", "image/jpeg", "image/webp"}
 DIFFICULTIES = {"leicht", "mittel", "schwer"}
-GRADES = {"1. Oberstufe", "2. Oberstufe", "3. Oberstufe", "Gymnasium 1./2.", "Gymnasium 3./4."}
+# Dieselben Schluessel wie users.grade_level (frontend/src/lib/i18n.jsx GRADE_KEYS)
+GRADES = ("mittelstufe", "oberstufe", "gymnasium")
+GRADE_TEXT = {"mittelstufe": "Mittelstufe (4.-6. Klasse, 10-12 Jahre)",
+              "oberstufe": "Oberstufe (Sek I, 7.-9. Klasse)",
+              "gymnasium": "Gymnasium (bis Matura)"}
+LISTE_MAX = 300
+# Obergrenze fuer die KI-Erzeugung pro Aufruf (Vorschau, noch nicht gespeichert)
+GENERIEREN_MAX_TOKENS = 1800
 
 
-def _validate_meta(db: Session, title: str, description: str, category: str,
-                   grade_levels: list[str], difficulty: str) -> str:
-    """Validierung; gibt die normalisierte grade_levels-Zeichenkette zurück.
+def klassen_schluessel(grade_level: str | None) -> str:
+    """users.grade_level (auch Alt-Werte wie «Gymnasium 1./2.») -> Bibliotheks-Schluessel."""
+    g = (grade_level or "").lower()
+    if "gym" in g:
+        return "gymnasium"
+    if "mittel" in g:
+        return "mittelstufe"
+    return "oberstufe"
 
-    Themen (``category``) sind vom Betreiber frei verwaltbar und werden gegen
-    die library_topics-Tabelle geprüft.
-    """
-    if not title.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Titel fehlt.")
-    if not description.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Beschreibung fehlt – sie ist die Basis der Suche.")
-    exists = db.scalar(select(LibraryTopic.id).where(LibraryTopic.name == category))
+
+def _grades_str(grades: list[str]) -> str:
+    """Klassenstufen pruefen und in fester Reihenfolge, ohne Duplikate, verbinden."""
+    saubere = {g.strip().lower() for g in grades if g and g.strip()}
+    if not saubere or not saubere <= set(GRADES):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Bitte gueltige Klassenstufen angeben (mittelstufe, oberstufe, gymnasium).")
+    return ",".join(g for g in GRADES if g in saubere)
+
+
+def _pruefe_thema(db: Session, category: str) -> str:
+    name = (category or "").strip()
+    exists = db.scalar(select(LibraryTopic.id).where(LibraryTopic.name == name))
     if exists is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "Unbekanntes Thema – leg es zuerst unter «Themen verwalten» an.",
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "Unbekanntes Thema – leg es zuerst unter «Themen verwalten» an.")
+    return name
+
+
+def _pruefe_schwierigkeit(difficulty: str) -> str:
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unbekannte Schwierigkeit.")
-    grades = [g.strip() for g in grade_levels if g.strip()]
-    if not grades or any(g not in GRADES for g in grades):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bitte gültige Klassenstufen angeben.")
-    # feste Reihenfolge + Duplikate raus
-    return ",".join(sorted(set(grades)))
+    return difficulty
+
+
+def _ausdruck(text: str, angegeben: str | None) -> str | None:
+    """Pruefausdruck: der angegebene, sonst aus dem Text gezogen; nur was
+    SymPy wirklich zu einer Zahl aufloest – sonst gaelte eine richtige
+    Antwort spaeter als falsch."""
+    kandidat = (angegeben or "").strip()
+    if kandidat:
+        geprueft = extract_expression(kandidat)
+        if geprueft is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                f"Der Pruefausdruck «{kandidat}» laesst sich nicht nachrechnen. "
+                                "Leer lassen, dann beurteilt der Tutor selbst.")
+        return geprueft[:255]
+    gefunden = extract_expression(text)
+    return gefunden[:255] if gefunden else None
+
+
+def _neue_aufgabe(db: Session, payload: LibraryExerciseIn) -> LibraryExercise:
+    return LibraryExercise(
+        text=payload.text.strip(),
+        math_expression=_ausdruck(payload.text, payload.math_expression),
+        category=_pruefe_thema(db, payload.category),
+        grade_levels=_grades_str(payload.grade_levels),
+        difficulty=_pruefe_schwierigkeit(payload.difficulty),
+        source=payload.source.strip()[:200],
+    )
 
 
 # ---- Themen-Verwaltung (Titel frei benennbar; nur der Betreiber schreibt) ----
 
 @router.get("/topics", response_model=list[LibraryTopicOut])
 def list_topics(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    counts = dict(
-        db.execute(
-            select(LibraryDocument.category, func.count(LibraryDocument.id))
-            .group_by(LibraryDocument.category)
-        ).all()
-    )
+    counts = dict(db.execute(
+        select(LibraryExercise.category, func.count(LibraryExercise.id))
+        .group_by(LibraryExercise.category)).all())
     topics = db.scalars(select(LibraryTopic).order_by(LibraryTopic.name)).all()
-    return [
-        LibraryTopicOut(id=t.id, name=t.name, doc_count=counts.get(t.name, 0)) for t in topics
-    ]
+    return [LibraryTopicOut(id=t.id, name=t.name, doc_count=counts.get(t.name, 0)) for t in topics]
 
 
 @router.post("/topics", response_model=LibraryTopicOut, status_code=201)
@@ -96,17 +147,16 @@ def rename_topic(topic_id: int, payload: LibraryTopicCreate,
     name = payload.name.strip()[:120]
     if not name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Themen-Titel fehlt.")
-    dup = db.scalar(
-        select(LibraryTopic).where(func.lower(LibraryTopic.name) == name.lower(), LibraryTopic.id != topic_id)
-    )
+    dup = db.scalar(select(LibraryTopic).where(func.lower(LibraryTopic.name) == name.lower(),
+                                               LibraryTopic.id != topic_id))
     if dup is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Dieses Thema gibt es schon.")
     old = topic.name
     topic.name = name
-    # Dokumente ziehen mit um (category speichert den Themen-Namen)
-    db.execute(update(LibraryDocument).where(LibraryDocument.category == old).values(category=name))
+    # Aufgaben ziehen mit um (category speichert den Themen-Namen)
+    db.execute(update(LibraryExercise).where(LibraryExercise.category == old).values(category=name))
     db.commit()
-    count = db.scalar(select(func.count(LibraryDocument.id)).where(LibraryDocument.category == name)) or 0
+    count = db.scalar(select(func.count(LibraryExercise.id)).where(LibraryExercise.category == name)) or 0
     return LibraryTopicOut(id=topic.id, name=topic.name, doc_count=count)
 
 
@@ -115,160 +165,204 @@ def delete_topic(topic_id: int, user: User = Depends(require_admin), db: Session
     topic = db.get(LibraryTopic, topic_id)
     if topic is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Thema nicht gefunden.")
-    in_use = db.scalar(
-        select(func.count(LibraryDocument.id)).where(LibraryDocument.category == topic.name)
-    ) or 0
+    in_use = db.scalar(select(func.count(LibraryExercise.id))
+                       .where(LibraryExercise.category == topic.name)) or 0
     if in_use:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"Das Thema hat noch {in_use} Dokument(e) – verschieb oder lösch sie zuerst.",
-        )
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            f"Das Thema hat noch {in_use} Aufgabe(n) – verschieb oder loesch sie zuerst.")
     db.delete(topic)
     db.commit()
 
 
-@router.get("", response_model=list[LibraryDocOut])
-def list_documents(
-    q: str = "",
-    grade: str = "",
-    category: str = "",
-    difficulty: str = "",
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    stmt = select(LibraryDocument)
+# ---- Aufgaben lesen (alle Eingeloggten) ----
+
+def _stand_des_schuelers(db: Session, user: User, ids: list[int]) -> dict[int, tuple[str, int]]:
+    """Je Bibliotheks-Aufgabe: («offen»|«geloest», juengster Versuch) fuer diesen Nutzer."""
+    if not ids:
+        return {}
+    zeilen = db.execute(
+        select(Exercise.library_id, Attempt.id, Attempt.solved)
+        .join(Attempt, Attempt.exercise_id == Exercise.id)
+        .where(Exercise.user_id == user.id, Exercise.library_id.in_(ids))
+        .order_by(Attempt.id)
+    ).all()
+    stand: dict[int, tuple[str, int]] = {}
+    geloest: set[int] = set()
+    for lib_id, attempt_id, solved in zeilen:
+        if solved:
+            geloest.add(lib_id)
+        stand[lib_id] = ("geloest" if lib_id in geloest else "offen", attempt_id)
+    return stand
+
+
+@router.get("", response_model=list[LibraryExerciseOut])
+def list_exercises(q: str = "", grade: str = "", category: str = "", difficulty: str = "",
+                   user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(LibraryExercise)
     if category:
-        stmt = stmt.where(LibraryDocument.category == category)
+        stmt = stmt.where(LibraryExercise.category == category)
     if difficulty:
-        stmt = stmt.where(LibraryDocument.difficulty == difficulty)
+        stmt = stmt.where(LibraryExercise.difficulty == difficulty)
     if grade:
-        stmt = stmt.where(LibraryDocument.grade_levels.like(f"%{grade}%"))
-    stmt = stmt.order_by(LibraryDocument.created_at.desc()).limit(200)
-    docs = list(db.scalars(stmt))
-
-    q = q.strip()
-    if not q:
-        return docs
-
-    # KI-Ranking nur fuer Konten, die auch sonst KI nutzen duerften – sonst
-    # waere die Suche ein unbegrenztes Gratis-Kosten-Loch. Zusaetzlich eine
-    # Stunden-Drossel pro Nutzer. Beides faellt still auf die Textsuche zurueck.
-    ranked = None
-    if quota.can_use_ki(user) and not quota.blocked_unverified(user):
-        from datetime import datetime, timedelta, timezone
-
-        from ..models import ApiUsage
-
-        hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
-        recent_ai = db.scalar(
-            select(func.count(ApiUsage.id)).where(
-                ApiUsage.user_id == user.id, ApiUsage.kind == "suche",
-                ApiUsage.created_at >= hour_ago,
-            )
-        ) or 0
-        if recent_ai < SEARCH_AI_MAX_PER_HOUR:
-            usage_out: dict = {}
-            ranked = rank_documents(
-                q,
-                [
-                    {
-                        "id": d.id,
-                        "title": d.title,
-                        "description": d.description,
-                        "category": d.category,
-                        "grade_levels": d.grade_levels,
-                        "difficulty": d.difficulty,
-                    }
-                    for d in docs
-                ],
-                usage_out,
-            )
-            if usage_out.get("usage") is not None:
-                usage.record(db, "suche", usage_out.get("model", ""), usage_out["usage"], user_id=user.id)
-                db.commit()
-    if ranked is not None:
-        by_id = {d.id: d for d in docs}
-        return [by_id[i] for i in ranked if i in by_id]
-
-    # Fallback ohne KI: einfache Textsuche in Titel + Beschreibung
-    needle = q.lower()
-    return [d for d in docs if needle in d.title.lower() or needle in d.description.lower()]
+        stmt = stmt.where(LibraryExercise.grade_levels.like(f"%{grade.lower()}%"))
+    if q.strip():
+        stmt = stmt.where(LibraryExercise.text.ilike(f"%{q.strip()}%"))
+    stmt = stmt.order_by(LibraryExercise.category, LibraryExercise.difficulty, LibraryExercise.id).limit(LISTE_MAX)
+    aufgaben = list(db.scalars(stmt))
+    stand = _stand_des_schuelers(db, user, [a.id for a in aufgaben])
+    out = []
+    for a in aufgaben:
+        eintrag = LibraryExerciseOut.model_validate(a)
+        if a.id in stand:
+            eintrag.status, eintrag.attempt_id = stand[a.id]
+        out.append(eintrag)
+    return out
 
 
-@router.get("/{doc_id}/file")
-def get_document_file(doc_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    doc = db.get(LibraryDocument, doc_id)
-    if doc is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dokument nicht gefunden.")
-    # Header sind latin-1: Umlaute etc. aus dem Dateinamen entfernen
-    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", doc.file_name) or "dokument"
-    return Response(
-        content=doc.content,  # deferred: Bytes werden erst hier geladen
-        media_type=doc.mime_type,
-        headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
-    )
+# ---- Aufgabe im Tutor starten (Schueler) ----
+
+@router.post("/{aufgabe_id}/start", response_model=AttemptStateOut, status_code=201)
+def start_exercise(aufgabe_id: int, user: User = Depends(require_student), db: Session = Depends(get_db)):
+    """Kopie der Bibliotheks-Aufgabe beim Schueler anlegen (einmal) und einen
+    Versuch starten – derselbe Weg wie bei einer eingetippten Aufgabe."""
+    from .exercises import _start_attempt_state
+
+    vorlage = db.get(LibraryExercise, aufgabe_id)
+    if vorlage is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            i18n.t(i18n.lang_of(user), "Aufgabe nicht gefunden", "Task not found"))
+    if quota.blocked_unverified(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            i18n.t(i18n.lang_of(user), "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.",
+                                   "Please confirm your email address first – check your inbox."))
+    if not quota.can_use_ki(user):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
+                            i18n.t(i18n.lang_of(user), "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.",
+                                   "Your balance is used up. Top up tokens or wait for next month."))
+    ex = db.scalar(select(Exercise).where(Exercise.user_id == user.id, Exercise.library_id == vorlage.id)
+                   .order_by(Exercise.id.desc()).limit(1))
+    if ex is None:
+        ex = Exercise(user_id=user.id, text=vorlage.text, math_expression=vorlage.math_expression,
+                      library_id=vorlage.id)
+        db.add(ex)
+        db.flush()
+    return _start_attempt_state(db, ex, user)
 
 
-@router.post("", response_model=LibraryDocOut, status_code=201)
-async def upload_document(
-    request: Request,
-    file: UploadFile = File(...),
-    title: str = Form(...),
-    description: str = Form(...),
-    category: str = Form("andere"),
-    grade_levels: str = Form(...),  # komma-getrennt aus dem Formular
-    difficulty: str = Form("mittel"),
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    if file.content_type not in ALLOWED_LIB:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Erlaubt sind PDF, PNG, JPG oder WebP.")
-    grades_str = _validate_meta(db, title, description, category, grade_levels.split(","), difficulty)
+# ---- Aufgaben pflegen (nur Betreiber) ----
 
-    declared = request.headers.get("content-length")
-    if declared and declared.isdigit() and int(declared) > MAX_LIB_UPLOAD + 8192:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Datei zu gross (max. 4 MB).")
-    data = b""
-    while chunk := await file.read(1024 * 256):
-        data += chunk
-        if len(data) > MAX_LIB_UPLOAD:
-            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Datei zu gross (max. 4 MB).")
-    if not data:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist leer.")
+@router.post("", response_model=LibraryExerciseOut, status_code=201)
+def create_exercise(payload: LibraryExerciseIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    aufgabe = _neue_aufgabe(db, payload)
+    db.add(aufgabe)
+    db.commit()
+    db.refresh(aufgabe)
+    return aufgabe
 
-    # Magic Bytes prüfen – Content-Type ist client-gesetzt
-    if file.content_type == "application/pdf":
-        if not data.startswith(b"%PDF-"):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist kein gültiges PDF.")
-    else:
+
+@router.post("/import", response_model=list[LibraryExerciseOut], status_code=201)
+def import_exercises(payload: LibraryImport, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Mehrere auf einmal – alles oder nichts, damit keine halbe Liste bleibt."""
+    neue = []
+    for i, eintrag in enumerate(payload.aufgaben, start=1):
         try:
-            from PIL import Image
+            neue.append(_neue_aufgabe(db, eintrag))
+        except HTTPException as exc:
+            raise HTTPException(exc.status_code, f"Aufgabe {i}: {exc.detail}")
+    db.add_all(neue)
+    db.commit()
+    for a in neue:
+        db.refresh(a)
+    return neue
 
-            Image.open(io.BytesIO(data)).verify()
-        except Exception:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Die Datei ist kein gültiges Bild.")
 
-    doc = LibraryDocument(
-        title=title.strip()[:200],
-        description=description.strip()[:4000],
-        category=category,
-        grade_levels=grades_str,
-        difficulty=difficulty,
-        file_name=(file.filename or "dokument.pdf")[:200],
-        mime_type=file.content_type,
-        size_bytes=len(data),
-        content=data,
+@router.patch("/{aufgabe_id}", response_model=LibraryExerciseOut)
+def update_exercise(aufgabe_id: int, payload: LibraryExerciseUpdate,
+                    user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    aufgabe = db.get(LibraryExercise, aufgabe_id)
+    if aufgabe is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden.")
+    if payload.text is not None:
+        aufgabe.text = payload.text.strip()
+    if payload.text is not None or payload.math_expression is not None:
+        # Neuer Text ohne neuen Ausdruck: Ausdruck aus dem neuen Text ziehen –
+        # der alte gehoerte zur alten Aufgabe.
+        aufgabe.math_expression = _ausdruck(aufgabe.text, payload.math_expression)
+    if payload.category is not None:
+        aufgabe.category = _pruefe_thema(db, payload.category)
+    if payload.grade_levels is not None:
+        aufgabe.grade_levels = _grades_str(payload.grade_levels)
+    if payload.difficulty is not None:
+        aufgabe.difficulty = _pruefe_schwierigkeit(payload.difficulty)
+    if payload.source is not None:
+        aufgabe.source = payload.source.strip()[:200]
+    db.commit()
+    db.refresh(aufgabe)
+    return aufgabe
+
+
+@router.delete("/{aufgabe_id}", status_code=204)
+def delete_exercise(aufgabe_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    aufgabe = db.get(LibraryExercise, aufgabe_id)
+    if aufgabe is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aufgabe nicht gefunden.")
+    db.delete(aufgabe)
+    db.commit()
+
+
+# ---- KI-Erzeugung mit Vorschau (nur Betreiber) ----
+
+def _generier_prompt(thema: str, stufe: str, difficulty: str, lernziel: str, anzahl: int) -> str:
+    return (
+        "Du erstellst Uebungsaufgaben fuer eine Mathe-Lern-App fuer Schweizer "
+        f"Schueler:innen. Klassenstufe: {GRADE_TEXT.get(stufe, stufe)}. "
+        f"Schwierigkeit: {difficulty}. Lehrplan 21.\n\n"
+        f"THEMA: {thema}\nWAS GEUEBT WERDEN SOLL: {lernziel}\n\n"
+        f"Erzeuge genau {anzahl} verschiedene Aufgaben, jede eigenstaendig loesbar, "
+        "mit Alltagsbezug wo es passt (Franken, Rappen, Meter). Schweizer "
+        "Rechtschreibung: «ss» statt «ß». Gib NUR ein JSON-Array zurueck, ohne "
+        'Text davor oder danach. Jedes Element: {"frage": "...", "ausdruck": "..."}\n'
+        "- «frage»: die Aufgabenstellung, wie sie auf einem Uebungsblatt steht. "
+        "Kurz und eindeutig. Keine Loesung, kein Hinweis.\n"
+        "- «ausdruck»: dieselbe Aufgabe in EINER maschinell loesbaren Zeile, z.B. "
+        '"3x + 5 = 20" oder "0.25 * 240". Nur eine Unbekannte, und sie muss zu '
+        'einer ZAHL aufloesen. Ist das nicht moeglich (Zeichnen, Begruenden), dann "".\n'
     )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    return doc
 
 
-@router.delete("/{doc_id}", status_code=204)
-def delete_document(doc_id: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    doc = db.get(LibraryDocument, doc_id)
-    if doc is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Dokument nicht gefunden.")
-    db.delete(doc)
+@router.post("/generieren", response_model=LibraryGeneratedOut)
+def generate_exercises(payload: LibraryGenerate, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Vorschau erzeugen – gespeichert wird erst, was der Betreiber nach dem
+    Durchlesen per /import uebernimmt. Kosten landen auf dem Betreiber-Konto."""
+    from ..services.exam import _saeubere
+
+    thema = _pruefe_thema(db, payload.category)
+    stufe = klassen_schluessel(payload.grade_level)
+    schwierigkeit = _pruefe_schwierigkeit(payload.difficulty)
+    if not settings.anthropic_api_key:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Die KI ist nicht konfiguriert.")
+
+    import anthropic
+
+    model = settings.anthropic_model_default
+    try:
+        resp = anthropic.Anthropic(api_key=settings.anthropic_api_key, max_retries=1).messages.create(
+            model=model, max_tokens=GENERIEREN_MAX_TOKENS,
+            messages=[{"role": "user", "content": _generier_prompt(
+                thema, stufe, schwierigkeit, payload.lernziel.strip(), payload.anzahl)}])
+        roh = "".join(b.text for b in resp.content if b.type == "text")
+        aufgaben = _saeubere(roh)
+    except Exception as exc:
+        log.exception("Bibliotheks-Erzeugung fehlgeschlagen")
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            f"Die KI hat keine brauchbaren Aufgaben geliefert ({type(exc).__name__}). Nochmal versuchen.")
+    kosten = usage.cost_usd(model, resp.usage)
+    usage.record(db, "generiert", model, resp.usage, user_id=user.id)
     db.commit()
+    return LibraryGeneratedOut(
+        aufgaben=[LibraryExerciseIn(text=a["frage"], math_expression=a["math_expression"] or None,
+                                    category=thema, grade_levels=[stufe], difficulty=schwierigkeit,
+                                    source="KI-erzeugt")
+                  for a in aufgaben[:payload.anzahl]],
+        kosten_rappen=round(kosten * settings.usd_chf_rate * 100, 2),
+    )

@@ -258,8 +258,16 @@ class ExerciseListItem(BaseModel):
 
 # ---------- Feedback ----------
 class FeedbackCreate(BaseModel):
-    text: str = Field(min_length=3, max_length=2000)
+    # Freies Feedback braucht Text; eine Problem-Meldung darf ohne Text
+    # kommen, weil Kategorie und Zusammenhang schon genug sagen.
+    text: str = Field(default="", max_length=2000)
     page: str | None = Field(default=None, max_length=80)
+    kind: str = "feedback"                       # "feedback" | "problem"
+    category: str | None = Field(default=None, max_length=30)
+    attempt_id: int | None = None
+    image_path: str | None = Field(default=None, max_length=255)
+    # was das Frontend gerade sieht (z.B. der erkannte Text vor dem Start)
+    context: str | None = Field(default=None, max_length=2000)
 
 
 class FeedbackOut(BaseModel):
@@ -267,6 +275,12 @@ class FeedbackOut(BaseModel):
     id: int
     text: str
     page: str | None
+    kind: str = "feedback"
+    category: str | None = None
+    attempt_id: int | None = None
+    image_path: str | None = None
+    context: str | None = None
+    resolved_at: datetime | None = None
     created_at: datetime
     # Absender (nur fuer die Admin-Liste angereichert)
     display_name: str = ""
@@ -307,8 +321,19 @@ class ParentWeek(BaseModel):
     """Eine Woche im Verlauf der Elternansicht (nur Zaehlwerte)."""
     week_start: date
     solved_count: int
+    worked_count: int = 0
     autonomy_rate: int  # in %
     active_days: int
+
+
+class ParentWorkedOn(BaseModel):
+    """Eine Aufgabe, an der diese Woche gearbeitet wurde. Nur Aufgabentext und
+    Zustand – nie Chat-Nachrichten."""
+    aufgabe: str
+    thema: str | None = None
+    wann: datetime | None = None
+    geloest: bool = False
+    viel_hilfe: bool = False
 
 
 class ParentChildSummary(BaseModel):
@@ -316,8 +341,15 @@ class ParentChildSummary(BaseModel):
     grade_level: str | None
     autonomy_rate: int  # in %
     solved_count: int
+    # Hauptzahl: bearbeitete Aufgaben. «geloest» entsteht zu selten, um allein
+    # zu tragen (12 % in der Produktion).
+    worked_count: int = 0
+    own_steps: int = 0          # eigene Rechenschritte des Kindes
+    ohne_thema: int = 0         # bearbeitete Aufgaben ohne Themen-Zuordnung
     active_days: int
-    dranbleiben_delta: int  # % vs. Vorwoche
+    # None = zu wenig Daten fuer einen ehrlichen Wochenvergleich.
+    dranbleiben_delta: int | None = None
+    worked_on: list[ParentWorkedOn] = []
     # Eintraege: {topic, label, heavy?, total?} – heavy/total fehlen bei
     # Aggregat-Zeilen aus der Zeit vor dieser Erweiterung.
     top_struggles: list[dict]
@@ -329,18 +361,20 @@ class ParentChildSummary(BaseModel):
 
 
 # ---------- Aufgaben-Bibliothek ----------
-class LibraryDocOut(BaseModel):
+class LibraryExerciseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    title: str
-    description: str
+    text: str
+    math_expression: str | None
     category: str
     grade_levels: list[str]
     difficulty: str
-    file_name: str
-    mime_type: str
-    size_bytes: int
+    source: str
     created_at: datetime
+    # Stand des angemeldeten Schuelers: "neu" | "offen" | "geloest"
+    status: str = "neu"
+    # juengster Versuch des Schuelers dazu (fuer «Weiter»), sonst None
+    attempt_id: int | None = None
 
     @field_validator("grade_levels", mode="before")
     @classmethod
@@ -348,6 +382,43 @@ class LibraryDocOut(BaseModel):
         if isinstance(v, str):
             return [g.strip() for g in v.split(",") if g.strip()]
         return v
+
+
+class LibraryExerciseIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    math_expression: str | None = Field(default=None, max_length=255)
+    category: str = Field(min_length=1, max_length=120)
+    grade_levels: list[str] = Field(min_length=1)
+    difficulty: str = "mittel"
+    source: str = Field(default="", max_length=200)
+
+
+class LibraryExerciseUpdate(BaseModel):
+    text: str | None = Field(default=None, min_length=1, max_length=2000)
+    math_expression: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=120)
+    grade_levels: list[str] | None = None
+    difficulty: str | None = None
+    source: str | None = Field(default=None, max_length=200)
+
+
+class LibraryImport(BaseModel):
+    """Mehrere Aufgaben auf einmal – z.B. aus einer Tabelle oder der KI-Vorschau."""
+    aufgaben: list[LibraryExerciseIn] = Field(min_length=1, max_length=100)
+
+
+class LibraryGenerate(BaseModel):
+    category: str = Field(min_length=1, max_length=120)
+    grade_level: str = "oberstufe"
+    difficulty: str = "mittel"
+    # Was geuebt werden soll, in Worten – ein Lernziel oder eine kurze Beschreibung
+    lernziel: str = Field(min_length=3, max_length=500)
+    anzahl: int = Field(default=6, ge=1, le=12)
+
+
+class LibraryGeneratedOut(BaseModel):
+    aufgaben: list[LibraryExerciseIn]
+    kosten_rappen: float
 
 
 class LibraryTopicCreate(BaseModel):

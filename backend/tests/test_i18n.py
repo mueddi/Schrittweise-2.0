@@ -16,8 +16,12 @@ def test_opener_und_mock_tutor_auf_englisch(client):
     ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
     state = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()
     opener = state["messages"][0]["text"]
-    assert "Let's go" in opener
-    assert "Los geht" not in opener
+    # Der Eroeffnungssatz wechselt von Aufgabe zu Aufgabe durch; entscheidend
+    # ist hier nur, dass er ENGLISCH ist.
+    from app.routers.exercises import ANREDE_MIT_TEXT, EINSTIEGSFRAGEN
+    assert any(en in opener for _, en in ANREDE_MIT_TEXT), opener
+    assert any(en in opener for _, en in EINSTIEGSFRAGEN), opener
+    assert not any(de in opener for de, _ in ANREDE_MIT_TEXT), "deutscher Satz im englischen Opener"
 
     aid = state["attempt"]["id"]
     with client.stream("POST", f"/api/attempts/{aid}/chat", headers=headers,
@@ -46,7 +50,9 @@ def test_deutsch_bleibt_standard(client):
     ex = client.post("/api/exercises", headers=headers, json={"text": "3x + 5 = 20"}).json()
     opener = client.post(f"/api/exercises/{ex['id']}/attempts",
                          headers=headers).json()["messages"][0]["text"]
-    assert "Los geht's" in opener
+    from app.routers.exercises import ANREDE_MIT_TEXT, EINSTIEGSFRAGEN
+    assert any(de in opener for de, _ in ANREDE_MIT_TEXT), opener
+    assert any(de in opener for de, _ in EINSTIEGSFRAGEN), opener
 
 
 def test_meta_bitte_erzeugt_echte_aufgabe(client):
@@ -122,9 +128,11 @@ def test_regie_erzwingt_englisch_und_system_bleibt_cachebar():
 
     # System besteht nur noch aus dem statischen, gecachten Prompt-Block –
     # die Regie wandert in die letzte User-Nachricht (Cache-Praefix stabil).
+    # Die Lebensdauer (5 min oder 1 h) ist eine Kostenentscheidung, die hier
+    # nicht festgenagelt wird – nur DASS der Block gecacht ist.
     system = _build_system()
     assert len(system) == 1
-    assert system[0]["cache_control"] == {"type": "ephemeral"}
+    assert system[0]["cache_control"]["type"] == "ephemeral"
 
 
 def test_regie_traegt_loesung_als_orientierung():
@@ -150,7 +158,7 @@ def test_regie_landet_in_letzter_user_nachricht():
     msgs = _history_to_messages(history, image=(b"TASK", "image/jpeg"),
                                 regie="REGIE-ANWEISUNG: ...")
     # Bild-Nachricht traegt den Cache-Breakpoint auf dem letzten Block
-    assert msgs[0]["content"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert msgs[0]["content"][-1]["cache_control"]["type"] == "ephemeral"
     last = msgs[-1]
     assert last["role"] == "user"
     assert last["content"][0]["text"].startswith("REGIE-ANWEISUNG")
@@ -210,7 +218,7 @@ def test_aufgabentext_steht_beim_bild():
     assert "3x + 5 = 20" in bloecke[2]["text"]
     assert "(Aufgabe gestartet)" not in bloecke[2]["text"]
     # Cache-Breakpoint bleibt auf dem letzten Block der Bild-Nachricht
-    assert bloecke[-1]["cache_control"] == {"type": "ephemeral"}
+    assert bloecke[-1]["cache_control"]["type"] == "ephemeral"
 
     # ohne Aufgabentext bleibt die alte Fuellung (kein leerer Block)
     ohne = _history_to_messages(history, image=(b"TASK", "image/jpeg"))
@@ -237,3 +245,34 @@ def test_loesung_aus_bilderkennung_wird_als_unsicher_markiert():
     assert "Bild-Erkennung" not in ohne_bild
     # die Orientierung selbst bleibt in BEIDEN Faellen erhalten
     assert "x = 5" in mit_bild and "x = 5" in ohne_bild
+
+
+def test_eroeffnung_klingt_nicht_bei_jeder_aufgabe_gleich(client):
+    """Gemeldet: «antwortet immer wie ein Roboter mit demselben Starter».
+    Stimmte – der Eroeffnungssatz war ein fester String. Die erste Zeile ist
+    das Erste, was ein Kind vom Tutor liest; bei der dritten Aufgabe wirkte
+    sie wie eine Maschine."""
+    headers = register_pw(client, "vielfalt@test.ch")
+
+    openers = []
+    for i in range(4):
+        ex = client.post("/api/exercises", headers=headers,
+                         json={"text": f"{i + 2}x + 1 = 9"}).json()
+        openers.append(client.post(f"/api/exercises/{ex['id']}/attempts",
+                                   headers=headers).json()["messages"][0]["text"])
+
+    assert len(set(openers)) >= 3, f"zu wenig Abwechslung: {openers}"
+
+
+def test_eroeffnung_bleibt_fuer_dieselbe_aufgabe_stabil(client):
+    """Gegenprobe zur Abwechslung: beim Neuladen derselben Uebung darf der
+    Satz NICHT wechseln – sonst wirkt es, als schreibe der Tutor die
+    Begruessung staendig um. Die Variante haengt deshalb an der
+    Attempt-Nummer, nicht am Zufall."""
+    headers = register_pw(client, "stabil@test.ch")
+    ex = client.post("/api/exercises", headers=headers, json={"text": "4x = 12"}).json()
+    state = client.post(f"/api/exercises/{ex['id']}/attempts", headers=headers).json()
+    aid = state["attempt"]["id"]
+
+    erneut = client.get(f"/api/attempts/{aid}", headers=headers).json()
+    assert erneut["messages"][0]["text"] == state["messages"][0]["text"]

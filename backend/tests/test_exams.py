@@ -391,7 +391,10 @@ def test_vordenken_wird_beim_starken_modell_abgeschaltet(client, monkeypatch):
     assert client.post(f"/api/topics/{tid}/pruefung", headers=headers).status_code == 201
     assert len(calls) == 1
     assert calls[0]["model"] == settings.anthropic_model_smart
-    assert calls[0].get("thinking") == {"type": "disabled"}
+    # Als extra_body, nicht als Schluesselwort: das SDK 0.42 kennt «thinking»
+    # nicht und warf einen TypeError, bevor die Anfrage die API erreichte.
+    assert "thinking" not in calls[0]
+    assert calls[0]["extra_body"] == {"thinking": {"type": "disabled"}}
 
 
 def test_kein_vordenk_schalter_fuer_das_standardmodell(client, monkeypatch):
@@ -419,7 +422,7 @@ def test_kein_vordenk_schalter_fuer_das_standardmodell(client, monkeypatch):
     monkeypatch.setattr(exam_service, "anthropic", types.SimpleNamespace(Anthropic=_Client))
     assert client.post(f"/api/topics/{tid}/pruefung", headers=headers).status_code == 201
     assert calls[1]["model"] == settings.anthropic_model_default
-    assert "thinking" not in calls[1]
+    assert "thinking" not in calls[1] and "extra_body" not in calls[1]
 
 
 def test_zeitbudget_passt_unter_den_deckel_der_plattform():

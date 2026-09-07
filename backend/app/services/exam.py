@@ -146,7 +146,7 @@ def erzeuge(thema: str, learning_goals: str, aufgaben_texte: list[str],
     # denkt standardmaessig vor, wenn der Parameter FEHLT, und die Denk-Tokens
     # zaehlen gegen max_tokens. Genau das hat die Pruefung nie zustande kommen
     # lassen – im Chat war es schon behoben, hier hatte ich es vergessen.
-    from .tutor import _modell_kette, _thinking_param
+    from .tutor import _modell_kette, _zusatz_parameter
 
     start = time.monotonic()
     letzter: Exception | None = None
@@ -154,13 +154,9 @@ def erzeuge(thema: str, learning_goals: str, aufgaben_texte: list[str],
         if versuch and time.monotonic() - start > AUSWEICH_DEADLINE:
             break  # ohne Restzeit hat ein zweiter Anlauf keinen Zweck mehr
         try:
-            kwargs = {}
-            denken = _thinking_param(modell)
-            if denken is not None:
-                kwargs["thinking"] = denken
             resp = client.messages.create(
                 model=modell, max_tokens=MAX_TOKENS,
-                messages=[{"role": "user", "content": prompt}], **kwargs,
+                messages=[{"role": "user", "content": prompt}], **_zusatz_parameter(modell),
             )
             roh = "".join(b.text for b in resp.content if b.type == "text")
             fertig = _saeubere(roh)
