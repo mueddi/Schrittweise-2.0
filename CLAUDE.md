@@ -113,15 +113,17 @@ https://claude.ai/code/artifact/67bdea5a-096e-439f-83f6-067727e5424b
 * **Vercel läuft auf `hobby`** – dieser Tarif ist laut Vercels Bedingungen für
   nicht-kommerzielle Projekte. Vor dem Verkauf von Tokens klären. Der
   Betreiber will beim ersten Käufer wechseln.
-* **Supabase seit 7.9. auf Pro** (Organisation «mueddi's Org»): kein
-  Pausieren mehr, tägliche Sicherungen. Achtung Kosten: jedes AKTIVE Projekt
-  kostet ~10 USD/Monat Rechenzeit, eines ist im Tarif enthalten. Aktiv sind
-  `schrittweise` (Produktion), `kniff-vorschau` und ein am 7.9. neu angelegtes
-  Projekt `quitta` (nicht Kniff). `Rayner Sales` ist pausiert.
+* **Supabase seit 7.9. auf Pro**, aber nur für die Produktion: in der
+  Pro-Organisation «mueddi's Org» liegen nur `schrittweise` (läuft, durch die
+  Compute-Gutschrift gedeckt) und `Rayner Sales` (pausiert). Jedes weitere
+  AKTIVE Projekt in einer Pro-Organisation kostet ~10 USD/Monat, und das ist
+  vom Spend Cap ausgenommen. `kniff-vorschau` und `quitta` liegen deshalb in
+  einer zweiten, kostenlosen Organisation (verschoben 7.9.; die
+  Projekt-Nummer bleibt gleich, `DATABASE_URL` unverändert). Der MCP-Zugang
+  dieser Sitzungen sieht nur «mueddi's Org»; die Vorschau-Datenbank ist per
+  SQL trotzdem erreichbar. Gratis-Limit: zwei laufende Projekte pro KONTO.
   **Pausieren geht nur im Gratis-Tarif** («Project is not free-tier»,
-  getestet 7.9.) – `kniff-vorschau` gehört deshalb in eine eigene
-  Gratis-Organisation (Projekt → Settings → General → Transfer project; die
-  Projekt-Nummer bleibt gleich). Dort pausiert
+  getestet 7.9.). Dort pausiert
   `.github/workflows/vorschau-datenbank.yml` sie nachts, wenn 24 h kein Push
   auf einen Zweig kam, und weckt sie bei jedem Push (Secret
   `SUPABASE_ACCESS_TOKEN`, angelegt 7.9.). Nach dem Wecken dauert es etwa
