@@ -66,12 +66,18 @@ def test_sympy_wird_erst_beim_rechnen_geladen():
     Frischer Interpreter, damit kein anderer Test das Modul schon geladen hat."""
     import subprocess
     import sys
+    from pathlib import Path
 
+    # Eigener Arbeitsordner (backend/), unabhaengig davon, von wo aus pytest
+    # gestartet wurde – der Deploy-Workflow ruft "pytest backend/tests/" vom
+    # Hauptverzeichnis aus auf, ohne cwd wuerde "import app" dort scheitern.
+    backend_dir = Path(__file__).resolve().parent.parent
     code = ("import sys; import app.services.sympy_verifier as v; "
             "assert 'sympy' not in sys.modules, 'SymPy schon beim Import geladen'; "
             "assert v.verify('3x + 5 = 20', 'x = 5').status == 'correct'; "
             "assert 'sympy' in sys.modules; print('ok')")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                       timeout=120, cwd=backend_dir)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == "ok"
 
