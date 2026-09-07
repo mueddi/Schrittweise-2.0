@@ -231,3 +231,20 @@ a {
   border-bottom-width: 0.08em !important;
   min-height: 1px;
 }
+
+/* ---------- Startseite ---------- */
+.landing-navlink:hover { color: var(--indigo-dark); }
+.landing-faq summary::-webkit-details-marker { display: none; }
+.landing-faq[open] .landing-faq-chevron { transform: rotate(45deg); }
+.landing-faq-chevron { display: inline-block; transition: transform .15s ease; }
+@media (max-width: 980px) {
+  .landing-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .landing-grid-3 { grid-template-columns: 1fr !important; }
+  .landing-navlink { display: none; }
+}
+@media (max-width: 560px) {
+  .landing-section { padding-left: 20px !important; padding-right: 20px !important; }
+  .landing-grid-4 { grid-template-columns: 1fr !important; }
+  .landing-grid-3-tight { grid-template-columns: 1fr !important; }
+}
+@media (prefers-reduced-motion: reduce) { .landing-faq-chevron { transition: none; } }
