@@ -142,8 +142,13 @@ def get_image(token: str, db: Session = Depends(get_db)):
     img = db.scalar(select(UploadedImage).where(UploadedImage.token == token))
     if img is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bild nicht gefunden")
+    # Der Inhalt hinter einem Token aendert sich nie – also darf ihn der Browser
+    # UND das Vercel-Netz (s-maxage) ein Jahr lang behalten. Vorher lief jede
+    # Anzeige desselben Fotos erneut durch die Funktion und die Datenbank;
+    # jetzt nur die erste. Die Adresse bleibt das Geheimnis (128-Bit-Token),
+    # daran aendert der Zwischenspeicher nichts.
     return Response(content=img.content, media_type=img.mime_type,
-                    headers={"Cache-Control": "private, max-age=86400"})
+                    headers={"Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable"})
 
 
 def _is_task_request(text: str) -> bool:
