@@ -118,6 +118,10 @@ https://claude.ai/code/artifact/67bdea5a-096e-439f-83f6-067727e5424b
   kostet ~10 USD/Monat Rechenzeit, eines ist im Tarif enthalten. Aktiv sind
   `schrittweise` (Produktion), `kniff-vorschau` und ein am 7.9. neu angelegtes
   Projekt `quitta` (nicht Kniff). `Rayner Sales` ist pausiert.
+  `.github/workflows/vorschau-datenbank.yml` pausiert `kniff-vorschau` nachts,
+  wenn 24 h kein Push auf einen Zweig kam, und weckt sie bei jedem Push
+  (braucht das Secret `SUPABASE_ACCESS_TOKEN`). Nach dem Wecken dauert es
+  etwa eine Minute, bis die Vorschau eine Datenbank hat.
 * **Die Zahlung wurde nie durchgeführt:** im Live-Stripe-Konto stehen
   0 Checkout-Sitzungen. Vor dem Start einmal echt kaufen und nachzählen.
 * **Impressum ohne Postadresse** (`frontend/src/screens/Rechtliches.jsx`) –

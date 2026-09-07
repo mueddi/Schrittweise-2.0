@@ -1,0 +1,98 @@
+name: Vorschau-Datenbank (pausieren / wecken)
+
+# Das Supabase-Projekt kniff-vorschau kostet auf Pro Rechenzeit, solange es
+# laeuft (~10 USD/Monat) – auch wenn niemand testet. Pausiert kostet es nichts.
+#
+# - Nachts um 03:00 UTC: gab es in den letzten 24 h keinen Push auf einen
+#   Arbeitszweig, wird die Vorschau pausiert.
+# - Bei jedem Push auf einen Zweig (nicht main): ist sie pausiert, wird sie
+#   geweckt – parallel zum Vercel-Bau, beide brauchen etwa eine Minute.
+#
+# Benoetigtes Secret (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_ACCESS_TOKEN  Persoenliches Zugangs-Token aus
+#                          supabase.com/dashboard/account/tokens
+# Die Produktion (schrittweise) wird von diesem Ablauf NIE angefasst.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+    inputs:
+      aktion:
+        description: "pausieren oder wecken"
+        type: choice
+        options: [wecken, pausieren]
+        default: wecken
+
+env:
+  VORSCHAU_REF: fdgbeicshpttcqnhinso
+
+jobs:
+  steuern:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Secret prüfen
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::Secret SUPABASE_ACCESS_TOKEN fehlt – unter supabase.com/dashboard/account/tokens anlegen und in GitHub eintragen."
+            exit 1
+          fi
+
+      - name: Zustand der Vorschau abfragen
+        id: zustand
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          status=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$VORSCHAU_REF" | jq -r '.status')
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Vorschau ist: $status"
+
+      - name: Entscheiden
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          aktion=""
+          case "${{ github.event_name }}" in
+            push) aktion="wecken" ;;
+            workflow_dispatch) aktion="${{ inputs.aktion }}" ;;
+            schedule)
+              # Gab es in den letzten 24 h einen Push auf irgendeinen Zweig ausser main?
+              seit=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+              aktiv=0
+              for zweig in $(gh api "repos/${{ github.repository }}/branches?per_page=100" --jq '.[].name'); do
+                [ "$zweig" = "main" ] && continue
+                n=$(gh api "repos/${{ github.repository }}/commits?sha=$zweig&since=$seit&per_page=1" --jq 'length')
+                if [ "$n" -gt 0 ]; then aktiv=1; echo "Zweig $zweig hatte Pushes seit $seit"; fi
+              done
+              if [ "$aktiv" = "0" ]; then aktion="pausieren"; else aktion="nichts"; fi ;;
+          esac
+          echo "aktion=$aktion" >> "$GITHUB_OUTPUT"
+          echo "Aktion: $aktion"
+
+      - name: Wecken
+        if: steps.plan.outputs.aktion == 'wecken' && steps.zustand.outputs.status == 'INACTIVE'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          curl -sS -f -X POST -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$VORSCHAU_REF/restore"
+          echo "Vorschau wird geweckt (dauert etwa eine Minute)."
+
+      - name: Pausieren
+        if: steps.plan.outputs.aktion == 'pausieren' && steps.zustand.outputs.status == 'ACTIVE_HEALTHY'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          curl -sS -f -X POST -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$VORSCHAU_REF/pause"
+          echo "Vorschau pausiert – kostet jetzt nichts mehr."
+
+      - name: Nichts zu tun
+        if: steps.plan.outputs.aktion == 'nichts' || (steps.plan.outputs.aktion == 'wecken' && steps.zustand.outputs.status != 'INACTIVE') || (steps.plan.outputs.aktion == 'pausieren' && steps.zustand.outputs.status != 'ACTIVE_HEALTHY')
+        run: echo "Zustand passt schon (${{ steps.zustand.outputs.status }}), keine Aenderung."
