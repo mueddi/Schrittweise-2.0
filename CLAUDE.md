@@ -89,14 +89,22 @@ Browser-Dialoge (`alert`, `confirm`, `prompt`) sind verboten und werden vom
 Build abgewiesen (`frontend/scripts/keine-browser-dialoge.mjs`). Stattdessen
 `useDialog()` aus `lib/dialog.jsx`.
 
-## Offen (Stand 2. September 2026)
+## Offen (Stand 7. September 2026)
+
+Pull Request 2 (25 Commits: Tutor-Reparatur, Sonnet-Fehler, Kosten- und
+Störungsseite, Bibliothek, «Problem melden», Foto-Bestätigung) ist am 7.9.
+gemergt und live; Deploy-Lauf grün, `/api/health` ok, alle Migrationen in der
+Produktion angelegt. Die 17 Startaufgaben der Bibliothek liegen in der
+Produktion. Launch-Checkliste des Betreibers:
+https://claude.ai/code/artifact/67bdea5a-096e-439f-83f6-067727e5424b
 
 * **Die wöchentliche Sicherung ist noch nie gelaufen** – acht Läufe seit dem
   19.07., alle gescheitert am fehlenden GitHub-Secret `DATABASE_URL`
   (`.github/workflows/backup.yml`). Es existiert keine Kopie der Daten. Das ist
   der wichtigste offene Punkt; er muss die Secrets selbst anlegen.
-* **Kein Zweig-Schutz auf `main`** – solange er fehlt, kann direkt live
-  geschoben werden. Er will das ändern.
+* ~~Kein Zweig-Schutz auf `main`~~ – **erledigt 7.9.**: Ruleset «main-schutz»
+  (aktiv): Pull Request Pflicht, Status-Checks `backend-tests` und
+  `frontend-build`, keine Force-Pushes, kein Löschen.
 * **Keine Überwachung von aussen.** Zwei Ausfälle blieben unbemerkt, bis er
   zufällig hinschaute. Er muss UptimeRobot einrichten – Typ «Keyword», Adresse
   `…/api/health`, Stichwort `"status":"ok"`, Alarm wenn es FEHLT.
