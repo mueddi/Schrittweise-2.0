@@ -35,7 +35,7 @@ ersten Mal. Er trifft die Entscheidungen; du lieferst Belege, keine Vermutungen.
 
 ```
 Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
-       →  Pull Request  →  291 Tests  →  sein Merge-Klick  →  live
+       →  Pull Request  →  297 Tests  →  sein Merge-Klick  →  live
 ```
 
 * **Produktion ausschliesslich über `.github/workflows/deploy.yml`** (Test →
@@ -61,7 +61,7 @@ Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
 ## Tests
 
 ```
-cd backend && python -m pytest -q          # 291 Tests, müssen alle grün sein
+cd backend && python -m pytest -q          # 297 Tests, müssen alle grün sein
 cd frontend && npm run build               # enthält die Browser-Dialog-Bremse
 ```
 
