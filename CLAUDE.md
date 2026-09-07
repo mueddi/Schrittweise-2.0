@@ -35,7 +35,7 @@ ersten Mal. Er trifft die Entscheidungen; du lieferst Belege, keine Vermutungen.
 
 ```
 Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
-       →  Pull Request  →  297 Tests  →  sein Merge-Klick  →  live
+       →  Pull Request  →  299 Tests  →  sein Merge-Klick  →  live
 ```
 
 * **Produktion ausschliesslich über `.github/workflows/deploy.yml`** (Test →
@@ -61,7 +61,7 @@ Zweig  →  Vercel baut automatisch eine Vorschau  →  er schaut sie an
 ## Tests
 
 ```
-cd backend && python -m pytest -q          # 297 Tests, müssen alle grün sein
+cd backend && python -m pytest -q          # 299 Tests, müssen alle grün sein
 cd frontend && npm run build               # enthält die Browser-Dialog-Bremse
 ```
 
@@ -78,6 +78,8 @@ Fehlen die Abhängigkeiten im Container: `uv venv /tmp/kniff-venv` und
 | Anweisung an den Tutor (deutscher Fliesstext) | `backend/app/services/tutor.py` |
 | Mathe-Prüfung | `backend/app/services/sympy_verifier.py` |
 | Chat-Bildschirm | `frontend/src/screens/Lernen.jsx` |
+| Aufgaben-Bibliothek (Aufgaben, nicht PDFs; Start im Tutor, KI-Vorschau) | `backend/app/routers/library.py`, `frontend/src/screens/Bibliothek.jsx` |
+| Störungen mit Einordnung «handeln / prüfen / keine» | `backend/app/services/stoerungen.py` |
 | App-Dialoge (nie `window.confirm`!) | `frontend/src/lib/dialog.jsx` |
 | Preise, Kontingent | `backend/app/config.py` |
 | Farben, Schriften | `frontend/src/styles/theme.css` |
