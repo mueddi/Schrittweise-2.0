@@ -26,6 +26,44 @@ def test_cost_usd_sonnet_mit_cache():
     assert abs(cost_usd("claude-sonnet-4-6", usage) - 7.05) < 1e-9
 
 
+def test_cache_schreiben_mit_stundenfrist_kostet_das_doppelte():
+    """Gemessen in der Vorschau (7.9.): der erste Turn einer Aufgabe schreibt
+    ~6700 Token in den 1-Stunden-Cache. Die alte Formel rechnete dafuer 1.25x
+    und verbuchte 0.0088 USD – tatsaechlich sind es 2x, also 0.0138 USD. Die
+    Auswertung lag damit bei jedem Aufgabenstart um ein Drittel zu tief."""
+    from app.services.usage import cache_write_split
+
+    # Aufteilung wie sie die API liefert (als dict oder als Objekt mit Attributen)
+    usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
+             "cache_creation_input_tokens": 1_000_000,
+             "cache_creation": {"ephemeral_5m_input_tokens": 250_000,
+                                "ephemeral_1h_input_tokens": 750_000}}
+    assert cache_write_split(usage) == (250_000, 750_000)
+    # Haiku: 0.25 * 1.25 + 0.75 * 2.0 = 1.8125 USD
+    assert abs(cost_usd("claude-haiku-4-5", usage) - 1.8125) < 1e-9
+
+    # Ohne Aufteilung (aeltere Antworten): alles gilt als 5-Minuten-Schreiben
+    ohne = {"cache_creation_input_tokens": 1_000_000}
+    assert cache_write_split(ohne) == (1_000_000, 0)
+    assert abs(cost_usd("claude-haiku-4-5", ohne) - 1.25) < 1e-9
+
+    # Aufteilung darf den Gesamtwert nie uebersteigen
+    kaputt = {"cache_creation_input_tokens": 100,
+              "cache_creation": {"ephemeral_1h_input_tokens": 500}}
+    assert cache_write_split(kaputt) == (0, 100)
+
+
+def test_record_haelt_stundenfrist_fest(client):
+    usage = {"input_tokens": 10, "output_tokens": 5, "cache_creation_input_tokens": 300,
+             "cache_creation": {"ephemeral_1h_input_tokens": 200, "ephemeral_5m_input_tokens": 100}}
+    with SessionLocal() as db:
+        record(db, "chat", "claude-haiku-4-5", usage)
+        db.commit()
+        zeile = db.query(ApiUsage).one()
+        assert zeile.cache_write_tokens == 300
+        assert zeile.cache_write_1h_tokens == 200
+
+
 def test_cost_usd_unbekanntes_modell_faellt_auf_sonnet_preis():
     usage = {"input_tokens": 1_000_000, "output_tokens": 0}
     assert cost_usd("irgendwas-neues", usage) == 3.00

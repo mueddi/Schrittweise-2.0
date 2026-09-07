@@ -127,6 +127,10 @@ def _schema_sicherstellen() -> None:
          "ALTER TABLE progress_aggregates ADD COLUMN own_steps INTEGER DEFAULT 0 NOT NULL"),
         ("progress_aggregates", "ohne_thema",
          "ALTER TABLE progress_aggregates ADD COLUMN ohne_thema INTEGER DEFAULT 0 NOT NULL"),
+        # Kostenerfassung: Cache-Schreiben mit 1-Stunden-Frist kostet 2x statt
+        # 1.25x. DEFAULT 0: alle Zeilen davor stammen aus dem 5-Minuten-Cache.
+        ("api_usage", "cache_write_1h_tokens",
+         "ALTER TABLE api_usage ADD COLUMN cache_write_1h_tokens INTEGER DEFAULT 0 NOT NULL"),
     ]
     # Spalten EINMAL pro Tabelle holen statt einmal pro Migrations-Eintrag:
     # 13 Eintraege verteilen sich auf 4 Tabellen.

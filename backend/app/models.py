@@ -302,6 +302,9 @@ class ApiUsage(Base):
     output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Teilmenge von cache_write_tokens mit 1-Stunden-Frist (kostet 2x statt
+    # 1.25x). Der Tutor cacht System-Prompt und Aufgabe eine Stunde lang.
+    cache_write_1h_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     charged_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
