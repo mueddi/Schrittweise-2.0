@@ -89,6 +89,55 @@ def _run(monkeypatch, ctx, versuche=None, usage_out=None):
                                       usage_out=usage_out))
 
 
+def test_vordenk_schalter_geht_als_extra_body_mit(monkeypatch):
+    """Im Vercel-Log der Vorschau (7.9.): «Messages.stream() got an unexpected
+    keyword argument 'thinking'». Das SDK 0.42 kennt das Feld nicht – jeder
+    Sonnet-Aufruf des Tutors scheiterte seit dem 26.7. VOR der API und wich
+    still auf Haiku aus. Als extra_body kommt das Feld in jeder Version an."""
+    gesehen = []
+
+    class _Messages:
+        def stream(self, **kwargs):
+            gesehen.append(kwargs)
+            return _OkStream()
+
+    class _Client:
+        def __init__(self, api_key, **kwargs):
+            self.messages = _Messages()
+
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-test")
+    monkeypatch.setattr(tutor, "anthropic", types.SimpleNamespace(Anthropic=_Client))
+    stufe4 = tutor.LadderStep("plea", 4, 2, False, True)      # geht ans starke Modell
+    "".join(tutor.stream_reply([], stufe4, _VER, "Beweise: ...", None))
+    assert gesehen[0]["model"] == settings.anthropic_model_smart
+    assert "thinking" not in gesehen[0]
+    assert gesehen[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+def test_ausweich_meldung_nennt_den_fehler(client, monkeypatch):
+    """«Modell nicht verfuegbar» sah bei Ueberlastung und bei einem
+    Programmierfehler gleich aus – 44 Tage lang wich der Tutor bei jedem
+    Sonnet-Aufruf aus, und die Meldung sagte «es ist nichts ausgefallen».
+    Der Fehlertyp gehoert in die Meldung, damit man den Unterschied sieht."""
+    from app.database import SessionLocal
+    from app.models import Alert
+    from app.services import alert as alert_svc
+
+    alert_svc._last_sent.clear()
+    versuche = []
+    # _STEP geht ans Standardmodell; das faellt aus, das starke antwortet
+    out = _run(monkeypatch,
+               lambda m: _FailingCtx() if m == settings.anthropic_model_default else _OkStream(),
+               versuche)
+    assert "Alles gut" in out
+    assert versuche == [settings.anthropic_model_default, settings.anthropic_model_smart]
+    with SessionLocal() as db:
+        meldung = db.query(Alert).filter(Alert.kind == "ki").order_by(Alert.id.desc()).first()
+    assert meldung is not None
+    assert "RuntimeError: api down" in meldung.detail
+    assert "ausgewichen" in meldung.detail
+
+
 def test_api_error_yields_honest_message(monkeypatch, caplog):
     with caplog.at_level(logging.ERROR, logger="schrittweise.tutor"):
         out = _run(monkeypatch, _FailingCtx())

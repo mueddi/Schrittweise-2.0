@@ -811,6 +811,21 @@ def _thinking_param(model: str) -> dict | None:
     return {"type": "disabled"} if model == settings.anthropic_model_smart else None
 
 
+def _zusatz_parameter(model: str) -> dict:
+    """Modellabhaengige Zusatzfelder fuer den API-Aufruf – als ``extra_body``.
+
+    Das eingesetzte SDK (0.42) kennt das Feld ``thinking`` noch nicht: als
+    normales Schluesselwort warf es einen TypeError, BEVOR ein Byte an die
+    API ging. Jeder Sonnet-Aufruf des Tutors scheiterte so seit dem 26.7.
+    und wich still auf Haiku aus – die Stoerungsmeldung sagte «Modell nicht
+    verfuegbar», tatsaechlich war es ein Programmierfehler (Vercel-Log der
+    Vorschau, 7.9.: «Messages.stream() got an unexpected keyword argument
+    'thinking'»). ``extra_body`` reicht das Feld in jeder SDK-Version durch.
+    """
+    denken = _thinking_param(model)
+    return {"extra_body": {"thinking": denken}} if denken is not None else {}
+
+
 def _merke_usage(usage_out: dict | None, model: str, usage) -> None:
     """Verbrauch festhalten – inklusive der beiden Cache-Felder.
 
@@ -833,12 +848,8 @@ def _merke_usage(usage_out: dict | None, model: str, usage) -> None:
 def _ein_versuch(client, model: str, system, messages, usage_out: dict | None,
                  max_tokens: int):
     """EIN Anlauf bei einem Modell. Wirft weiter, damit der Aufrufer wechseln kann."""
-    kwargs = {}
-    denken = _thinking_param(model)
-    if denken is not None:
-        kwargs["thinking"] = denken
     with client.messages.stream(model=model, max_tokens=max_tokens, system=system,
-                                messages=messages, **kwargs) as stream:
+                                messages=messages, **_zusatz_parameter(model)) as stream:
         vollstaendig = False
         try:
             for text in stream.text_stream:
@@ -919,15 +930,11 @@ def transcribe_drawing(image: tuple[bytes, str], aufgabe: str | None = None,
         inhalt.append({"type": "text",
                        "text": f"Zur Einordnung, die Aufgabe lautet: {ohne_steuer_marker(aufgabe)[:400]}"})
     model = settings.anthropic_model_smart
-    kwargs = {}
-    denken = _thinking_param(model)
-    if denken is not None:
-        kwargs["thinking"] = denken
     try:
         antwort = _client().messages.create(
             model=model, max_tokens=MAX_TOKENS_TRANSKRIPT,
             system=TRANSKRIPT_SYSTEM,
-            messages=[{"role": "user", "content": inhalt}], **kwargs)
+            messages=[{"role": "user", "content": inhalt}], **_zusatz_parameter(model))
     except Exception as exc:
         log.exception("Transkription der Zeichnung fehlgeschlagen")
         from . import alert
@@ -990,11 +997,16 @@ def stream_reply(history, step: LadderStep, verification: Verification,
                 yield text
             if versuch:
                 log.warning("Modell %s nicht verfuegbar, mit %s beantwortet", model, aktuelles_modell)
+                # Der Fehlertyp gehoert in die Meldung: «ueberlastet» (529) ist
+                # harmlos und geht vorbei, ein TypeError oder 400 ist ein Fehler
+                # im Code oder in der Konfiguration und kommt bei JEDEM Aufruf
+                # wieder – ohne den Typ sah beides gleich aus.
                 alert.notify("ki",
-                             f"Modell {model} war nicht verfuegbar – automatisch auf "
-                             f"{aktuelles_modell} ausgewichen. Der Schueler hat eine normale "
-                             f"Antwort bekommen, es ist nichts ausgefallen.",
-                             key="ausweich")
+                             f"Modell {model} hat nicht geantwortet – automatisch auf "
+                             f"{aktuelles_modell} ausgewichen, der Schueler hat eine Antwort "
+                             f"bekommen. Fehler: {type(letzter_fehler).__name__}: "
+                             f"{str(letzter_fehler)[:200]}",
+                             key=f"ausweich:{type(letzter_fehler).__name__}")
             if usage_out is not None and usage_out.get("cache_aktiv") is False:
                 # Stumme Fehlerquelle: der Praefix liegt unter der Mindestlaenge
                 # des Modells, oder ein Block davor hat sich veraendert.
