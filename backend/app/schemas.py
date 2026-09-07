@@ -347,18 +347,20 @@ class ParentChildSummary(BaseModel):
 
 
 # ---------- Aufgaben-Bibliothek ----------
-class LibraryDocOut(BaseModel):
+class LibraryExerciseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    title: str
-    description: str
+    text: str
+    math_expression: str | None
     category: str
     grade_levels: list[str]
     difficulty: str
-    file_name: str
-    mime_type: str
-    size_bytes: int
+    source: str
     created_at: datetime
+    # Stand des angemeldeten Schuelers: "neu" | "offen" | "geloest"
+    status: str = "neu"
+    # juengster Versuch des Schuelers dazu (fuer «Weiter»), sonst None
+    attempt_id: int | None = None
 
     @field_validator("grade_levels", mode="before")
     @classmethod
@@ -366,6 +368,43 @@ class LibraryDocOut(BaseModel):
         if isinstance(v, str):
             return [g.strip() for g in v.split(",") if g.strip()]
         return v
+
+
+class LibraryExerciseIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    math_expression: str | None = Field(default=None, max_length=255)
+    category: str = Field(min_length=1, max_length=120)
+    grade_levels: list[str] = Field(min_length=1)
+    difficulty: str = "mittel"
+    source: str = Field(default="", max_length=200)
+
+
+class LibraryExerciseUpdate(BaseModel):
+    text: str | None = Field(default=None, min_length=1, max_length=2000)
+    math_expression: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=120)
+    grade_levels: list[str] | None = None
+    difficulty: str | None = None
+    source: str | None = Field(default=None, max_length=200)
+
+
+class LibraryImport(BaseModel):
+    """Mehrere Aufgaben auf einmal – z.B. aus einer Tabelle oder der KI-Vorschau."""
+    aufgaben: list[LibraryExerciseIn] = Field(min_length=1, max_length=100)
+
+
+class LibraryGenerate(BaseModel):
+    category: str = Field(min_length=1, max_length=120)
+    grade_level: str = "oberstufe"
+    difficulty: str = "mittel"
+    # Was geuebt werden soll, in Worten – ein Lernziel oder eine kurze Beschreibung
+    lernziel: str = Field(min_length=3, max_length=500)
+    anzahl: int = Field(default=6, ge=1, le=12)
+
+
+class LibraryGeneratedOut(BaseModel):
+    aufgaben: list[LibraryExerciseIn]
+    kosten_rappen: float
 
 
 class LibraryTopicCreate(BaseModel):

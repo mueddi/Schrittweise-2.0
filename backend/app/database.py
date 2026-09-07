@@ -131,6 +131,8 @@ def _schema_sicherstellen() -> None:
         # 1.25x. DEFAULT 0: alle Zeilen davor stammen aus dem 5-Minuten-Cache.
         ("api_usage", "cache_write_1h_tokens",
          "ALTER TABLE api_usage ADD COLUMN cache_write_1h_tokens INTEGER DEFAULT 0 NOT NULL"),
+        # Bibliothek: aus welcher Bibliotheks-Aufgabe eine Schueler-Aufgabe stammt.
+        ("exercises", "library_id", "ALTER TABLE exercises ADD COLUMN library_id INTEGER"),
     ]
     # Spalten EINMAL pro Tabelle holen statt einmal pro Migrations-Eintrag:
     # 13 Eintraege verteilen sich auf 4 Tabellen.
