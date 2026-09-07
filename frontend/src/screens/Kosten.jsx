@@ -13,11 +13,6 @@ export default function Kosten() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
-  const [alarme, setAlarme] = useState([]);
-
-  useEffect(() => {
-    api.get("/api/admin/alarme").then(setAlarme).catch(() => setAlarme([]));
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -87,20 +82,6 @@ export default function Kosten() {
           </div>
         )}
 
-        {alarme.length > 0 && (
-          <div style={{ background: "#fdf6f4", border: "1px solid #f2c9c0", borderRadius: 14, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#b3492f", marginBottom: 8 }}>{t("⚠️ Letzte Störungen", "⚠️ Recent incidents")}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {alarme.slice(0, 5).map((a, i) => (
-                <div key={i} style={{ fontSize: 12.5, color: "#6b7280" }}>
-                  <b style={{ color: "#1a1c22" }}>{a.label}</b>
-                  {a.zeit ? ` · ${new Date(a.zeit).toLocaleString("de-CH")}` : ""}
-                  {a.detail ? ` – ${a.detail.slice(0, 140)}` : ""}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
         {loading && !data && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("lädt …", "loading …")}</div>}
 
         {data && (

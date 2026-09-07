@@ -8,7 +8,7 @@ import { DialogProvider } from "./lib/dialog.jsx";
 import "./styles/theme.css";
 
 
-// Browser-Fehler an den Betreiber melden (Admin -> Kosten -> Stoerungen).
+// Browser-Fehler an den Betreiber melden (Admin -> Stoerungen).
 // Best effort: nur eingeloggt, max. 3 Meldungen pro Seiten-Session,
 // Fehler beim Melden werden still geschluckt (nie Folgefehler ausloesen).
 let errorReports = 0;

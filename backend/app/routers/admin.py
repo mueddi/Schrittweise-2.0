@@ -413,19 +413,93 @@ def tokens_anpassen(user_id: int, payload: TokenAdjustRequest,
     return {"token_balance": target.token_balance}
 
 
-@router.get("/alarme")
-def alarme(user: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Letzte protokollierte Stoerungen (KI/OCR/Webhook) fuer den Admin-Bereich."""
+# Wie viele Einzelmeldungen je Gruppe die Seite mitbekommt.
+MELDUNGEN_JE_GRUPPE = 5
+
+
+def _utc(zeit: datetime | None) -> str | None:
+    """Zeitstempel mit Zeitzone. Die Spalte ist «naiv» (ohne Zone) und traegt
+    UTC; ohne das «Z» liest der Browser sie als Ortszeit und zeigt die
+    Stoerung zwei Stunden zu frueh oder zu spaet an."""
+    if zeit is None:
+        return None
+    if zeit.tzinfo is None:
+        zeit = zeit.replace(tzinfo=timezone.utc)
+    return zeit.isoformat()
+
+
+@router.get("/stoerungen")
+def stoerungen(tage: int = Query(30, ge=1, le=365),
+               user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Stoerungen im Zeitfenster, gebuendelt und eingeordnet.
+
+    Statt einer Liste roher Fehlertexte: je Art EINE Gruppe mit Titel,
+    Bedeutung fuer die Nutzer, Massnahme und der Stufe «handeln / pruefen /
+    keine» (services/stoerungen.py). Die Einzelmeldungen haengen dran.
+    """
+    from .. import i18n
     from ..models import Alert
     from ..services.alert import KIND_LABEL as ALERT_LABEL
+    from ..services.stoerungen import HAEUFUNG_24H, regel_fuer, stufe_mit_haeufung
 
-    rows = list(db.scalars(select(Alert).order_by(Alert.id.desc()).limit(30)))
-    return [
-        {
-            "kind": a.kind,
-            "label": ALERT_LABEL.get(a.kind, a.kind),
-            "detail": a.detail,
-            "zeit": a.created_at.isoformat() if a.created_at else None,
-        }
-        for a in rows
-    ]
+    lang = i18n.lang_of(user)
+    jetzt = datetime.now(timezone.utc)
+    since = (jetzt - timedelta(days=tage)).replace(tzinfo=None)
+    vor_24h = (jetzt - timedelta(hours=24)).replace(tzinfo=None)
+
+    rows = list(db.scalars(select(Alert).where(Alert.created_at >= since)
+                           .order_by(Alert.id.desc())))
+
+    gruppen: dict[str, dict] = {}
+    for a in rows:
+        regel = regel_fuer(a.kind, a.detail)
+        g = gruppen.setdefault(regel.id, {
+            "id": regel.id, "kind": a.kind, "label": ALERT_LABEL.get(a.kind, a.kind),
+            "regel": regel, "anzahl": 0, "anzahl_24h": 0,
+            "erster": a.created_at, "letzter": a.created_at, "meldungen": [],
+        })
+        g["anzahl"] += 1
+        if a.created_at and a.created_at >= vor_24h:
+            g["anzahl_24h"] += 1
+        if a.created_at:
+            g["erster"] = min(g["erster"], a.created_at)
+            g["letzter"] = max(g["letzter"], a.created_at)
+        if len(g["meldungen"]) < MELDUNGEN_JE_GRUPPE:
+            g["meldungen"].append({"zeit": _utc(a.created_at), "detail": a.detail})
+
+    def satz(paar: tuple[str, str]) -> str:
+        return i18n.t(lang, *paar)
+
+    ausgabe = []
+    for g in gruppen.values():
+        regel = g.pop("regel")
+        stufe = stufe_mit_haeufung(regel, g["anzahl_24h"])
+        ausgabe.append({
+            **g,
+            "stufe": stufe,
+            "gehaeuft": g["anzahl_24h"] >= HAEUFUNG_24H,
+            "titel": satz(regel.titel),
+            "bedeutung": satz(regel.bedeutung),
+            "massnahme": satz(regel.massnahme),
+            "erster": _utc(g["erster"]),
+            "letzter": _utc(g["letzter"]),
+        })
+    rang = {"handeln": 0, "pruefen": 1, "keine": 2}
+    ausgabe.sort(key=lambda g: (rang[g["stufe"]], g["letzter"] or ""), reverse=False)
+    # Innerhalb einer Stufe die juengste zuerst
+    ausgabe.sort(key=lambda g: (rang[g["stufe"]], -(datetime.fromisoformat(g["letzter"]).timestamp()
+                                                    if g["letzter"] else 0)))
+
+    stand = {"handeln": 0, "pruefen": 0, "keine": 0}
+    for g in ausgabe:
+        stand[g["stufe"]] += 1
+    return {
+        "zeitraum_tage": tage,
+        "stand": stand,
+        "meldungen_gesamt": len(rows),
+        "gruppen": ausgabe,
+        "drossel_hinweis": i18n.t(
+            lang,
+            "Meldungen sind auf eine pro Stunde und Fehlerart gedrosselt – die Zaehler sind Untergrenzen.",
+            "Messages are throttled to one per hour and error type – the counts are lower bounds."),
+    }
