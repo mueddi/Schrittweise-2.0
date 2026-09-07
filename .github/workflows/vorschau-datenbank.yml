@@ -1,7 +1,11 @@
 name: Vorschau-Datenbank (pausieren / wecken)
 
-# Das Supabase-Projekt kniff-vorschau kostet auf Pro Rechenzeit, solange es
-# laeuft (~10 USD/Monat) – auch wenn niemand testet. Pausiert kostet es nichts.
+# Das Supabase-Projekt kniff-vorschau soll nur laufen, wenn getestet wird.
+# VORAUSSETZUNG: das Projekt liegt in einer Organisation im Gratis-Tarif.
+# Supabase laesst Projekte in bezahlten Organisationen NICHT pausieren
+# («Project is not free-tier», getestet 7.9.) – dort kostete es ~10 USD/Monat
+# Rechenzeit, auch ohne Nutzung. In einer Gratis-Organisation kostet es
+# nichts, und die Projekt-Nummer bleibt beim Verschieben gleich.
 #
 # - Nachts um 03:00 UTC: gab es in den letzten 24 h keinen Push auf einen
 #   Arbeitszweig, wird die Vorschau pausiert.
