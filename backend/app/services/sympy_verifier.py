@@ -8,19 +8,39 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 
-import sympy as sp
-from sympy.parsing.sympy_parser import (
-    convert_xor,
-    implicit_multiplication_application,
-    parse_expr,
-    standard_transformations,
-)
 
-_TRANSFORMS = standard_transformations + (
-    implicit_multiplication_application,
-    convert_xor,
-)
+class _SympyLazy:
+    """SymPy erst beim ERSTEN Rechnen laden, nicht beim Start der App.
+
+    Gemessen: der Import kostet 1.56 s – bei jedem Kaltstart der Vercel-
+    Funktion, also auch fuer Anfragen, die gar nicht rechnen (Anmelden,
+    Kontingent, Themenliste, Gesundheitsauskunft). Nach dem ersten Zugriff
+    ersetzt sich dieser Platzhalter selbst durch das echte Modul.
+    """
+
+    def __getattr__(self, name):
+        import sympy
+
+        globals()["sp"] = sympy
+        return getattr(sympy, name)
+
+
+sp = _SympyLazy()
+
+
+@lru_cache(maxsize=1)
+def _parser():
+    """parse_expr samt Transformationen – ebenfalls erst bei Bedarf."""
+    from sympy.parsing.sympy_parser import (
+        convert_xor,
+        implicit_multiplication_application,
+        parse_expr,
+        standard_transformations,
+    )
+
+    return parse_expr, standard_transformations + (implicit_multiplication_application, convert_xor)
 
 
 @dataclass
@@ -106,8 +126,9 @@ _GROSSER_EXPONENT = re.compile(r"(?:\^|\*\*)\s*\(?\s*-?\d{4,}")
 def _parse(expr: str):
     if _POTENZ_TURM.search(expr) or _GROSSER_EXPONENT.search(expr):
         raise ValueError("Ausdruck zu aufwaendig")
+    parse_expr, transforms = _parser()
     out = parse_expr(_insert_explicit_mult(_normalize(expr)),
-                     transformations=_TRANSFORMS, evaluate=True)
+                     transformations=transforms, evaluate=True)
     if not isinstance(out, sp.Basic):
         # «3, x» liefert ein TUPEL statt eines Ausdrucks – das ist kein
         # Rechenausdruck und darf nicht weiterlaufen (sonst knallt es erst
