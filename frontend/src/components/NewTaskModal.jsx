@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useShell } from "./AppShell.jsx";
 import DrawPad from "./DrawPad.jsx";
+import { ProblemButton } from "./ProblemMelden.jsx";
 import { useLang } from "../lib/i18n.jsx";
 
 
@@ -153,6 +154,14 @@ export default function NewTaskModal({ onClose, presetTopicId }) {
                   // damit Fehl-Erkennungen nicht erst im Chat auffallen.
                   <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 11.5, color: "#4b4f5c", background: "#fff", border: "1px solid #e7e8ee", borderRadius: 8, padding: "4px 8px", marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {ocrText}
+                  </div>
+                )}
+                {!ocrBusy && imagePath && (
+                  // Falsch gelesen? Bild und erkannter Text gehen mit der
+                  // Meldung mit – so sieht der Betreiber, was die Erkennung
+                  // wirklich bekommen hat.
+                  <div style={{ marginTop: 6 }}>
+                    <ProblemButton klein attemptId={null} imagePath={imagePath} context={ocrText || "(nichts erkannt)"} />
                   </div>
                 )}
                 {!ocrBusy && !imagePath && lastFile && (

@@ -264,6 +264,16 @@ class Feedback(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     # von welcher Seite abgeschickt (z.B. /app/lernen) – hilft beim Einordnen
     page: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # "feedback" (freier Text) oder "problem" (Knopf «Problem melden» mit
+    # Kategorie und automatisch mitgegebenem Zusammenhang)
+    kind: Mapped[str] = mapped_column(String(20), default="feedback", nullable=False)
+    category: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    attempt_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    image_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Aufgabentext, letzte Schueler- und Tutor-Nachricht, erkannter Text –
+    # vom Server gefuellt, damit der Betreiber sieht, was schiefging
+    context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 

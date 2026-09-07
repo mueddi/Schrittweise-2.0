@@ -133,6 +133,13 @@ def _schema_sicherstellen() -> None:
          "ALTER TABLE api_usage ADD COLUMN cache_write_1h_tokens INTEGER DEFAULT 0 NOT NULL"),
         # Bibliothek: aus welcher Bibliotheks-Aufgabe eine Schueler-Aufgabe stammt.
         ("exercises", "library_id", "ALTER TABLE exercises ADD COLUMN library_id INTEGER"),
+        # «Problem melden»: Kategorie und Zusammenhang zur Meldung.
+        ("feedback", "kind", "ALTER TABLE feedback ADD COLUMN kind VARCHAR(20) DEFAULT 'feedback' NOT NULL"),
+        ("feedback", "category", "ALTER TABLE feedback ADD COLUMN category VARCHAR(30)"),
+        ("feedback", "attempt_id", "ALTER TABLE feedback ADD COLUMN attempt_id INTEGER"),
+        ("feedback", "image_path", "ALTER TABLE feedback ADD COLUMN image_path VARCHAR(255)"),
+        ("feedback", "context", "ALTER TABLE feedback ADD COLUMN context TEXT"),
+        ("feedback", "resolved_at", "ALTER TABLE feedback ADD COLUMN resolved_at TIMESTAMP"),
     ]
     # Spalten EINMAL pro Tabelle holen statt einmal pro Migrations-Eintrag:
     # 13 Eintraege verteilen sich auf 4 Tabellen.

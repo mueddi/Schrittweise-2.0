@@ -5,6 +5,7 @@ import { useShell } from "../components/AppShell.jsx";
 import DrawPad from "../components/DrawPad.jsx";
 import MathText from "../lib/MathText.jsx";
 import MathFigure from "../components/MathFigure.jsx";
+import { ProblemButton } from "../components/ProblemMelden.jsx";
 import { useLang } from "../lib/i18n.jsx";
 import { useDialog } from "../lib/dialog.jsx";
 
@@ -708,6 +709,9 @@ export default function Lernen() {
           {(attempt.solved || attempt.hint_level >= 1) && (
             <Ladder level={attempt.hint_level} solved={attempt.solved} ownAttempts={attempt.own_attempts} />
           )}
+          {/* Ein Klick, wenn etwas schiefgeht: Aufgabe, Nachrichten und Bild
+              gehen automatisch mit – das Kind muss nichts erklaeren. */}
+          <ProblemButton attemptId={attempt.id} imagePath={exercise.image_path} />
         </div>
       </div>
 

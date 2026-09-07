@@ -258,8 +258,16 @@ class ExerciseListItem(BaseModel):
 
 # ---------- Feedback ----------
 class FeedbackCreate(BaseModel):
-    text: str = Field(min_length=3, max_length=2000)
+    # Freies Feedback braucht Text; eine Problem-Meldung darf ohne Text
+    # kommen, weil Kategorie und Zusammenhang schon genug sagen.
+    text: str = Field(default="", max_length=2000)
     page: str | None = Field(default=None, max_length=80)
+    kind: str = "feedback"                       # "feedback" | "problem"
+    category: str | None = Field(default=None, max_length=30)
+    attempt_id: int | None = None
+    image_path: str | None = Field(default=None, max_length=255)
+    # was das Frontend gerade sieht (z.B. der erkannte Text vor dem Start)
+    context: str | None = Field(default=None, max_length=2000)
 
 
 class FeedbackOut(BaseModel):
@@ -267,6 +275,12 @@ class FeedbackOut(BaseModel):
     id: int
     text: str
     page: str | None
+    kind: str = "feedback"
+    category: str | None = None
+    attempt_id: int | None = None
+    image_path: str | None = None
+    context: str | None = None
+    resolved_at: datetime | None = None
     created_at: datetime
     # Absender (nur fuer die Admin-Liste angereichert)
     display_name: str = ""

@@ -18,6 +18,30 @@ export default function Stoerungen() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [offen, setOffen] = useState({});
+  const [meldungen, setMeldungen] = useState([]);   // von Schuelern gemeldete Probleme
+
+  const KATEGORIE = {
+    erkennung: t("Foto/Zeichnung falsch erkannt", "Photo/drawing read wrongly"),
+    antwort: t("Antwort falsch oder unverständlich", "Answer wrong or unclear"),
+    verraten: t("Lösung verraten", "Solution given away"),
+    technik: t("Technisches Problem", "Technical problem"),
+    anderes: t("Anderes", "Other"),
+  };
+
+  const ladeMeldungen = () =>
+    api.get("/api/feedback?kind=problem&offen=true").then(setMeldungen).catch(() => setMeldungen([]));
+  useEffect(() => {
+    ladeMeldungen();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function erledigt(m) {
+    try {
+      await api.patch(`/api/feedback/${m.id}/erledigt`, {});
+      ladeMeldungen();
+    } catch (e) {
+      setErr(e.message);
+    }
+  }
 
   const label = {
     handeln: t("Handlungsbedarf", "Action needed"),
@@ -74,6 +98,40 @@ export default function Stoerungen() {
           </div>
         )}
         {!data && !err && <div style={{ fontSize: 13, color: "#9aa0ab" }}>{t("lädt …", "loading …")}</div>}
+
+        {meldungen.length > 0 && (
+          <div style={{ background: "#fff", border: "1px solid #c9ccf6", borderLeft: "5px solid #4f46e5", borderRadius: 16, padding: 18, marginBottom: 20 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 2 }}>✋ {t("Von Schülern gemeldet", "Reported by students")} ({meldungen.length})</div>
+            <div style={{ fontSize: 12, color: "#9aa0ab", marginBottom: 12 }}>
+              {t("Der Knopf «Problem melden» im Chat und bei der Foto-Erkennung. Aufgabe, letzte Nachrichten und Bild kommen automatisch mit.", "The \"report a problem\" button in the chat and photo recognition. Task, last messages and image come along automatically.")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {meldungen.map((m) => (
+                <div key={m.id} style={{ border: "1px solid #eef0f3", borderRadius: 12, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#4f46e5", background: "#eef0fe", borderRadius: 999, padding: "4px 10px" }}>{KATEGORIE[m.category] || m.category}</span>
+                    <span style={{ fontSize: 11.5, color: "#9aa0ab" }}>{zeit(m.created_at)} · {m.display_name} ({m.role}){m.page ? ` · ${m.page}` : ""}{m.attempt_id ? ` · Versuch #${m.attempt_id}` : ""}</span>
+                    <button onClick={() => erledigt(m)} style={{ marginLeft: "auto", fontSize: 11, fontWeight: 600, border: "1px solid #c6e6cf", background: "#eef8f0", color: "#1a7f3c", borderRadius: 999, padding: "5px 11px", cursor: "pointer" }}>✓ {t("Erledigt", "Done")}</button>
+                  </div>
+                  {m.text && <div style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 6 }}>«{m.text}»</div>}
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    {m.image_path && (
+                      <a href={`${api.base}${m.image_path}`} target="_blank" rel="noopener noreferrer" title={t("Bild öffnen", "Open image")}>
+                        <img src={`${api.base}${m.image_path}`} alt="" style={{ width: 110, height: 80, objectFit: "cover", borderRadius: 8, border: "1px solid #e7e8ee" }} />
+                      </a>
+                    )}
+                    {m.context && <pre style={code}>{m.context}</pre>}
+                  </div>
+                  {m.attempt_id && (
+                    <a href={`/app/lernen/${m.attempt_id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#4f46e5", fontWeight: 600, display: "inline-block", marginTop: 6 }}>
+                      {t("Gespräch öffnen →", "Open conversation →")}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {data && (
           <>
