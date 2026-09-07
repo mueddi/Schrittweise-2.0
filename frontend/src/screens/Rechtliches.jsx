@@ -41,7 +41,7 @@ export function Impressum() {
           <H>Operator</H>
           <P>
             Mahmmoud Said<br />
-            St. Georgen-Strasse<br />
+            St. Georgen-Strasse 84<br />
             9000 St.Gallen, Switzerland
           </P>
           <H>Contact</H>
@@ -63,7 +63,7 @@ export function Impressum() {
           <H>Betreiber</H>
           <P>
             Mahmmoud Said<br />
-            St. Georgen-Strasse<br />
+            St. Georgen-Strasse 84<br />
             9000 St.Gallen, Schweiz
           </P>
           <H>Kontakt</H>
@@ -100,7 +100,7 @@ export function Datenschutz() {
 
           <H>1. Controller</H>
           <P>
-            Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Switzerland<br />
+            Mahmmoud Said, St. Georgen-Strasse 84, 9000 St.Gallen, Switzerland<br />
             E-mail: <Mail />
           </P>
 
@@ -190,7 +190,7 @@ export function Datenschutz() {
 
           <H>1. Verantwortliche Stelle</H>
           <P>
-            Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Schweiz<br />
+            Mahmmoud Said, St. Georgen-Strasse 84, 9000 St.Gallen, Schweiz<br />
             E-Mail: <Mail />
           </P>
 
@@ -285,7 +285,7 @@ export function Agb() {
           <Note>This is a courtesy translation. The German version is legally binding.</Note>
           <P>
             General terms and conditions (contract of use) for Kniff, operated by
-            Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Switzerland
+            Mahmmoud Said, St. Georgen-Strasse 84, 9000 St.Gallen, Switzerland
             (<Mail />).
             Last updated: July 2026.
           </P>
@@ -352,7 +352,7 @@ export function Agb() {
         <>
           <P>
             Allgemeine Geschäftsbedingungen für die Nutzung von Kniff, betrieben von
-            Mahmmoud Said, St. Georgen-Strasse, 9000 St.Gallen, Schweiz
+            Mahmmoud Said, St. Georgen-Strasse 84, 9000 St.Gallen, Schweiz
             (<Mail />).
             Stand: Juli 2026.
           </P>
