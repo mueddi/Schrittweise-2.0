@@ -111,7 +111,13 @@ https://claude.ai/code/artifact/67bdea5a-096e-439f-83f6-067727e5424b
   Die Gegenstelle dafür steht: `main.py:health()` fasst die Datenbank an und
   antwortet bei einem Ausfall mit **503** und ohne das Wort `ok`.
 * **Vercel läuft auf `hobby`** – dieser Tarif ist laut Vercels Bedingungen für
-  nicht-kommerzielle Projekte. Vor dem Verkauf von Tokens klären.
+  nicht-kommerzielle Projekte. Vor dem Verkauf von Tokens klären. Der
+  Betreiber will beim ersten Käufer wechseln.
+* **Supabase seit 7.9. auf Pro** (Organisation «mueddi's Org»): kein
+  Pausieren mehr, tägliche Sicherungen. Achtung Kosten: jedes AKTIVE Projekt
+  kostet ~10 USD/Monat Rechenzeit, eines ist im Tarif enthalten. Aktiv sind
+  `schrittweise` (Produktion), `kniff-vorschau` und ein am 7.9. neu angelegtes
+  Projekt `quitta` (nicht Kniff). `Rayner Sales` ist pausiert.
 * **Die Zahlung wurde nie durchgeführt:** im Live-Stripe-Konto stehen
   0 Checkout-Sitzungen. Vor dem Start einmal echt kaufen und nachzählen.
 * **Impressum ohne Postadresse** (`frontend/src/screens/Rechtliches.jsx`) –
