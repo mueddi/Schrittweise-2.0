@@ -159,3 +159,14 @@ def test_chat_frequenz_bremse(client):
             "".join(r.iter_text())
     r = client.post(f"/api/attempts/{aid}/chat", headers=headers, json={"text": "eine zu viel"})
     assert r.status_code == 429
+
+
+# ---- Kniff Plus: neue Spalten haben unschaedliche Standardwerte ----
+
+def test_neue_abo_spalten_default(client):
+    register_pw(client, "mia@test.ch")
+    u = _fresh("mia@test.ch")
+    assert u.abo_bis is None
+    assert u.abo_gekuendigt is False
+    assert u.stripe_subscription_id is None
+    assert u.abo_intervall is None
