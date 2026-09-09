@@ -22,6 +22,11 @@ def _fresh(email: str) -> User:
         return db.query(User).filter(User.email == email).one()
 
 
+def _can(u: User) -> bool:
+    with SessionLocal() as db:
+        return can_use_ki(db, u)
+
+
 # ---- charged_tokens: Rappen-Mathe mit Marge ----
 
 def test_charged_tokens_mit_marge():
@@ -68,7 +73,7 @@ def test_charge_monats_rollover(client):
     _user("mia@test.ch", token_balance=0, free_used_tokens=50, free_month="2020-01")
 
     # Neuer Monat: Gratis-Kontingent wieder da, sowohl lesend ...
-    assert can_use_ki(_fresh("mia@test.ch")) is True
+    assert _can(_fresh("mia@test.ch")) is True
     with SessionLocal() as db:
         state = quota_state(db, _fresh("mia@test.ch"))
     assert state["free_used_tokens"] == 0
@@ -87,7 +92,7 @@ def test_charge_monats_rollover(client):
 def test_charge_free_month_null_zaehlt_als_neuer_monat(client):
     register_pw(client, "mia@test.ch")
     _user("mia@test.ch", token_balance=0, free_used_tokens=50, free_month=None)
-    assert can_use_ki(_fresh("mia@test.ch")) is True
+    assert _can(_fresh("mia@test.ch")) is True
 
 
 # ---- HTTP-Verhalten ----

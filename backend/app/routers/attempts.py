@@ -185,11 +185,8 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                             i18n.t(lang,
                                    "Bitte bestätige zuerst deine E-Mail-Adresse – schau in dein Postfach.",
                                    "Please confirm your email address first – check your inbox."))
-    if not quota.can_use_ki(user):
-        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED,
-                            i18n.t(lang,
-                                   "Dein Guthaben ist aufgebraucht. Lad Tokens oder warte auf den nächsten Monat.",
-                                   "Your balance is used up. Top up tokens or wait for next month."))
+    if not quota.can_use_ki(db, user, ex.id):
+        raise quota.sperre(db, user, lang, ex.id)
 
     # Angehaengtes Bild (Stift-Zeichnung/Foto aus /api/exercises/ocr) pruefen:
     # nur eigene, tatsaechlich gespeicherte Bilder duerfen an Nachrichten haengen.
@@ -279,7 +276,7 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
     reply_level = None if already_solved else step.allowed_stage
 
     exercise_id_local = ex.id
-    unlimited_local = quota.is_unlimited(user)
+    stufe_local = quota.stufe(db, user, ex.id)
     # Darf der Tutor diese Runde selbst abhaken?
     # * Nicht, wenn die Aufgabe schon zu ist.
     # * Nicht, wenn SymPy WIDERSPRICHT – dann bleibt SymPy die Autoritaet und
@@ -357,10 +354,11 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                     # Verrechnung + Erfassung im selben Commit wie die Tutor-Message,
                     # damit charged_tokens nie vom tatsaechlich Abgebuchten abweicht.
                     charged = 0
-                    if not unlimited_local:
+                    if stufe_local != "school":
                         charged = usage.charged_tokens(
                             usage.cost_usd(usage_out.get("model", ""), usage_out["usage"]))
-                        quota.charge(s, user_id_local, charged)
+                        quota.charge(s, user_id_local, charged,
+                                     vom_guthaben=stufe_local == "guthaben")
                     usage.record(s, "chat", usage_out.get("model", ""), usage_out["usage"],
                                  user_id=user_id_local, exercise_id=exercise_id_local,
                                  charged=charged)

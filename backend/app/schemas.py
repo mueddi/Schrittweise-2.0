@@ -305,6 +305,19 @@ class QuotaOut(BaseModel):
     percent_used: int  # vom Gratis-Kontingent
     # Betreiber-Konto / Schul-Plan: keine Abbuchung, unbegrenzte Aufgaben
     unlimited: bool = False
+    # Kniff Plus: school | plus | trial | gratis (Altpfad) | guthaben | gesperrt
+    stufe: str = "gratis"
+    abo_enabled: bool = False
+    plus_name: str = "Kniff Plus"
+    preise: dict = Field(default_factory=dict)  # {"monat": Rappen, "jahr": Rappen}
+    trial_tasks: int = 0
+    trial_used: int = 0
+    trial_left: int = 0
+    monat_verbraucht: int = 0  # Tokens diesen Monat (Fair-Use-Zaehler)
+    plus_limit: int = 0
+    abo_bis: str | None = None
+    abo_gekuendigt: bool = False
+    abo_intervall: str | None = None
 
 
 # ---------- Parent ----------
