@@ -21,16 +21,16 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import i18n
 from ..config import settings
 from ..database import get_db
-from ..deps import require_student
-from ..models import Payment, Plan, StripeEvent, User
-from ..schemas import CheckoutRequest
+from ..deps import get_current_user
+from ..models import ParentLink, Payment, Plan, Role, StripeEvent, User
+from ..schemas import AboRequest, CheckoutRequest
 from ..services import alert, quota
 
 router = APIRouter(prefix="/api/pay", tags=["pay"])
@@ -112,11 +112,38 @@ def _abo_ende(sub: dict) -> datetime | None:
     return datetime.utcfromtimestamp(int(ts)) if ts else None
 
 
+def _zielkonto(db: Session, user: User, student_id: int | None) -> User:
+    """Fuer wen gilt Kauf oder Kuendigung? Schueler:innen fuer sich selbst,
+    Eltern fuer ein verknuepftes Kind – nie fuer ein fremdes Konto."""
+    lang = i18n.lang_of(user)
+    if user.role == Role.student:
+        if student_id not in (None, user.id):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, i18n.t(lang, "Nur für das eigene Konto.", "Only for your own account."))
+        return user
+    if user.role == Role.parent:
+        if student_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, i18n.t(lang, "Für welches Kind? Bitte das Kind angeben.", "For which child? Please specify the child."))
+        link = db.scalar(select(ParentLink).where(ParentLink.parent_id == user.id,
+                                                  ParentLink.student_id == student_id,
+                                                  ParentLink.status == "linked"))
+        student = db.get(User, student_id) if link is not None else None
+        if student is None:
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                i18n.t(lang, "Dieses Kind ist nicht mit deinem Konto verknüpft.", "This child is not linked to your account."))
+        return student
+    raise HTTPException(status.HTTP_403_FORBIDDEN, i18n.t(lang, "Nur für Schüler- und Eltern-Konten.", "Only for student and parent accounts."))
+
+
 @router.post("/checkout")
 def create_checkout(request: Request, payload: CheckoutRequest | None = None,
-                    user: User = Depends(require_student), db: Session = Depends(get_db)):
-    """Erstellt eine Stripe-Checkout-Session (Abo) und gibt deren Bezahl-URL zurück."""
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Erstellt eine Stripe-Checkout-Session (Abo) und gibt deren Bezahl-URL zurück.
+
+    Eltern kaufen mit student_id fuer ihr Kind: das Abo haengt am Kind,
+    die Rechnung geht an die Eltern-Adresse."""
     lang = i18n.lang_of(user)
+    zahler = user
+    user = _zielkonto(db, zahler, payload.student_id if payload else None)
     if quota.blocked_unverified(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN,
                             i18n.t(lang, "Bitte bestätige zuerst deine E-Mail-Adresse, bevor du kaufst – schau in dein Postfach.", "Please confirm your email address before buying – check your inbox."))
@@ -132,16 +159,18 @@ def create_checkout(request: Request, payload: CheckoutRequest | None = None,
         raise HTTPException(status.HTTP_409_CONFLICT,
                             i18n.t(lang, f"{settings.plus_name} ist auf diesem Konto schon aktiv.", f"{settings.plus_name} is already active on this account."))
     base = _return_base(request)
+    zurueck = f"{base}/eltern" if zahler.role == Role.parent else f"{base}/app/einstellungen"
     if intervall == "jahr":
         rappen, interval, name = settings.plus_preis_jahr_rappen, "year", f"{settings.plus_name} – jährlich"
     else:
         rappen, interval, name = settings.plus_preis_monat_rappen, "month", f"{settings.plus_name} – monatlich"
     data = {
         "mode": "subscription",
-        "success_url": f"{base}/app/einstellungen?zahlung=ok",
-        "cancel_url": f"{base}/app/einstellungen?zahlung=abbruch",
+        "success_url": f"{zurueck}?zahlung=ok",
+        "cancel_url": f"{zurueck}?zahlung=abbruch",
         "client_reference_id": str(user.id),
         "metadata[user_id]": str(user.id),
+        "metadata[zahler_id]": str(zahler.id),
         "metadata[intervall]": intervall,
         "subscription_data[metadata][user_id]": str(user.id),
         "subscription_data[metadata][intervall]": intervall,
@@ -154,7 +183,7 @@ def create_checkout(request: Request, payload: CheckoutRequest | None = None,
     if user.stripe_customer_id:
         data["customer"] = user.stripe_customer_id
     else:
-        data["customer_email"] = user.email
+        data["customer_email"] = zahler.email
     session = _stripe("POST", "/v1/checkout/sessions", data)
     return {"url": session["url"]}
 
@@ -175,15 +204,19 @@ def _abo_umstellen(user: User, db: Session, kuendigen: bool) -> dict:
 
 
 @router.post("/abo/kuendigen")
-def abo_kuendigen(user: User = Depends(require_student), db: Session = Depends(get_db)):
+def abo_kuendigen(payload: AboRequest | None = None, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
     """Abo zum Periodenende beenden – bis dahin bleibt Plus aktiv."""
-    return _abo_umstellen(user, db, kuendigen=True)
+    ziel = _zielkonto(db, user, payload.student_id if payload else None)
+    return _abo_umstellen(ziel, db, kuendigen=True)
 
 
 @router.post("/abo/weiter")
-def abo_weiter(user: User = Depends(require_student), db: Session = Depends(get_db)):
+def abo_weiter(payload: AboRequest | None = None, user: User = Depends(get_current_user),
+               db: Session = Depends(get_db)):
     """Kündigung zurücknehmen, solange die Periode noch läuft."""
-    return _abo_umstellen(user, db, kuendigen=False)
+    ziel = _zielkonto(db, user, payload.student_id if payload else None)
+    return _abo_umstellen(ziel, db, kuendigen=False)
 
 
 def verify_stripe_signature(payload: bytes, sig_header: str, secret: str, tolerance: int = 300) -> bool:

@@ -294,6 +294,11 @@ class CheckoutRequest(BaseModel):
     student_id: int | None = None
 
 
+class AboRequest(BaseModel):
+    # Eltern kuendigen fuer ihr Kind; Schueler:innen lassen das Feld weg
+    student_id: int | None = None
+
+
 # ---------- Quota ----------
 class QuotaOut(BaseModel):
     plan: str
@@ -372,6 +377,9 @@ class ParentChildSummary(BaseModel):
     shared: bool  # Schueler hat Freigabe erteilt?
     # letzte Wochen (aktuelle zuerst) fuer den Verlaufs-Chart
     history: list[ParentWeek] = []
+    # Kniff Plus: Eltern sehen die Stufe ihres Kindes und schliessen das Abo ab
+    student_id: int | None = None
+    plus: dict = Field(default_factory=dict)  # quota_state des Kindes
 
 
 # ---------- Aufgaben-Bibliothek ----------

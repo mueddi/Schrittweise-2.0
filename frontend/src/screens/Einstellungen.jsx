@@ -175,7 +175,7 @@ export default function Einstellungen() {
   );
 }
 
-function chf(rappen) {
+export function chf(rappen) {
   const s = (rappen / 100).toFixed(2);
   return s.endsWith(".00") ? s.slice(0, -3) + ".–" : s;
 }
