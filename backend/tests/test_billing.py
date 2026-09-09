@@ -1,6 +1,6 @@
 """Nutzungsbasierte Verrechnung: 1 Token = 1 Rappen, Abbuchung pro KI-Antwort."""
 from app.database import SessionLocal
-from app.models import ApiUsage, User
+from app.models import ApiUsage, Message, MessageRole, User
 from app.services.quota import can_use_ki, charge, current_month, quota_state
 from app.services.usage import charged_tokens
 
@@ -175,3 +175,23 @@ def test_neue_abo_spalten_default(client):
     assert u.abo_gekuendigt is False
     assert u.stripe_subscription_id is None
     assert u.abo_intervall is None
+
+
+def test_aufgabe_hat_eine_obergrenze_an_nachrichten(client):
+    from app.routers.attempts import CHAT_MAX_PER_ATTEMPT
+
+    headers = register_pw(client, "mia@test.ch")
+    aid = _make_task(client, headers)
+    with SessionLocal() as db:
+        for i in range(CHAT_MAX_PER_ATTEMPT - 1):  # plus Eroeffnung = Grenze erreicht
+            db.add(Message(attempt_id=aid, role=MessageRole.student, text=f"Versuch {i}"))
+        db.commit()
+    r = client.post(f"/api/attempts/{aid}/chat", headers=headers, json={"text": "x = 5"})
+    assert r.status_code == 429
+    assert "lang geworden" in r.json()["detail"]
+    # Eine neue Runde derselben Aufgabe geht wieder
+    ex_id = client.get(f"/api/attempts/{aid}", headers=headers).json()["exercise"]["id"]
+    neu = client.post(f"/api/exercises/{ex_id}/attempts", headers=headers).json()["attempt"]["id"]
+    with client.stream("POST", f"/api/attempts/{neu}/chat", headers=headers, json={"text": "x = 5"}) as r:
+        assert r.status_code == 200
+        "".join(r.iter_text())

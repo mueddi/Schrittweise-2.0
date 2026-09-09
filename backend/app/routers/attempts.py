@@ -27,6 +27,10 @@ router = APIRouter(prefix="/api/attempts", tags=["attempts"])
 # Verhindert, dass viele PARALLELE Anfragen das Guthaben-Gate ueberholen
 # (Abbuchung erfolgt erst nach der Antwort, Boden bei 0).
 CHAT_MAX_PER_MINUTE = 8
+# Kostenschranke pro Aufgabe: mit Kniff Plus sind die Probe-Aufgaben in
+# Runden unbegrenzt - ohne Deckel koennte eine einzige Aufgabe beliebig
+# teuer werden. 40 Nachrichten sind mehr, als je eine Aufgabe brauchte.
+CHAT_MAX_PER_ATTEMPT = 40
 
 
 def _ohne_offenen_figur_block(text: str) -> str:
@@ -177,6 +181,13 @@ def chat(attempt_id: int, payload: ChatRequest, user: User = Depends(require_stu
                             i18n.t(lang,
                                    "Langsam 🙂 – eine Nachricht nach der anderen. Versuch es gleich nochmal.",
                                    "Slow down 🙂 – one message at a time. Try again in a moment."))
+
+    verlauf = db.scalar(select(func.count(Message.id)).where(Message.attempt_id == attempt.id)) or 0
+    if verlauf >= CHAT_MAX_PER_ATTEMPT:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            i18n.t(lang,
+                                   "Diese Aufgabe ist lang geworden – starte sie neu oder nimm die nächste.",
+                                   "This task has become long – restart it or take the next one."))
 
     # Guthaben-Gate VOR jeder Zustandsaenderung: sonst staende die Nachricht
     # ohne Antwort im Verlauf und die Leiter wuerde sich gratis weiterdrehen.
