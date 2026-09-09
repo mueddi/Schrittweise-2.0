@@ -289,8 +289,9 @@ class FeedbackOut(BaseModel):
 
 # ---------- Zahlung ----------
 class CheckoutRequest(BaseModel):
-    # Schluessel eines Eintrags in routers.pay.PACKAGES
-    package: str = Field(default="power", max_length=20)
+    # Kniff Plus: "monat" oder "jahr"; student_id = Eltern kaufen fuer ihr Kind
+    intervall: str = Field(default="monat", max_length=8)
+    student_id: int | None = None
 
 
 # ---------- Quota ----------
