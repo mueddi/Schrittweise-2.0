@@ -1,4 +1,6 @@
 """Nutzungsbasierte Verrechnung: 1 Token = 1 Rappen, Abbuchung pro KI-Antwort."""
+from datetime import datetime, timedelta
+
 from app.database import SessionLocal
 from app.models import ApiUsage, Message, MessageRole, User
 from app.services.quota import can_use_ki, charge, current_month, quota_state
@@ -184,7 +186,9 @@ def test_aufgabe_hat_eine_obergrenze_an_nachrichten(client):
     aid = _make_task(client, headers)
     with SessionLocal() as db:
         for i in range(CHAT_MAX_PER_ATTEMPT - 1):  # plus Eroeffnung = Grenze erreicht
-            db.add(Message(attempt_id=aid, role=MessageRole.student, text=f"Versuch {i}"))
+            # in der Vergangenheit, sonst greift zuerst die Minuten-Bremse
+            db.add(Message(attempt_id=aid, role=MessageRole.student, text=f"Versuch {i}",
+                           created_at=datetime.utcnow() - timedelta(hours=1)))
         db.commit()
     r = client.post(f"/api/attempts/{aid}/chat", headers=headers, json={"text": "x = 5"})
     assert r.status_code == 429
